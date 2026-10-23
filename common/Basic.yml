@@ -1,0 +1,53 @@
+# coding=utf-8
+header_dev:
+    "Content-Type": "application/x-www-form-urlencoded"
+    "User-Agent": "Mozilla/5.0 (Linux; Android 11; HD1900 Build/RKQ1.201022.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/87.0.4280.141 Mobile Safari/537.36 / Xs android V1.2.0.0 / Js V1.0.0.0 / Login V1658980709"
+    "host": 'dev.iambanban.com'
+
+header_pt:
+    "Content-Type": "application/x-www-form-urlencoded"
+    "User-Agent": "Agent / Xs android V1.0.5.3 / Js V1.0.0.0 / Login V1601690448"
+    "host": 'pt-dev.iambanban.com'
+
+header_slp:
+    "Content-Type": "application/x-www-form-urlencoded"
+    "User-Agent": "Mozilla/5.0 (Linux; Android 15; 23116PN5BC Build/AQ3A.240627.003; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.201 Mobile Safari/537.36 / Xs android V5.32.0.0 / Js V1.0.0.0 / Login V1736941405"
+    "host": '114.55.3.96'
+# pt-dev-mobile-login
+data_pt_mobile:
+    "mobile": '13545208900'
+    "dtoken": '2c56BmhPkCc14Fk2CGwHjNXjTNTKTIsHi22NKL__2FJK0C__2FjS0Vkikb3YTVEox6XUxNfp70OtGzyYarBYQzfXqW1OIIQ6sJpdekar__2BT85QgZEhvXcXvMQ__2F__2BBNP2kwl__2BmswkkjQZSmN9'
+    "area": '86'
+    "password": '7c4a8d09ca3762af61e59520943dc26494f8941b'
+
+data_pt_mobile_params:
+    v=1&package=com:imbb:oversea:android&_ipv=0&_platform=android&_index=340&_model=PCRM00&_timestamp=1690283646&_abi=arm64-v8a&format=json&_sign=a9e43547fd40ec55825d8c013062e65e
+# slp-dev-mobile-login
+data_slp_mobile_params:
+    v=1&package=com.yhl.sleepless.android&_ipv=0&_platform=android&_index=847&_model=23116PN5BC&_timestamp=1736943823&format=json&_sign=41588863a2ebebece54dd13d31c9047b
+# slp-dev-mobile-login
+data_slp_mobile:
+    'mobile': '15008520000'
+    'type': 'login'
+    'code': '1399'
+    'token': 'f362G57__2BaPFyiXrGlFxA4mR79s8HRJ0RMJ98G__2Fkr6bT__2F7yyPs8CDrFVoZtRx3oRbhtI1OC9BIUasGd6__2B7OeI'
+    'dtoken': '9073b8DsE0whH5D6q1c0MUZIP32GtEoK503lBrtU5bcJgz1FZmQ3H__2BgjFwJJKUzoJPWi2u4gSmvGW0eVjonk52yAzruEFyYCuUlgejInW1DRdQIFfLW4OQUgWRWb1H6dV34mUcS5oJPPIkM'
+    'area': '86'
+# 192.168.11.58(测试支付服务器)
+# 伴伴
+params_dev_qq:
+    t=BCB514D0C9FBEBB04F30223DBE7DCE20&o=659826BC750ABF8FF3AED92E552DCF62
+
+# 冲鸭
+params_teammate_qq:
+    t=08CD562CDFA2B2AEFC69865D22E2B345&o=7AFAE4ED1F6408A24C950DECE5A0C120
+
+# 伴伴
+data_dev_qq:
+    "type": 'login'
+    "dtoken": '8160Ky5RFbkn6TNHLM1gxOq6lFGTHgV__2BwRNY4gTNINdHhZyOKOWn02OWbUNeFp7BIaqTMx8jy40WQHcYK9AaGfLtZEjE90AhqOMFvVrLFFXzQfOBGtGY7Vqd3cfa44iisS__2BUERHpP5fooA'
+
+# 冲鸭
+data_teammate_qq:
+    "type": 'login'
+    "dtoken": 'eb4epfrrA5D11B54hdqHBW8CUl4qFtuOR4tXlEMUzUx8ryHz2DXesrU5G9KAvCtx7uR7GAQeY8cL1DJABrZDcotV0Z1agNfk__2BlL70oDeYm48HWXXW9MhSaDBe9X4__2FaDK8wu4Pj8Dvx1S9Q'
