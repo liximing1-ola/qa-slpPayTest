@@ -10,9 +10,7 @@ class updateCode:
     _time_logged = False
 
     @staticmethod
-    def autoGitPull(appInfo, env='dev', bot='BB', to='slack'):
-        env=env if env else 'slp'
-        bot=bot if bot else 'slp'
+    def autoGitPull(appInfo):
         if appInfo == 'bb_php':
             Logs.get_log('gitBranchError.log').error("bb_php 相关配置已废弃，codeInfo 中不存在 bb_php_path/bb_git_branch")
             return
@@ -51,7 +49,8 @@ def updateTime(operate, now=''):
             f.flush()
     elif operate == 'read':
         if not os.path.exists(txtPath):
-            os.system(r"touch {}".format(txtPath))
+            # 原实现用 os.system('touch') 创建文件，Windows 下没有 touch 命令会直接报错
+            open(txtPath, 'w').close()
             with open(txtPath, 'r+') as f:
                 f.write(default_time)
                 f.flush()

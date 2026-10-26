@@ -60,7 +60,6 @@ PySocks>=1.7.1
 pytest==6.2.4
 python-debian==0.1.32
 pyxdg==0.25
-PyYAML==3.12
 redis==4.0.2
 requests==2.18.4
 requests-toolbelt==0.9.1
@@ -80,6 +79,5 @@ XMind==1.2.0
 zipp==3.5.0
 zope.event==4.5.0
 zope.interface==5.4.0
-Markdown~=3.4.1
 mysql-connector-python>=8.0.0
 paramiko>=2.11.0

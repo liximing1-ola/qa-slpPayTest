@@ -9,12 +9,6 @@ import time
 import requests
 import urllib3
 
-# from caseStarify.need_data import starify_payUid
-# from caseSlp.config import slp_payUid
-# from caseStarify.tools import create_sign
-from common import Session
-# from common.Basic_starify import header_starify
-# from common.Basic_starify import query_starify
 from common.Session import Session
 
 # 单次请求超时时间（秒），避免网络异常时用例无限挂起

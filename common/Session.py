@@ -4,9 +4,8 @@
 """
 import json
 import os
-import requests
 import urllib3
-from common import Logs, method
+from common import Logs
 from common.Config import config
 
 
@@ -26,14 +25,14 @@ class Session:
 		if env == config.appName['不夜星球']:
 			print("slp")
 			from caseSlp.config import payUid, gsUid, gs_B_uid
-			from caseSlp.tools import get_test_token
 		elif env == config.appName['小拾光']:
 			print("xsg")
 			from caseXsg.config import payUid, gsUid, gs_B_uid_1 as gs_B_uid
-			from caseXsg.tools import get_test_token
 		else:
 			print("env input error")
 			return None
+		# 两个 App 用同一个获取 token 的实现，不需要按环境分别 import
+		from common.tools import get_test_token
 		try:
 			token_map = get_test_token(payUid, gsUid, gs_B_uid)
 			for uid, token in token_map.items():

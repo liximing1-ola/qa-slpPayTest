@@ -1,29 +1,56 @@
-from time import time, strftime, localtime
+"""
+通知机器人：企业微信群机器人 / slack webhook
+
+webhook 地址支持用环境变量覆盖，换群、轮换 key 都不用改代码：
+    WX_BOT_SLP     企业微信机器人 webhook（默认指向不夜星球测试通知群）
+    SLACK_BOT_SLP  slack webhook
+另外已下线项目（伴伴/PT/starify）的 webhook 一并删除，避免 key 继续留在仓库里。
+"""
+import os
+from time import localtime, strftime, time
+
 import requests
+
 from common import method
 
+# 企业微信群机器人 webhook
+WX_BOTS = {
+    'slp': os.environ.get('WX_BOT_SLP') or 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=998f0f30-0a19-4551-a9c5-def001c69908',
+}
 
-def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
+# slack webhook
+SLACK_BOTS = {
+    'slp': os.environ.get('SLACK_BOT_SLP') or 'https://hooks.slack.com/services/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',
+}
+
+
+def _mention_all(url, headers):
+    """补充 @all 提醒：上一条消息发送成功后再补一条，避免重复打扰"""
+    data = {
+        "msgtype": "text",
+        "text": {
+            "mentioned_mobile_list": ["@all"]
+        }
+    }
+    requests.post(url, headers=headers, json=data, timeout=5)
+
+
+def robot(mode, reason, title='', bot='slp', color="good", to='wx'):
+    """
+    发送通知
+    :param mode: fail / success / markdown / icon / slack
+    :param reason: 正文（markdown 模式即 markdown 内容）
+    :param title: 标题（fail / slack 模式使用）
+    :param bot: WX_BOTS / SLACK_BOTS 里的 key
+    :param color: slack 颜色
+    :param to: wx=企业微信, slack=slack
+    """
     headers = {'Content-Type': 'application/json'}
-    #  企微
-    robot_dict_wechat = {
-        'BB': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=f9d916cb-6b93-4389-8aa4-f51c755faa0e',
-        'test': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=0179d8d1-2078-41ba-a8da-0fb11bd51880',
-        'PT': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b05a239e-3cc3-4faf-a3cc-c77e200ae1e6',
-        'slp': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=998f0f30-0a19-4551-a9c5-def001c69908',
-    }
-    #  slack
-    robot_dict = {
-        'BB': 'https://hooks.slack.com/services/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',
-        'PT': 'https://hooks.slack.com/workflows/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',
-        # 'starify': 'https://hooks.slack.com/services/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',
-        # 'starify': 'https://hooks.slack.com/services/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',  # todo 调试
-        'slp': 'https://hooks.slack.com/services/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',  # todo 调试
-    }
-    if to == 'slack':
-        url = robot_dict[bot]
-    else:
-        url = robot_dict_wechat[bot]
+    bots = SLACK_BOTS if to == 'slack' else WX_BOTS
+    if bot not in bots:
+        print('未配置的通知机器人: {}，可选: {}'.format(bot, list(bots)))
+        return
+    url = bots[bot]
 
     if mode == 'fail':
         content = "警告! 失败用例: {}, 失败原因: {}".format(title, reason)
@@ -33,15 +60,9 @@ def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
                 "content": content
             }
         }
-        r = requests.post(url, headers=headers, json=data)
+        r = requests.post(url, headers=headers, json=data, timeout=5)
         if r.status_code == 200 and 'ok' in r.text:
-            data = {
-                "msgtype": "text",
-                "text": {
-                    "mentioned_mobile_list": ["@all"]
-                }
-            }
-            requests.post(url, headers=headers, json=data)
+            _mention_all(url, headers)
 
     elif mode == 'success':
         data = {
@@ -50,7 +71,7 @@ def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
                 "content": reason
             }
         }
-        requests.post(url, headers=headers, json=data)
+        requests.post(url, headers=headers, json=data, timeout=5)
 
     elif mode == 'markdown':
         data = {
@@ -59,35 +80,27 @@ def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
                 "content": reason
             }
         }
-        requests.post(url, headers=headers, json=data)
+        requests.post(url, headers=headers, json=data, timeout=5)
 
     elif mode == 'icon':
         now = strftime('%m-%d %H:%M', localtime(time()))
         title = "{}, Execution is abnormal.Please check the status!".format(now)
-        des = reason
-        icon = method.getImage(mode=1)
         data = {
             "msgtype": "news",
             "news": {
                 "articles": [
                     {
                         "title": title,
-                        "description": des,
+                        "description": reason,
                         "url": "https://www.12306.cn/index/",
-                        "picurl": icon,
+                        "picurl": method.getImage(mode=1),
                     }
                 ]
             }
         }
-        r = requests.post(url, headers=headers, json=data)
+        r = requests.post(url, headers=headers, json=data, timeout=5)
         if r.status_code == 200 and 'ok' in r.text:
-            data = {
-                "msgtype": "text",
-                "text": {
-                    "mentioned_mobile_list": ["@all"]
-                }
-            }
-            requests.post(url, headers=headers, json=data)
+            _mention_all(url, headers)
 
     elif mode == 'slack':
         data = {
@@ -106,28 +119,11 @@ def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
                 }
             ]
         }
-        requests.post(url, headers=headers, json=data)
-
-    elif mode == 'slack_pt':
-        data = {
-            "title": title,
-            "value": reason,
-        }
-        requests.post(url, headers=headers, json=data)
-
-    elif mode == 'wxBot':
-        data = {
-            "msgtype": "text",
-            "text": {
-                "content": reason
-            }
-        }
-        url = robot_dict_wechat['BB']
-        requests.post(url, headers=headers, json=data)
+        requests.post(url, headers=headers, json=data, timeout=5)
 
     else:
         print('robot over gg')
 
 
 if __name__ == '__main__':
-    robot('slack', reason='commit')
+    robot('markdown', reason='commit')

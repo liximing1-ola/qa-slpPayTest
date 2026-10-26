@@ -2,10 +2,25 @@
 封装assert方法
 """
 import json
+import os
 import platform
 import time
 from common import Consts
 from common.Config import config
+
+# rpc 接口延迟补偿：除阿里测试机外，每次校验状态码前先等一会，避免刚操作完就去读导致结果不一致。
+# 全量跑一遍每个用例都等一次，累计 40 秒左右，用环境变量 ASSERT_SLEEP 调整，设为 0 直接关闭。
+# 用 or 兜底：变量存在但为空（如 export ASSERT_SLEEP=）时不能被 float('') 抛错，那会让所有用例在 import 阶段就失败
+ASSERT_SLEEP = float(os.environ.get('ASSERT_SLEEP') or '0.3')
+_ON_ALI_NODE = platform.node() == config.linux_node['ali']
+
+
+def _settle_before_assert():
+    """
+    :return:
+    """
+    if ASSERT_SLEEP > 0 and not _ON_ALI_NODE:
+        time.sleep(ASSERT_SLEEP)
 
 
 def assert_code(actual_code, expected_code=200):
@@ -14,8 +29,7 @@ def assert_code(actual_code, expected_code=200):
     :param actual_code: 实际结果
     :param expected_code: 预期结果
     """
-    if platform.node() != config.linux_node['ali']:
-        time.sleep(0.3)  # rpc接口延迟，防止结果失败！！！
+    _settle_before_assert()
     try:
         assert actual_code == expected_code
         return True

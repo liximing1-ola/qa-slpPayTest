@@ -86,17 +86,31 @@ pip3 install -r requirements.txt    # 依赖有变更时执行
 
 ## 需要修改的配置（如果服务器环境不同）
 
+优先用环境变量，不改代码：
+
+| 环境变量 | 默认值 | 用途 |
+|---------|--------|------|
+| `DB_HOST` / `DB_USER` / `DB_PASS` | `192.168.1.24` / `root` / `root` | MySQL 连接 |
+| `WX_BOT_SLP` | 内置测试群 webhook | 企微通知（换群/轮换 key） |
+| `ASSERT_SLEEP` | `0.3` | 断言前等待秒数，设 `0` 可提速 |
+| `REQUEST_INTERVAL` | `2` | 同账号请求最小间隔（频控） |
+| `LIST_PASS` | `0` | 设 `1` 时通知里列出通过用例 |
+
+```bash
+export DB_HOST=192.168.1.24
+export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
+```
+
 | 配置文件 | 配置项 | 当前值 |
 |---------|--------|--------|
 | `common/Config.py` | API 地址 | `https://192.168.1.23/` |
-| `common/conSlpXsgMysql.py` | MySQL | `192.168.1.24:3306`，用户 `root`，密码 `root`，库 `xianshi` |
 | `common/conRedis.py` | Redis | `192.168.1.24:6379`，无密码 |
 
 ---
 
 ## 注意事项
 
-1. **测试用例范围**：`run_all_case.py` 第 75 行 `pattern` 当前为单文件调试模式，运行全部用例需改为 `test_*.py`
+1. **测试用例范围**：`run_all_case.py` 的 `all_case()` 里 `pattern` 现为 `test_*.py`（全量），只调试单个文件时把这一行改成对应文件名
 2. **定时任务**（可选）：
    ```bash
    crontab -e

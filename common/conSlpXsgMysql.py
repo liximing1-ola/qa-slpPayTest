@@ -1,12 +1,13 @@
 # coding=utf-8
 import ast
+import os
 import threading
 import time
 import traceback
 
 import pymysql
 
-from caseSlp.tools import get_last_weekday_timestamp
+from common.tools import get_last_weekday_timestamp
 
 
 class _ClassProperty:
@@ -79,10 +80,11 @@ class _ThreadLocalConnection:
 
 class conMysql:
     db_config = {
+        # 测试库连接信息可用环境变量覆盖（DB_HOST / DB_USER / DB_PASS），换环境无需改代码
         # "ali_db": '127.0.0.1',
-        "ali_db": '192.168.1.24',
-        "ali_user": 'root',
-        "ali_pas": 'root'
+        "ali_db": os.environ.get('DB_HOST') or '192.168.1.24',
+        "ali_user": os.environ.get('DB_USER') or 'root',
+        "ali_pas": os.environ.get('DB_PASS') or 'root'
     }
     _dbUrl = db_config['ali_db']
     _user = db_config['ali_user']

@@ -4,7 +4,7 @@ from common.Config import config as old_config
 pay_url = old_config.slp_pay_url
 default_num = 1  # 礼物个数
 default_money = 1000000  # 打赏者默认金额
-payUid = 200254777  # 15008520000	支付测试0000	打赏者/Basic.yml 登录session 星舰成员
+payUid = 200254777  # 15008520000	支付测试0000	打赏者/登录session 星舰成员
 payUid_subsidiary = 200251538  # 15008520008	支付测试0008	打赏者-小号(同安全手机号)
 payUid_subsidiary2 = 200251096  # 15008520009	支付测试0009	打赏者-小号(同实名认证,现在可以认证5个账号)
 

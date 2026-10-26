@@ -1,5 +1,5 @@
 # coding=utf-8
-import inspect
+import os
 import unittest
 from time import time
 
@@ -8,65 +8,11 @@ from autoGitPull import updateTime, updateCode
 from common import Logs, Consts
 from common.Config import config
 from common.Session import Session
+from common.report import AllTestRunner, not_pass_summary, split_message
 
-
-def extract_des_from_docstring(docstring):
-    """从测试方法 docstring 中提取用例描述（用例描述：与脚本步骤：之间的第一行非空文本）"""
-    if not docstring:
-        return None
-    lines = docstring.splitlines()
-    capture = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith('用例描述'):
-            capture = True
-            # 如果 "用例描述：" 同行后面有内容，直接取
-            after_colon = stripped.split('：', 1)[-1].strip()
-            if after_colon:
-                return after_colon
-            continue
-        if capture and stripped.startswith('脚本步骤'):
-            break
-        if capture and stripped:
-            return stripped
-    return None
-
-
-class AllTestResult(unittest.TextTestResult):
-    """自定义测试结果类，记录所有用例（通过/失败/异常）"""
-    def __init__(self, stream, descriptions, verbosity):
-        super().__init__(stream, descriptions, verbosity)
-        self.successes = []
-        self.test_des_map = {}  # 记录每个测试的 des 值
-
-    def startTest(self, test):
-        super().startTest(test)
-        # 优先从方法签名的 des 默认参数获取，其次从 docstring 提取
-        try:
-            method = getattr(test, test._testMethodName)
-            # 方式1: 从方法签名获取 des 默认值
-            sig = inspect.signature(method)
-            des_param = sig.parameters.get('des', None)
-            if des_param is not None and des_param.default is not inspect.Parameter.empty:
-                self.test_des_map[test] = des_param.default
-                return
-            # 方式2: 从 docstring 提取用例描述
-            docstring = test._testMethodDoc
-            if docstring:
-                des = extract_des_from_docstring(docstring)
-                if des:
-                    self.test_des_map[test] = des
-        except Exception:
-            pass
-
-    def addSuccess(self, test):
-        super().addSuccess(test)
-        self.successes.append(test)
-
-
-class AllTestRunner(unittest.TextTestRunner):
-    """自定义测试运行器，返回 AllTestResult"""
-    resultclass = AllTestResult
+# 是否在通知里逐条列出通过的用例：默认关闭。通过用例动辄上百条，会把消息撞到企微 4096 字节上限，
+# 导致真正需要看的失败/异常清单被截断；需要看全量明细时用 LIST_PASS=1 临时打开
+LIST_PASS = os.environ.get('LIST_PASS', '0') == '1'
 
 
 def main(appInfo):
@@ -79,58 +25,34 @@ def main(appInfo):
 		Session.getSession(appInfo)
 
 		# 检查代码更新（不阻塞测试执行）
-		updateCode.autoGitPull('slp_php', bot='slp', to=to, env=appInfo)
-		updateCode.autoGitPull('slp_common_rpc', bot='slp', to=to, env=appInfo)
+		updateCode.autoGitPull('slp_php')
+		updateCode.autoGitPull('slp_common_rpc')
 		updateTime('write', now=str(int(time())))
 
 		# 执行测试
 		test_result = AllTestRunner(verbosity=0).run(all_case(appInfo))
 		Consts.endTime = time()
-		des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}, 跳过用例数: {}" \
-			.format(test_result.testsRun, len(test_result.failures), len(test_result.errors),
-					len(test_result.skipped))
-		Logs.get_log('caseResult.log').info(des)
-
-		# 构建消息内容
-		lines = []
-		lines.append(f"des: {des}")
-		lines.append("")
 
 		pass_count = len(test_result.successes)
 		fail_count = len(test_result.failures)
 		error_count = len(test_result.errors)
 		skip_count = len(test_result.skipped)
+		des = "用例总数: {}, 通过: {}, 失败: {}, 异常: {}, 跳过: {}".format(
+			test_result.testsRun, pass_count, fail_count, error_count, skip_count)
+		Logs.get_log('caseResult.log').info(des)
 
-		lines.append(f"通过: {pass_count}  失败: {fail_count}  异常: {error_count}  跳过: {skip_count}")
-		lines.append("")
+		# 未通过用例放在最前面：企微单条 markdown 上限 4096 字节，超长会被静默截断，
+		# 通过用例若逐条列出会占满篇幅，把真正要看的结论挤到截断区之外
+		lines = [f"des: {des}", "", not_pass_summary(test_result)]
+		if LIST_PASS:
+			lines.append("")
+			lines.append("通过用例：")
+			for case in test_result.successes:
+				lines.append("{} - PASS".format(test_result.test_des_map.get(case, case.id())))
 
-		# 列出所有通过的用例
-		for case in test_result.successes:
-			des_val = test_result.test_des_map.get(case, case.id())
-			lines.append(f"{des_val} - PASS")
-
-		# 列出失败的用例
-		for case, reason_str in test_result.failures:
-			des_val = test_result.test_des_map.get(case, case.id())
-			lines.append(f"{des_val} - FAIL")
-			# 从 reason 中提取响应体（去掉 "Depiction: xxx, failReason: " 前缀）
-			if "failReason:" in reason_str:
-				body_part = reason_str.split("failReason:", 1)[1].strip()
-				lines.append(f"  {body_part}")
-
-		# 列出异常的用例
-		for case, reason_str in test_result.errors:
-			des_val = test_result.test_des_map.get(case, case.id())
-			lines.append(f"{des_val} - ERROR")
-			lines.append(f"  {str(reason_str)[:200]}")
-
-		# 列出跳过的用例：skip 既不算通过也不算失败，不显式列出会让人误以为这些用例已经验证过了
-		for case, reason_str in test_result.skipped:
-			des_val = test_result.test_des_map.get(case, case.id())
-			lines.append(f"{des_val} - SKIP ({reason_str})")
-
-		message = "\n".join(lines)
-		robot('markdown', message, bot='slp')
+		# 仍然超长时按字节拆成多条推送，避免被企微静默截断
+		for chunk in split_message(lines):
+			robot('markdown', chunk, bot='slp')
 
 		# 记录失败日志
 		if fail_count >= 1:
@@ -151,17 +73,9 @@ def all_case(appInfo):
 		return
 
 	testcase = unittest.TestSuite()
-	# discover = unittest.defaultTestLoader.discover(case_dir,  # 指定待执行用例的目录
-	#                                                pattern="test_pt_cnArea.py",
-	#                                                top_level_dir=None)
+	# 全量执行：pattern 可按需改成单个文件名调试
 	discover = unittest.defaultTestLoader.discover(case_dir,  # 指定待执行用例的目录
 	                                               pattern="test_*.py",
-	                                               # pattern="test_gs_other_broker_slporder_room_new.py",
-	                                               # pattern="test_gs_room_pay_self.py",
-	                                               # pattern="test_naming_song.py",
-	                                               # pattern="test_001.py",
-	                                               # pattern="test_002.py",
-	                                               # pattern="test_coupon.py",
 	                                               top_level_dir=config.BASE_PATH)
 	testcase.addTests(discover)
 	return testcase

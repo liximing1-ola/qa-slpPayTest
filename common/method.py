@@ -1,58 +1,39 @@
-import os
+"""
+用例公共小工具
+
+历史遗留的 dictToList / dictToListSlack / getValue / checkPath / getUserTitle / reason_slp
+已确认全仓库零引用（并发脚本删掉后就没人调了），这里一并移除；
+checkPath 还引用着已下线项目的 'PT' 机器人，属于会直接报错的死代码。
+"""
 import random
-import time
+
 import requests
-import Robot
-from common import Consts
-from common.Config import config
-
-
-def dictToListSlack(result_dict):
-    """slack机器人使用"""
-    case = []
-    for k, v in result_dict.items():
-        field = {
-            "title": f"Scene:{k}",
-            "value": f"执行结果:{v}",
-            "short": False
-        }
-        case.append(field)
-    return case
-
-
-# 将列表生成支持markdown的形式
-def dictToList(result_dict):
-    list_case = []
-    for k, v in result_dict.items():
-        # list_case.append('<font color="comment">{}-</font>,<font color=\"info\">{}</font>'.format(v, k))
-        list_case.append('scene-{}：{}'.format(k, v))
-    case = '\n'.join(list_case)
-    # 注释生成md文件
-    # path = config.BASE_PATH + '/markdown2Html/'
-    # if not os.path.exists(path):
-    #    os.mkdir(path)
-    # with open(path + 'result.md', 'a', encoding='utf-8') as r:
-    #    r.writelines(case)
-    return case
 
 
 # 随机获取图片
 def getImage(mode=2):
+    """
+    通知里用的配图。第三方图片接口不可用时退化为固定图床，
+    不能让「取图失败」把失败通知本身带崩。
+    :param mode: 1=mxnzp 随机图, 2=shibe 随机狗图, 其他=固定图床
+    """
     url = 'https://www.mxnzp.com/api/image/girl/list/random?app_id=kilmc0p2ytsnawyp&app_secret=bnNoWElSVDBYbEhsc1EvYVM2WnVnZz09'
     url_dog = 'https://shibe.online/api/shibes?count=1'
-    if mode == 1:
-        res = requests.get(url)
-        res.raise_for_status()
-        res = res.json()
-        if res['code'] == 1:
-            return res['data'][0]['imageUrl']
-    elif mode == 2:
-        res = requests.get(url_dog)
-        res = res.json()
-        return res[0]
-    elif mode == 3:
-        icon = random.randint(1, 1000)
-        return 'http://xs-image.oss-cn-hangzhou.aliyuncs.com/static/gift_big/{}.png'.format(icon)
+    fallback = 'http://xs-image.oss-cn-hangzhou.aliyuncs.com/static/gift_big/{}.png'.format(random.randint(1, 1000))
+    try:
+        if mode == 1:
+            res = requests.get(url, timeout=3)
+            res.raise_for_status()
+            res = res.json()
+            if res['code'] == 1:
+                return res['data'][0]['imageUrl']
+        elif mode == 2:
+            res = requests.get(url_dog, timeout=3)
+            res = res.json()
+            return res[0]
+    except Exception as error:
+        print('获取通知配图失败，使用默认图床: {}'.format(error))
+    return fallback
 
 
 # 检查当前字段是否在Json中存在
@@ -92,80 +73,8 @@ def getKeys(data):
     return keysAll_list
 
 
-def getValue(res):
-    """
-    统计并发请求的成功/失败次数
-    注意：接口返回的 success 是整数 1，不能用 `is True` 判断（1 is True 结果为 False）
-    :param res: post_request_session 的返回值
-    """
-    body = res.get('body') if isinstance(res, dict) else None
-    success = body.get('success') if isinstance(body, dict) else None
-    if success in (1, True):
-        print('结果：{}, 时间：{}'.format(success, time.time()))
-        Consts.success_num += 1
-    else:
-        print('结果：{}， 时间：{}'.format(body, time.time()))
-        Consts.fail_num += 1
-
-
 def reason(des, res):
     body = res.get('body') if isinstance(res, dict) else None
     if isinstance(body, dict) and body.get('success') == 0 and not isExtend(body, 'msg'):
         print(body)
     return 'Depiction: {},  failReason: {}'.format(des, body)
-
-
-# def reason_starify(des, res):
-#     if res['body'].get("success", None) is True and not isExtend(res['body'], 'msg'):
-#         print(res['body'])
-#     return 'Depiction: {},  failReason: {}'.format(des, res['body'])
-def reason_slp(des, res):
-    if res['body'].get("success", None) is True and not isExtend(res['body'], 'msg'):
-        print(res['body'])
-    return 'Depiction: {},  failReason: {}'.format(des, res['body'])
-
-def checkPath(path):
-    if not os.path.exists(path):
-        Robot.robot('icon', 'php代码路径异常: {}'.format(path), bot='PT')
-        raise EnvironmentError('代码路径异常')
-
-
-def getUserTitle(level):
-    """
-    UserNewTitleSrv::TITLE_QI_SHI => 1.0,
-    UserNewTitleSrv::TITLE_NAN_JUE => 1.1,
-    UserNewTitleSrv::TITLE_ZI_JUE => 1.2,
-    UserNewTitleSrv::TITLE_BO_JUE => 1.3,
-    UserNewTitleSrv::TITLE_HOU_JUE => 1.4,
-    UserNewTitleSrv::TITLE_GONG_JUE => 1.5,
-    UserNewTitleSrv::TITLE_QIN_KING => 1.6,
-    UserNewTitleSrv::TITLE_GUO_KING => 1.8,
-    UserNewTitleSrv::TITLE_HUANG_DI => 2.0,
-    """
-    if level == 10:
-        return 1.0
-    elif level == 20:
-        return 1.1
-    elif level == 30:
-        return 1.2
-    elif level == 40:
-        return 1.3
-    elif level == 50:
-        return 1.4
-    elif level == 60:
-        return 1.5
-    elif level == 70:
-        return 1.6
-    elif level == 80:
-        return 1.8
-    elif level == 90:
-        return 2.0
-
-#
-# def checkUserVipExp(money_type='money', uid=config.payUid, pay_off=100):
-#     if money_type == 'money' or money_type == 'coin':
-#         return int(pay_off * getUserTitle(mysql.selectUserInfoSql('level', uid)))
-#     elif money_type == 'bean':
-#         return int(pay_off * 1.5)
-#     else:
-#         return 0
