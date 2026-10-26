@@ -15,6 +15,10 @@ def get_log(log_name, level=logging.DEBUG, when='midnight', back_count=0):
     """
     logs = logging.getLogger(log_name)
     logs.setLevel(level)  # log打印级别
+    # 同名 logger 是全局单例，重复调用时再挂 handler 会让同一条日志被打印 N 次，
+    # 且每次都会新建 TimedRotatingFileHandler，造成文件句柄泄漏
+    if logs.handlers:
+        return logs
     LOG_PATH = os.path.join(config.BASE_PATH, 'log')
     if not os.path.exists(LOG_PATH):
         os.makedirs(LOG_PATH)

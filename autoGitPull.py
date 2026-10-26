@@ -1,14 +1,13 @@
-import datetime
 import os
-import git
-from time import time, mktime, strptime
-from git.repo import Repo
-from Robot import robot
+from time import time
+
 from common import Logs, Consts
 from common.Config import config
 
 
 class updateCode:
+    # 两个仓库的判断结果完全一致，用该标记保证同一条日志只打印一次
+    _time_logged = False
 
     @staticmethod
     def autoGitPull(appInfo, env='dev', bot='BB', to='slack'):
@@ -31,35 +30,15 @@ class updateCode:
         # g.pull() if not appInfo.startswith("slp") else print(f"{appInfo}不拉代码!")
         # repo = Repo(gtr_path)
         Consts.startTime = time()
-        # commit_log = repo.git.log('--pretty={"commit":"%h","author":"%an","summary":"%s","date":"%cd"}', max_count=3,
-        #                           date='format:%Y-%m-%d %H:%M:%S')
-        commit_log = str(datetime.datetime.now())
-        log_list = commit_log.split("\n")
-        # Logs.get_log('gitCommitPull.log').info(
-        #     '当前分支: {}, 最新一条commit: {}'.format(repo.active_branch, log_list[0]))
-        # if str(repo.active_branch) == git_branch:  # 当前线上分支
         if "dev" == git_branch:  # 当前线上分支
-            # times = int(
-            #    mktime(strptime([eval(item) for item in log_list][0]['date'], "%Y-%m-%d %H:%M:%S")))  # commit更新时间
-            times = 9999999999
-            lastTime = int(updateTime('read'))  # 上次脚本执行时间
-            if times > lastTime:
+            # slp_php 与 slp_common_rpc 共用同一个"上次执行时间"，判断结果完全一致，
+            # 只打印一次，避免同一条日志重复刷屏
+            if not updateCode._time_logged:
+                updateCode._time_logged = True
                 Logs.get_log('updateGitCode.log').info(
-                    '最新代码提交时间: {}, 上次代码更新时间: {}'.format(times, lastTime))
-                # 不发送 git commit 通知消息
-                # if appInfo == 'pt':
-                #     robot('slack_pt', log_list[0], bot=bot)
-                # elif appInfo in ['slp_php', 'slp_common_rpc']:
-                #     robot('slack', log_list[0], bot=bot, to=to) if to == 'slack' else robot('markdown', log_list[0], bot=bot, to=to)
-                # else:
-                #     robot('slack', log_list[0], bot=bot)
-                return True
-            else:
-                # Logs.get_log('updateGitCode.log').info("未拉取到{}分支代码，最近代码提交时间: {}, 上次代码更新时间: {}"
-                #                                        .format(repo.active_branch, times, lastTime))
-                return False
+                    '上次代码更新时间: {}'.format(updateTime('read')))
+            return True
         else:
-            # Logs.get_log('gitBranchError.log').error("git branch error： {}".format(repo.active_branch))
             return False
 
 
