@@ -7,15 +7,15 @@ blackboxprotobuf==1.0.1
 blinker==1.4
 brotlipy==0.7.0
 certifi==2018.1.18
-cffi @ file:///opt/conda/conda-bld/cffi_1642701102775/work
+cffi>=1.15.0
 chardet==3.0.4
-charset-normalizer @ file:///tmp/build/80754af9/charset-normalizer_1630003229654/work
+charset-normalizer>=2.0.0
 chinesecalendar==1.7.2
 click==6.7
 colorama==0.3.7
 configobj==5.0.6
 constantly==15.1.0
-cryptography @ file:///tmp/build/80754af9/cryptography_1652083456434/work
+cryptography>=36.0
 defusedxml==0.7.1
 Deprecated==1.2.13
 distro-info==1.0
@@ -49,17 +49,16 @@ psutil==5.8.0
 py==1.10.0
 pyasn1==0.4.2
 pyasn1-modules==0.2.1
-pycparser @ file:///tmp/build/80754af9/pycparser_1636541352034/work
+pycparser>=2.21
 PyJWT==1.5.3
-PyMySQL==1.0.2
+PyMySQL>=1.0.0,<1.1.0
 pynsq==0.9.0
 pyOpenSSL==17.5.0
 pyparsing==2.4.7
 pyserial==3.4
-PySocks @ file:///tmp/build/80754af9/pysocks_1594394576006/work
+PySocks>=1.7.1
 pytest==6.2.4
 python-debian==0.1.32
-python-pam==2.0.2
 pyxdg==0.25
 PyYAML==3.12
 redis==4.0.2
@@ -81,5 +80,6 @@ XMind==1.2.0
 zipp==3.5.0
 zope.event==4.5.0
 zope.interface==5.4.0
-
 Markdown~=3.4.1
+mysql-connector-python>=8.0.0
+paramiko>=2.11.0
