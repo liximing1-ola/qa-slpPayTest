@@ -2,6 +2,8 @@
 """
 封装 request
 """
+import os
+import threading
 import time
 
 import requests
@@ -17,6 +19,40 @@ from common.Session import Session
 
 # 单次请求超时时间（秒），避免网络异常时用例无限挂起
 REQUEST_TIMEOUT = 30
+# 同一账号两次请求的最小间隔（秒）：服务端对连续操作有频控，间隔不足会返回"请勿频繁操作"；
+# 需要提速时可用环境变量覆盖，例如 REQUEST_INTERVAL=0.5
+REQUEST_INTERVAL = float(os.environ.get('REQUEST_INTERVAL', 2))
+# 命中频控后的最大重试次数：设为 0 表示不重试，直接把频控响应交给用例判断
+FREQUENT_RETRY = int(os.environ.get('FREQUENT_RETRY', 2))
+FREQUENT_MSG = '请勿频繁操作'
+
+# 每个账号上一次请求的计划发起时间，用于补足最小间隔
+_last_request_at = {}
+_interval_lock = threading.Lock()
+
+
+def _wait_for_interval(token_name):
+    """
+    按账号保证两次请求之间的最小间隔。
+
+    原实现是每个请求前固定 sleep(2)，即使距上次请求已经过去很久也要空等；
+    这里改为只补足差额：连续操作时不会触发频控，请求间隔本来就够时也不浪费时间。
+    """
+    with _interval_lock:
+        now = time.time()
+        last = _last_request_at.get(token_name)
+        wait = REQUEST_INTERVAL - (now - last) if last is not None else 0
+        if wait < 0:
+            wait = 0
+        # 先占位再等待，多个线程排队时也能保持间隔
+        _last_request_at[token_name] = now + wait
+    if wait > 0:
+        time.sleep(wait)
+
+
+def _is_frequent_response(body):
+    """判断是否命中服务端频控"""
+    return isinstance(body, dict) and FREQUENT_MSG in str(body.get('msg', ''))
 
 
 def post_request_session(url, data, tokenName='dev', pay_uid=None):
@@ -38,20 +74,32 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
     }
     if not url.startswith('https://'):
         url = '%s%s' % ('https://', url)
-    try:
-        if data is None:
-            response = requests.post(url=url, headers=header, verify=False, timeout=REQUEST_TIMEOUT)
-        else:
-            response = requests.post(url=url, data=data, headers=header, verify=False, timeout=REQUEST_TIMEOUT)
-    except requests.RequestException as error:
-        # 不能返回空元组：调用方会直接 res['code'] 触发 TypeError，把真实失败原因（超时/证书错误）掩盖掉
-        raise AssertionError('接口请求失败: {}, 原因: {}'.format(url, error)) from error
 
-    try:
-        body = response.json()
-    except ValueError:
-        # 网关返回 html 等非 json 响应时保留原始文本，便于定位问题
-        body = response.text
+    response = None
+    body = None
+    for attempt in range(FREQUENT_RETRY + 1):
+        _wait_for_interval(tokenName)
+        try:
+            if data is None:
+                response = requests.post(url=url, headers=header, verify=False, timeout=REQUEST_TIMEOUT)
+            else:
+                response = requests.post(url=url, data=data, headers=header, verify=False, timeout=REQUEST_TIMEOUT)
+        except requests.RequestException as error:
+            # 不能返回空元组：调用方会直接 res['code'] 触发 TypeError，把真实失败原因（超时/证书错误）掩盖掉
+            raise AssertionError('接口请求失败: {}, 原因: {}'.format(url, error)) from error
+
+        try:
+            body = response.json()
+        except ValueError:
+            # 网关返回 html 等非 json 响应时保留原始文本，便于定位问题
+            body = response.text
+
+        # 频控属于环境噪声而不是被测逻辑，退避后重试；超过次数则把原响应交给用例断言
+        if attempt < FREQUENT_RETRY and _is_frequent_response(body):
+            print('[频控] 命中"{}", {} 秒后重试（第 {}/{} 次）'.format(
+                FREQUENT_MSG, REQUEST_INTERVAL, attempt + 1, FREQUENT_RETRY))
+            continue
+        break
 
     print("#"*100)
     print(response.status_code)
