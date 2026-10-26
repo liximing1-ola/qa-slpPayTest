@@ -43,7 +43,7 @@ class AllTestResult(unittest.TextTestResult):
     def startTest(self, test):
         super().startTest(test)
         # 防御性清理：重试回放态与缓存按用例隔离。@Retry 的 wrapper 开头也会清一次，
-        # 这里收住“没加 @Retry 的用例”这种将来可能出现的入口，避免继承上一条用例的回放态
+        # 这里收住"没加 @Retry 的用例"这种将来可能出现的入口，避免继承上一条用例的回放态
         from common import Request
         Request.begin_case()
         # 优先从方法签名的 des 默认参数获取，其次从 docstring 提取

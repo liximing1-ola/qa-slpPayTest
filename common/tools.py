@@ -197,6 +197,29 @@ def clear_acceleration_card(uid, pay_uid=None):
         mysql.deleteXsUserAccelerationInfo(pay_uid)
 
 
+def _insert_once(label, desc, insert_func, read_func):
+    """
+    插入类的数据准备只真正执行一次
+
+    插入不是幂等操作，重试轮次里再插一次会让背包/优惠券数量翻倍，因此回放轮跳过插入。
+    但后续那次"取 id"的读取照常执行：它属于下单前的准备产物，会被读值回放命中、返回首轮记下的值，
+    同时让读序号与首轮对齐——否则同一查询在这轮少调用一次，后面的读值会静默错位。
+    :param label: 日志与报错里的中文名称
+    :param desc: 参数描述，用于定位是哪一次插入
+    :param insert_func: 真正执行插入
+    :param read_func: 插入后查询记录 id，返回 None 视为查不到
+    """
+    if Request.is_replaying():
+        print('[重试] 跳过重复插入{}: {}'.format(label, desc))
+    else:
+        insert_func()
+
+    value = read_func()
+    if value is None:
+        raise AssertionError('{}插入后查不到记录: {}'.format(label, desc))
+    return int(value)
+
+
 def insert_coupon(uid, cid, num=1):
     """
     插入优惠券并返回coupon id
@@ -207,22 +230,13 @@ def insert_coupon(uid, cid, num=1):
     """
     from common.conSlpXsgMysql import conMysql as mysql
 
-    # 插入不是幂等操作：重试轮次里再插一次会让背包/券多一份，直接复用上一轮的结果
-    key = ('insert_coupon', uid, cid, num)
-    if Request.is_replaying():
-        cached = Request.cache_get(key)
-        if cached is not None:
-            print('[重试] 跳过重复插入优惠券: uid={}, cid={}'.format(uid, cid))
-            return cached
+    def _insert():
+        mysql.insertXsUserCommodity(uid, cid, num)
+        mysql.insertXsUserCouponUse(uid, cid)
 
-    mysql.insertXsUserCommodity(uid, cid, num)
-    mysql.insertXsUserCouponUse(uid, cid)
-    value = mysql.selectUserInfoSql('id_commodity', uid, cid=cid)
-    if value is None:
-        # 不能直接 int(None)：报错信息会被 TypeError 掩盖，看不出是“刚插入的记录查不到”
-        raise AssertionError('优惠券插入后查不到记录: uid={}, cid={}'.format(uid, cid))
-    Request.cache_put(key, value)
-    return int(value)
+    return _insert_once(
+        '优惠券', 'uid={}, cid={}, num={}'.format(uid, cid, num), _insert,
+        lambda: mysql.selectUserInfoSql('id_commodity', uid, cid=cid))
 
 
 def insert_package_gift(uid, cid, num=1):
@@ -235,20 +249,12 @@ def insert_package_gift(uid, cid, num=1):
     """
     from common.conSlpXsgMysql import conMysql as mysql
 
-    # 同上：重复插入会让背包数量翻倍，重试时直接复用上一轮的 id
-    key = ('insert_package_gift', uid, cid, num)
-    if Request.is_replaying():
-        cached = Request.cache_get(key)
-        if cached is not None:
-            print('[重试] 跳过重复插入背包礼物: uid={}, cid={}'.format(uid, cid))
-            return cached
+    def _insert():
+        mysql.insertXsUserCommodity(uid, cid, num)
 
-    mysql.insertXsUserCommodity(uid, cid, num)
-    value = mysql.selectUserInfoSql('id_commodity', uid, cid=cid)
-    if value is None:
-        raise AssertionError('背包礼物插入后查不到记录: uid={}, cid={}'.format(uid, cid))
-    Request.cache_put(key, value)
-    return int(value)
+    return _insert_once(
+        '背包礼物', 'uid={}, cid={}, num={}'.format(uid, cid, num), _insert,
+        lambda: mysql.selectUserInfoSql('id_commodity', uid, cid=cid))
 
 
 def get_last_weekday_timestamp(weekday_num=1):

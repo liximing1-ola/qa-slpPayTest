@@ -47,15 +47,25 @@ def begin_case():
     _cache().clear()
     _replay_state.replay = False
     _replay_state.wrote = False
+    _replay_state.read_index = {}
+
+
+# 回放轮还要还原"下单前的读值"：用例常写成 old = 查 → 下单 → 断言 new == old + 增量，
+# 回放轮不再真正下单，库里的基线已经是首轮结算后的值，若不还原 old，断言必然失败。
+# 这里按"同一查询在本轮的调用序号"对齐，只回放发生在首轮下单之前的读值；
+# 下单之后的读值必须重新查询——那正是重试要观察的目标。
+READ_MISS = object()
 
 
 def begin_replay():
     """用例重试开始：后续同参数写请求直接复用上一轮的响应
 
     只有上一轮真的发出过写请求才进入回放：若首轮死在下单之前的前置断言上，
-    缓存里根本没有下单记录，这时如果照样进入回放，就会“跳过数据准备 + 真实下单”，
+    缓存里根本没有下单记录，这时如果照样进入回放，就会"跳过数据准备 + 真实下单"，
     拿着上一条用例残留的脏数据跑出假失败，还白下一单。这种情况下保持普通重跑即可。
     """
+    # 读序号按轮次归零：本轮的第 n 次查询才能对上上一轮的第 n 次查询
+    _replay_state.read_index = {}
     if not getattr(_replay_state, 'wrote', False):
         return
     _replay_state.replay = True
@@ -64,6 +74,30 @@ def begin_replay():
 def is_replaying():
     """当前是否处在重试轮次（非幂等的数据准备可据此跳过）"""
     return getattr(_replay_state, 'replay', False)
+
+
+def next_read_index(key):
+    """同一个查询在本轮内的调用序号"""
+    index = getattr(_replay_state, 'read_index', None)
+    if index is None:
+        index = {}
+        _replay_state.read_index = index
+    seq = index.get(key, 0)
+    index[key] = seq + 1
+    return seq
+
+
+def remember_read(key, seq, value):
+    """记下本轮读值，并标记它是否发生在下单之前"""
+    _cache()[('read', key, seq)] = (value, not getattr(_replay_state, 'wrote', False))
+
+
+def replay_read(key, seq):
+    """复用此前在下单前记下的读值；下单后记下的读值返回 READ_MISS，由调用方真实查询"""
+    item = _cache().get(('read', key, seq))
+    if item is None or not item[1]:
+        return READ_MISS
+    return item[0]
 
 
 def cache_get(key):
@@ -109,23 +143,25 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
     """
     urllib3.disable_warnings()
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    if not url.startswith('https://'):
+        url = '%s%s' % ('https://', url)
+
+    # 写请求才做重试复用：读接口重复请求行为保持不变。
+    # 命中回放要放在读 token 之前，否则 token 文件异常时回放会跟着一起失败
+    cache_key = None
+    if _RETRY_CACHE_MARK in url:
+        cache_key = (url, str(data), tokenName, str(pay_uid))
+        cached = cache_get(cache_key)
+        if is_replaying() and cached is not None:
+            print('[重试复用] 不重复下单: {}'.format(url))
+            return cached
+
     header = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 11; HD1900 Build/RKQ1.201022.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/87.0.4280.141 Mobile Safari/537.36 / Xs android V1.1.0.0 / Js V1.0.0.0 / Login V1658980709",
         "Content-Type": "application/x-www-form-urlencoded",
         'Connection': 'close',
         "user-token": Session.checkUserToken(operate='read', app_name=tokenName, uid=pay_uid)
     }
-    if not url.startswith('https://'):
-        url = '%s%s' % ('https://', url)
-
-    # 写请求才做重试复用：读接口重复请求行为保持不变
-    cache_key = None
-    if _RETRY_CACHE_MARK in url:
-        cache_key = (url, str(data), tokenName, str(pay_uid))
-        cached = cache_get(cache_key)
-        if cached is not None and is_replaying():
-            print('[重试复用] 不重复下单: {}'.format(url))
-            return cached
 
     response = None
     body = None

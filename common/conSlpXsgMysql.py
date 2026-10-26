@@ -4,7 +4,6 @@ import os
 import re
 import threading
 import time
-import traceback
 
 import pymysql
 
@@ -13,14 +12,26 @@ from common.tools import get_last_weekday_timestamp
 
 # 写库语句的起始关键字：先剥掉前导注释再判首 token，避免 "-- 清数据\nupdate ..." 这类写法漏判
 _WRITE_KEYWORDS = ('insert', 'update', 'delete', 'replace', 'truncate', 'alter', 'drop', 'create', 'set', 'call')
-_LEADING_COMMENT_RE = re.compile(r'^(?:\s*(?:--[^\n]*\n|#[^\n]*\n|/\*.*?\*/))*\s*', re.S)
+_LEADING_COMMENT_RE = re.compile(r'^(?:\s*(?:--[^\n]*(?:\n|$)|#[^\n]*(?:\n|$)|/\*.*?\*/))*\s*', re.S)
 _WRITE_RE = re.compile(r'^\s*(?:' + '|'.join(_WRITE_KEYWORDS) + r')\b', re.I)
 
 
 def _is_write_sql(sql):
     """语句是否会写库（兼容前导空白/注释、全大写写法）"""
-    text = _LEADING_COMMENT_RE.sub('', str(sql), count=1)
-    return bool(_WRITE_RE.match(text))
+    return bool(_WRITE_RE.match(_LEADING_COMMENT_RE.sub('', str(sql))))
+
+
+def _safe_rollback():
+    """回滚只是尽力而为。
+
+    连接已经断开时 rollback 自己会抛错，若不加保护，它会把后面的 DbQueryError 抢掉，
+    SQL 与真实失败原因全部丢失——而这正是最需要看清故障的时候。
+    """
+    try:
+        conMysql.con.rollback()
+    except Exception as error:
+        # 留痕但不影响主流程：连接断开时的回滚失败本身就是重要现场信息
+        print('[DB] rollback 失败（忽略）: {}'.format(error))
 
 
 class DbQueryError(Exception):
@@ -64,6 +75,14 @@ class _ReplayCursor:
             print('[重试] 跳过写库: {}'.format(str(sql).strip()[:100]))
             return 0
         return self._real.executemany(sql, *args, **kwargs)
+
+    def __enter__(self):
+        # with 走的是特殊方法而不是 __getattr__，不显式补上就会在回放态下直接 TypeError
+        self._real.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._real.__exit__(exc_type, exc, tb)
 
     def __getattr__(self, item):
         # fetchone / fetchall / rowcount / description 等全部透传给真实游标
@@ -160,6 +179,33 @@ class conMysql:
     # 查询用户账户信息
     @staticmethod
     def selectUserInfoSql(accountType, uid="200254463", money_type='money_cash_b', cid=263, payuid="200254777", app_id=66):
+        """查询用户账户信息（重试轮会复用首轮下单前的读值）
+
+        回放轮不再真正下单，库里的"下单前基线"已经是首轮结算后的值。用例里大量存在
+        old = 查 → 下单 → 断言 new == old + 增量 的写法，若不还原 old，断言必然失败；
+        "插入后取 id"这类准备产物同理，不沿用首轮结果就拿不到 id。
+        因此按"同一查询在本轮的调用序号"对齐，只回放首轮下单之前的读值，
+        下单之后的读值仍真实查询——那正是重试要观察的目标。
+        """
+        # salt 不随订单变化，且它处于"取 token"的路径上：回放轮命中响应后不会再取 token，
+        # 这种少一次的调用会让同 key 的序号错位，直接不纳入回放
+        if accountType == 'user_index':
+            return conMysql._query_user_info(accountType, uid, money_type, cid, payuid, app_id)
+
+        key = (accountType, uid, money_type, cid, payuid, app_id)
+        seq = Request.next_read_index(key)
+        if Request.is_replaying():
+            cached = Request.replay_read(key, seq)
+            if cached is not Request.READ_MISS:
+                print('[重试] 复用下单前读数: {}, uid={}'.format(accountType, uid))
+                return cached
+        value = conMysql._query_user_info(accountType, uid, money_type, cid, payuid, app_id)
+        Request.remember_read(key, seq, value)
+        return value
+
+    @staticmethod
+    def _query_user_info(accountType, uid, money_type, cid, payuid, app_id):
+        """实际执行某个 accountType 对应的查询，失败抛 DbQueryError"""
         if accountType == 'bean':  # 查询用户账户扩展表金豆余额
             sql = "select money_coupon from xs_user_money_extend where uid={}".format(uid)
             try:
@@ -368,7 +414,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -377,7 +423,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -395,7 +441,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -404,7 +450,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -413,7 +459,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -422,7 +468,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -431,7 +477,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -440,7 +486,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -449,7 +495,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -537,7 +583,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
-                conMysql.con.rollback()
+                _safe_rollback()
                 raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
@@ -565,7 +611,7 @@ class conMysql:
                       "money_debts=0 where uid={}".format(uid)
                 conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -578,7 +624,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -632,7 +678,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -658,14 +704,14 @@ class conMysql:
                 try:
                     conMysql.cur.execute(sql)
                 except Exception as error:
-                    conMysql.con.rollback()
+                    _safe_rollback()
                     raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             else:
                 sql = 'update xs_broker set creater={} where bid={} limit 1'.format(bid, bid)
                 try:
                     conMysql.cur.execute(sql)
                 except Exception as error:
-                    conMysql.con.rollback()
+                    _safe_rollback()
                     raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         except Exception as error:
             raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
@@ -684,14 +730,14 @@ class conMysql:
                 try:
                     conMysql.cur.execute(sql)
                 except Exception as error:
-                    conMysql.con.rollback()
+                    _safe_rollback()
                     raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             else:
                 sql = "update xs_mentor_exp set level={} where uid={} limit 1".format(level, uid)
                 try:
                     conMysql.cur.execute(sql)
                 except Exception as error:
-                    conMysql.con.rollback()
+                    _safe_rollback()
                     raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         except Exception as error:
             raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
@@ -773,7 +819,7 @@ class conMysql:
             sql = f"update xs_user_settings set agreement_version={agreement_version} where uid={uid}"
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -840,7 +886,7 @@ class conMysql:
             sql = f"""update xs_relation_defend set expire_time={expire_time},upgrade=0 where (uid={uid1} and defend_uid={uid2}) or (uid={uid2} and defend_uid={uid1}); """
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -852,7 +898,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -866,7 +912,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -884,7 +930,7 @@ class conMysql:
             conMysql.cur.execute(sql1)
             conMysql.cur.execute(sql2)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据写入失败, SQL1: {}, SQL2: {}, 原因: {}'.format(sql1, sql2, error)) from error
         finally:
             conMysql.con.commit()
@@ -896,7 +942,7 @@ class conMysql:
             sql = f"""update xs_chatroom_config set uid={uid} where rid={rid} AND position = {position} limit 1;"""
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -908,7 +954,7 @@ class conMysql:
             sql = f"""update xs_room_user_music_list set naming_id=0 where id={song_id};"""
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -920,7 +966,7 @@ class conMysql:
             sql = f"""update xs_room_user_music_naming set expire_time=expire_time-24*3600*365 where song_id={song_id} order by id desc limit 1;;"""
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -932,7 +978,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -973,7 +1019,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
@@ -986,7 +1032,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
-            conMysql.con.rollback()
+            _safe_rollback()
             raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
         finally:
             conMysql.con.commit()
