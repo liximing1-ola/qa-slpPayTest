@@ -103,7 +103,7 @@ def all_case(appInfo):
 	                                               # pattern="test_001.py",
 	                                               # pattern="test_002.py",
 	                                               # pattern="test_coupon.py",
-	                                               top_level_dir=None)
+	                                               top_level_dir=config.BASE_PATH)
 	testcase.addTests(discover)
 	return testcase
 
