@@ -9,7 +9,7 @@ from common.Config import config
 
 
 def dictToListSlack(result_dict):
-    """slack机器人使�?""
+    """slack机器人使用"""
     case = []
     for k, v in result_dict.items():
         field = {
@@ -21,18 +21,12 @@ def dictToListSlack(result_dict):
     return case
 
 
-# 将列表生成支持markdown的形�?def dictToList(result_dict):
+# 将列表生成支持markdown的形式
+def dictToList(result_dict):
     list_case = []
     for k, v in result_dict.items():
-        # list_case.append('<font color="comment">{}-</font>,<font color=\"info\">{}</font>'.format(v, k))
         list_case.append('scene-{}：{}'.format(k, v))
     case = '\n'.join(list_case)
-    # 注释生成md文件
-    # path = config.BASE_PATH + '/markdown2Html/'
-    # if not os.path.exists(path):
-    #    os.mkdir(path)
-    # with open(path + 'result.md', 'a', encoding='utf-8') as r:
-    #    r.writelines(case)
     return case
 
 
@@ -55,7 +49,8 @@ def getImage(mode=2):
         return 'http://xs-image.oss-cn-hangzhou.aliyuncs.com/static/gift_big/{}.png'.format(icon)
 
 
-# 检查当前字段是否在Json中存�?def isExtend(data, tag):
+# 检查当前字段是否在Json中存在
+def isExtend(data, tag):
     if type(data) != type({}):
         print('please input a json!')
     else:
@@ -69,7 +64,7 @@ def getImage(mode=2):
 def getKeys(data):
     keysAll_list = []
 
-    def getKey(json_data):  # 遍历json所有key
+    def getKey(json_data):
         if type(json_data) == type({}):
             keys = json_data.keys()
             for key in keys:
@@ -96,7 +91,7 @@ def getValue(res):
         print('结果：{}, 时间：{}'.format(res['body']['success'], time.time()))
         Consts.success_num += 1
     else:
-        print('结果：{}�?时间：{}'.format(res['body'], time.time()))
+        print('结果：{}, 时间：{}'.format(res['body'], time.time()))
         Consts.fail_num += 1
 
 
@@ -122,17 +117,6 @@ def checkPath(path):
 
 
 def getUserTitle(level):
-    """
-    UserNewTitleSrv::TITLE_QI_SHI => 1.0,
-    UserNewTitleSrv::TITLE_NAN_JUE => 1.1,
-    UserNewTitleSrv::TITLE_ZI_JUE => 1.2,
-    UserNewTitleSrv::TITLE_BO_JUE => 1.3,
-    UserNewTitleSrv::TITLE_HOU_JUE => 1.4,
-    UserNewTitleSrv::TITLE_GONG_JUE => 1.5,
-    UserNewTitleSrv::TITLE_QIN_KING => 1.6,
-    UserNewTitleSrv::TITLE_GUO_KING => 1.8,
-    UserNewTitleSrv::TITLE_HUANG_DI => 2.0,
-    """
     if level == 10:
         return 1.0
     elif level == 20:
