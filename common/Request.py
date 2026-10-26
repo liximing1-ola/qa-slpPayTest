@@ -24,6 +24,55 @@ FREQUENT_MSG = '请勿频繁操作'
 _last_request_at = {}
 _interval_lock = threading.Lock()
 
+# ===== 用例重试时的写请求复用 =====
+# Retry 失败后会把整个用例体重跑一遍，里面如果是下单/送礼的写请求，就会真的再下一单：
+# 测试账号多出重复订单、金额断言口径被污染，形成"失败→重跑→再下一单"的放大链。
+# 这里对写请求（pay/create）做"同一用例内同参数复用"：首次执行把响应记下来，
+# 重试时直接返回上一轮的响应，只重新做读库断言——结算延迟这类抖动依然能救回来。
+_RETRY_CACHE_MARK = 'pay/create'
+_replay_state = threading.local()
+
+
+def _cache():
+    """回放缓存跟随线程：重试标记与缓存必须同源，否则并发时会互相踩"""
+    cache = getattr(_replay_state, 'cache', None)
+    if cache is None:
+        cache = {}
+        _replay_state.cache = cache
+    return cache
+
+
+def begin_case():
+    """每个用例（含它的全部重试轮次）开始时调用：清掉上一个用例的缓存并退出重试态"""
+    _cache().clear()
+    _replay_state.replay = False
+    _replay_state.wrote = False
+
+
+def begin_replay():
+    """用例重试开始：后续同参数写请求直接复用上一轮的响应
+
+    只有上一轮真的发出过写请求才进入回放：若首轮死在下单之前的前置断言上，
+    缓存里根本没有下单记录，这时如果照样进入回放，就会“跳过数据准备 + 真实下单”，
+    拿着上一条用例残留的脏数据跑出假失败，还白下一单。这种情况下保持普通重跑即可。
+    """
+    if not getattr(_replay_state, 'wrote', False):
+        return
+    _replay_state.replay = True
+
+
+def is_replaying():
+    """当前是否处在重试轮次（非幂等的数据准备可据此跳过）"""
+    return getattr(_replay_state, 'replay', False)
+
+
+def cache_get(key):
+    return _cache().get(key)
+
+
+def cache_put(key, value):
+    _cache()[key] = value
+
 
 def _wait_for_interval(token_name):
     """
@@ -69,6 +118,15 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
     if not url.startswith('https://'):
         url = '%s%s' % ('https://', url)
 
+    # 写请求才做重试复用：读接口重复请求行为保持不变
+    cache_key = None
+    if _RETRY_CACHE_MARK in url:
+        cache_key = (url, str(data), tokenName, str(pay_uid))
+        cached = cache_get(cache_key)
+        if cached is not None and is_replaying():
+            print('[重试复用] 不重复下单: {}'.format(url))
+            return cached
+
     response = None
     body = None
     for attempt in range(FREQUENT_RETRY + 1):
@@ -99,13 +157,17 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
     print(response.status_code)
     print(body)
     print("#"*100)
-    return {
+    result = {
         'code': response.status_code,
         'body': body,
         # elapsed.microseconds 只是秒以下的部分，total_seconds() 才是完整耗时
         'time_consuming': response.elapsed.total_seconds() * 1000,
         'time_total': response.elapsed.total_seconds(),
     }
+    if cache_key is not None:
+        _replay_state.wrote = True
+        cache_put(cache_key, result)
+    return result
 
 
 # def post_request_session_starify(url, data, tokenName='starify', uid=starify_payUid):

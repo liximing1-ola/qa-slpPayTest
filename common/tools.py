@@ -12,9 +12,11 @@ caseSlp/tools.py 与 caseXsg/tools.py 保留为转发模块，兼容原有引用
 import hashlib
 import math
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
+
+from common import Request
 
 
 def merge_dicts(*args):
@@ -205,9 +207,22 @@ def insert_coupon(uid, cid, num=1):
     """
     from common.conSlpXsgMysql import conMysql as mysql
 
+    # 插入不是幂等操作：重试轮次里再插一次会让背包/券多一份，直接复用上一轮的结果
+    key = ('insert_coupon', uid, cid, num)
+    if Request.is_replaying():
+        cached = Request.cache_get(key)
+        if cached is not None:
+            print('[重试] 跳过重复插入优惠券: uid={}, cid={}'.format(uid, cid))
+            return cached
+
     mysql.insertXsUserCommodity(uid, cid, num)
     mysql.insertXsUserCouponUse(uid, cid)
-    return int(mysql.selectUserInfoSql('id_commodity', uid, cid=cid))
+    value = mysql.selectUserInfoSql('id_commodity', uid, cid=cid)
+    if value is None:
+        # 不能直接 int(None)：报错信息会被 TypeError 掩盖，看不出是“刚插入的记录查不到”
+        raise AssertionError('优惠券插入后查不到记录: uid={}, cid={}'.format(uid, cid))
+    Request.cache_put(key, value)
+    return int(value)
 
 
 def insert_package_gift(uid, cid, num=1):
@@ -220,8 +235,20 @@ def insert_package_gift(uid, cid, num=1):
     """
     from common.conSlpXsgMysql import conMysql as mysql
 
+    # 同上：重复插入会让背包数量翻倍，重试时直接复用上一轮的 id
+    key = ('insert_package_gift', uid, cid, num)
+    if Request.is_replaying():
+        cached = Request.cache_get(key)
+        if cached is not None:
+            print('[重试] 跳过重复插入背包礼物: uid={}, cid={}'.format(uid, cid))
+            return cached
+
     mysql.insertXsUserCommodity(uid, cid, num)
-    return int(mysql.selectUserInfoSql('id_commodity', uid, cid=cid))
+    value = mysql.selectUserInfoSql('id_commodity', uid, cid=cid)
+    if value is None:
+        raise AssertionError('背包礼物插入后查不到记录: uid={}, cid={}'.format(uid, cid))
+    Request.cache_put(key, value)
+    return int(value)
 
 
 def get_last_weekday_timestamp(weekday_num=1):
@@ -237,7 +264,9 @@ def get_last_weekday_timestamp(weekday_num=1):
     if weekday_num < 1 or weekday_num > 7:
         raise ValueError("weekday_num 必须是 1-7 之间的整数")
 
-    today = datetime.now()
+    # 业务按北京时间切分"上周"，而云服务器时区通常是 UTC：
+    # 直接用 datetime.now() 会差 8 小时，把上周一 00:00 算成北京时间 08:00
+    today = datetime.now(timezone(timedelta(hours=8)))
     target_weekday = weekday_num - 1  # 转换为 0-6 (0=周一)
     days_ago = (today.weekday() - target_weekday + 7) % 7 + 7
     last_weekday = today - timedelta(days=days_ago)

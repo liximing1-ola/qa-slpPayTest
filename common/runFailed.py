@@ -4,7 +4,7 @@ import functools
 import inspect
 import unittest
 
-from common import Consts
+from common import Consts, Request
 
 
 class Retry(object):
@@ -55,6 +55,8 @@ class ClassD(unittest.TestCase):
         if inspect.isfunction(func_or_cls):
             @functools.wraps(func_or_cls)
             def wrapper(*args, **kwargs):
+                # 新用例开始：清掉上一个用例的重试缓存与重试态
+                Request.begin_case()
                 for n in range(1, self._max_n + 2):
                     # 记录重试前的失败原因位置：上一轮断言产生的失败原因不能留在报告里，
                     # 否则用例最终通过时仍会被计入失败原因。
@@ -68,7 +70,9 @@ class ClassD(unittest.TestCase):
                         raise
                     except AssertionError as error:
                         # 只重试断言失败：这类失败多为环境抖动（异步结算延迟、频控、缓存未刷新），重跑有意义；
-                        # TypeError/KeyError 等代码或数据问题重跑也不会变好，直接抛出保留真实堆栈
+                        # TypeError/KeyError 等代码或数据问题重跑也不会变好，直接抛出保留真实堆栈。
+                        # DbQueryError（连库失败/SQL 错）同样不重试：连接层已有 ping 自动重连，
+                        # 自愈不了的故障重跑同一条语句也没用，交给框架记成 ERROR 更醒目
                         if n > self._max_n:
                             raise
                         # 断言库把失败明细写进了 fail_case_reason，裸 assert 的 str(error) 是空串，
@@ -77,6 +81,9 @@ class ClassD(unittest.TestCase):
                         del Consts.fail_case_reason[reason_mark:]
                         detail = new_reasons[-1] if new_reasons else repr(error)
                         print('[Retry {}/{}] {}: {}'.format(n, self._max_n, func_or_cls.__name__, detail))
+                        # 下一轮：下单类写请求复用上一轮的响应、非幂等的数据准备跳过，
+                        # 让重试只重新做"读库断言"，避免每次重试都多下一单
+                        Request.begin_replay()
 
             return wrapper
         elif inspect.isclass(func_or_cls):
