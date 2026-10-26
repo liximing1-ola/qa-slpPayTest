@@ -32,7 +32,6 @@ class updateCode:
         # g.pull() if not appInfo.startswith("slp") else print(f"{appInfo}不拉代码!")
         # repo = Repo(gtr_path)
         Consts.startTime = time()
-        Session.getSession(env)  # 更新userToken
         # commit_log = repo.git.log('--pretty={"commit":"%h","author":"%an","summary":"%s","date":"%cd"}', max_count=3,
         #                           date='format:%Y-%m-%d %H:%M:%S')
         commit_log = str(datetime.datetime.now())

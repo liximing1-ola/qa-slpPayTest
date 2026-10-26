@@ -30,6 +30,10 @@ def main(appInfo):
 		print("*" * 50)
 		print(f"消息推送到:{to}")
 		print("*" * 50)
+		# 刷新 Token（只调用一次）
+		from common.Session import Session
+		Session.getSession(appInfo)
+
 		# 检查代码更新（不阻塞测试执行）
 		updateCode.autoGitPull('slp_php', bot='slp', to=to, env=appInfo)
 		updateCode.autoGitPull('slp_common_rpc', bot='slp', to=to, env=appInfo)
