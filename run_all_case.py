@@ -9,11 +9,45 @@ from common.Config import config
 from common.Session import Session
 
 
+def extract_des_from_docstring(docstring):
+    """从测试方法 docstring 中提取用例描述（用例描述：与脚本步骤：之间的第一行非空文本）"""
+    if not docstring:
+        return None
+    lines = docstring.splitlines()
+    capture = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith('用例描述'):
+            capture = True
+            # 如果 "用例描述：" 同行后面有内容，直接取
+            after_colon = stripped.split('：', 1)[-1].strip()
+            if after_colon:
+                return after_colon
+            continue
+        if capture and stripped.startswith('脚本步骤'):
+            break
+        if capture and stripped:
+            return stripped
+    return None
+
+
 class AllTestResult(unittest.TextTestResult):
     """自定义测试结果类，记录所有用例（通过/失败/异常）"""
     def __init__(self, stream, descriptions, verbosity):
         super().__init__(stream, descriptions, verbosity)
         self.successes = []
+        self.test_des_map = {}  # 记录每个测试的 des 值
+
+    def startTest(self, test):
+        super().startTest(test)
+        # 通过 str(test) 获取 docstring，提取用例描述
+        try:
+            docstring = str(test)
+            des = extract_des_from_docstring(docstring)
+            if des:
+                self.test_des_map[test] = des
+        except Exception:
+            pass
 
     def addSuccess(self, test):
         super().addSuccess(test)
@@ -60,15 +94,23 @@ def main(appInfo):
 
 		# 列出所有通过的用例
 		for case in test_result.successes:
-			lines.append(f"✅ {case.id()} - PASS")
+			des_val = test_result.test_des_map.get(case, case.id())
+			lines.append(f"{des_val} - PASS")
 
 		# 列出失败的用例
-		for case, reason in test_result.failures:
-			lines.append(f"❌ {case.id()} - FAIL")
+		for case, reason_str in test_result.failures:
+			des_val = test_result.test_des_map.get(case, case.id())
+			lines.append(f"{des_val} - FAIL")
+			# 从 reason 中提取响应体（去掉 "Depiction: xxx, failReason: " 前缀）
+			if "failReason:" in reason_str:
+				body_part = reason_str.split("failReason:", 1)[1].strip()
+				lines.append(f"  {body_part}")
 
 		# 列出异常的用例
-		for case, reason in test_result.errors:
-			lines.append(f"⚠️ {case.id()} - ERROR")
+		for case, reason_str in test_result.errors:
+			des_val = test_result.test_des_map.get(case, case.id())
+			lines.append(f"{des_val} - ERROR")
+			lines.append(f"  {str(reason_str)[:200]}")
 
 		message = "\n".join(lines)
 		robot('markdown', message, bot='slp')

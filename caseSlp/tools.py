@@ -60,7 +60,6 @@ def get_test_token(*uids):
         headers = {}
         try:
             res = requests.request("GET", url, headers=headers, data=payload, verify=False, timeout=3)
-            print(res.json())
             if res.status_code != 200 or not res.json().get('data', None):
                 raise Exception("使用测试接口,获取token失败")
             token_map[uid] = res.json()['data']
