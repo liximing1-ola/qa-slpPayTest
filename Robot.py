@@ -34,11 +34,11 @@ def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
             }
         }
         r = requests.post(url, headers=headers, json=data)
-        if r.status_code == 200 and r.text.find('ok'):
+        if r.status_code == 200 and 'ok' in r.text:
             data = {
                 "msgtype": "text",
                 "text": {
-                    "mentioned_mobile_list": ["all"]
+                    "mentioned_mobile_list": ["@all"]
                 }
             }
             requests.post(url, headers=headers, json=data)
@@ -80,7 +80,7 @@ def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
             }
         }
         r = requests.post(url, headers=headers, json=data)
-        if r.status_code == 200 and r.text.find('ok'):
+        if r.status_code == 200 and 'ok' in r.text:
             data = {
                 "msgtype": "text",
                 "text": {

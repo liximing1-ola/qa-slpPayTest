@@ -6,6 +6,7 @@ from Robot import robot
 from autoGitPull import updateTime, updateCode
 from common import Logs, Consts
 from common.Config import config
+from common.Session import Session
 
 
 class AllTestResult(unittest.TextTestResult):
@@ -31,7 +32,6 @@ def main(appInfo):
 		print(f"消息推送到:{to}")
 		print("*" * 50)
 		# 刷新 Token（只调用一次）
-		from common.Session import Session
 		Session.getSession(appInfo)
 
 		# 检查代码更新（不阻塞测试执行）

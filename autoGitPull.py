@@ -6,7 +6,6 @@ from git.repo import Repo
 from Robot import robot
 from common import Logs, Consts
 from common.Config import config
-from common.Session import Session
 
 
 class updateCode:
@@ -16,8 +15,8 @@ class updateCode:
         env=env if env else 'slp'
         bot=bot if bot else 'slp'
         if appInfo == 'bb_php':
-            gtr_path = config.codeInfo['bb_php_path']
-            git_branch = config.codeInfo['bb_git_branch']
+            Logs.get_log('gitBranchError.log').error("bb_php 相关配置已废弃，codeInfo 中不存在 bb_php_path/bb_git_branch")
+            return
         elif appInfo == 'slp_php':#todo
             gtr_path = config.codeInfo['slp_php_path']
             git_branch = config.codeInfo['slp_git_branch']
