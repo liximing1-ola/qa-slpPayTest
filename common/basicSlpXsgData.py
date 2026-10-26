@@ -58,7 +58,6 @@ def encodeData(
                 },
         }
         print(data)
-        print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
@@ -90,7 +89,6 @@ def encodeData(
                     "display_page": display_page,
                 }
         }
-        print(data)
         print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
@@ -130,7 +128,6 @@ def encodeData(
                 }
         }
         print(data)
-        print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
@@ -149,7 +146,6 @@ def encodeData(
                     "useCoin": -1,
                 }
         }
-        print(data)
         print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
@@ -170,7 +166,6 @@ def encodeData(
                 }
         }
         print(data)
-        print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
@@ -186,7 +181,6 @@ def encodeData(
                 }
         }
         print(data)
-        print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
@@ -201,7 +195,6 @@ def encodeData(
                     "useCoin": -1
                 }
         }
-        print(data)
         print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
@@ -229,7 +222,6 @@ def encodeData(
                     "gift_tab": "gift"
                 }
         }
-        print(data)
         print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
@@ -268,7 +260,6 @@ def encodeData(
             }
         }
         print(data)
-        print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
@@ -306,7 +297,6 @@ def encodeData(
             }
         }
         print(data)
-        print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
@@ -342,7 +332,6 @@ def encodeData(
                     "graffiti_feature": graffiti_feature
                 },
         }
-        print(data)
         print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
@@ -419,7 +408,6 @@ def encodeData(
                 }
         }
         print(data)
-        print(data)
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
@@ -441,6 +429,12 @@ def encodeData(
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
+    else:
+        # 未知 payType 原来会静默返回 None，调用方拿 None 去发请求，
+        # 用例最终报的是“响应不对”而不是“场景写错”，排查成本很高，这里直接抛错暴露调用方问题
+        raise ValueError('encodeData 不支持的 payType: {}'.format(payType))
+
+
 if __name__ == '__main__':
     uid = gsUid
     rid = gs_soundchat_rid

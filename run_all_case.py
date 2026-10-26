@@ -86,8 +86,9 @@ def main(appInfo):
 		# 执行测试
 		test_result = AllTestRunner(verbosity=0).run(all_case(appInfo))
 		Consts.endTime = time()
-		des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}" \
-			.format(test_result.testsRun, len(test_result.failures), len(test_result.errors))
+		des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}, 跳过用例数: {}" \
+			.format(test_result.testsRun, len(test_result.failures), len(test_result.errors),
+					len(test_result.skipped))
 		Logs.get_log('caseResult.log').info(des)
 
 		# 构建消息内容
@@ -98,8 +99,9 @@ def main(appInfo):
 		pass_count = len(test_result.successes)
 		fail_count = len(test_result.failures)
 		error_count = len(test_result.errors)
+		skip_count = len(test_result.skipped)
 
-		lines.append(f"通过: {pass_count}  失败: {fail_count}  异常: {error_count}")
+		lines.append(f"通过: {pass_count}  失败: {fail_count}  异常: {error_count}  跳过: {skip_count}")
 		lines.append("")
 
 		# 列出所有通过的用例
@@ -121,6 +123,11 @@ def main(appInfo):
 			des_val = test_result.test_des_map.get(case, case.id())
 			lines.append(f"{des_val} - ERROR")
 			lines.append(f"  {str(reason_str)[:200]}")
+
+		# 列出跳过的用例：skip 既不算通过也不算失败，不显式列出会让人误以为这些用例已经验证过了
+		for case, reason_str in test_result.skipped:
+			des_val = test_result.test_des_map.get(case, case.id())
+			lines.append(f"{des_val} - SKIP ({reason_str})")
 
 		message = "\n".join(lines)
 		robot('markdown', message, bot='slp')

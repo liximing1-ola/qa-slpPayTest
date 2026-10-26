@@ -8,7 +8,6 @@ import requests
 import urllib3
 from common import Logs, method
 from common.Config import config
-from common.paramsYaml import Yaml
 
 
 class Session:

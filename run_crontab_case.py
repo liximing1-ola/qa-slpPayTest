@@ -41,17 +41,18 @@ def notify(test_result, app_info):
     total = test_result.testsRun
     failures = test_result.failures
     errors = test_result.errors
+    skipped = test_result.skipped
 
-    des = "[{}] 用例总数: {}, 失败用例数: {}, 异常用例数: {}".format(
-        app_info, total, len(failures), len(errors))
+    des = "[{}] 用例总数: {}, 失败用例数: {}, 异常用例数: {}, 跳过用例数: {}".format(
+        app_info, total, len(failures), len(errors), len(skipped))
     Logs.get_log('caseResult.log').info(des)
 
     if not failures and not errors:
         # 不夜星球与小拾光共用同一个机器人，消息里必须带上 App 标识，否则无法区分是哪个应用的结果
         branch = config.codeInfo.get('slp_git_branch', '') if app_info == config.appName['不夜星球'] else '-'
-        message = "{}[{}]：\n{}\n用例数: {}, 失败数: 0, 代码分支: {}".format(
+        message = "{}[{}]：\n{}\n用例数: {}, 跳过数: {}, 失败数: 0, 代码分支: {}".format(
             '定时任务', app_info,
-            method.dictToList(Consts.case_list_c), total, branch)
+            method.dictToList(Consts.case_list_c), total, len(skipped), branch)
         robot('markdown', message, bot='slp')
         return
 

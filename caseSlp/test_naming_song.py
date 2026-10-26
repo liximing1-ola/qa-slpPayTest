@@ -4,8 +4,6 @@ __desc__ = "点唱房-点歌/冠歌"
 import time
 import unittest
 
-import pytest
-
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
@@ -19,7 +17,10 @@ from common.runFailed import Retry
 
 @Retry(max_n=2)
 class TestPayCreate(unittest.TestCase):
-	@pytest.mark.run(order=1)
+	# test_004~test_006 都对 test_003 造出的冠歌记录做二次操作，记录不存在时接口会直接成功/不生效，
+	# 用例会以「预期失败却成功」的形式误报，用它标记前置状态是否就绪
+	_naming_ready = False
+
 	def test_001(self, des='点唱房-点歌,一首歌'):
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
@@ -50,7 +51,6 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
 
-	@pytest.mark.run(order=2)
 	def test_002(self, des='点唱房-点歌,多首歌'):
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
@@ -81,7 +81,6 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
 
-	@pytest.mark.run(order=3)
 	def test_003(self, des='点唱房-冠歌'):
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
@@ -117,9 +116,11 @@ class TestPayCreate(unittest.TestCase):
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
+		TestPayCreate._naming_ready = True  # 冠歌记录已就绪，后续依赖用例可以执行
 
-	@pytest.mark.run(order=4)
 	def test_004(self, des='点唱房-冠歌[未过期]后,冠歌同一首歌.同倍数,失败'):
+		if not TestPayCreate._naming_ready:
+			self.skipTest('依赖 test_003 冠歌成功，该用例未执行或已失败')
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
 		uid = gsUid
@@ -154,8 +155,9 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
 
-	@pytest.mark.run(order=5)
 	def test_005(self, des='点唱房-冠歌[已过期]后,冠歌同一首歌.同倍数,成功'):
+		if not TestPayCreate._naming_ready:
+			self.skipTest('依赖 test_003 冠歌成功，该用例未执行或已失败')
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
 		uid = gsUid
@@ -191,9 +193,11 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
+		case_list_b[des] = result
 
-	@pytest.mark.run(order=6)
 	def test_006(self, des='点唱房-抢冠-高倍数,成功'):
+		if not TestPayCreate._naming_ready:
+			self.skipTest('依赖 test_003 冠歌成功，该用例未执行或已失败')
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
 		uid = gsUid
@@ -230,7 +234,6 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
 
-	@pytest.mark.run(order=7)
 	def test_007(self, des='点唱房-冠歌,礼物上架,用背包礼物支付,礼物个数<所需个数,[混合支付],扣[背包+钻石]'):
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
@@ -275,7 +278,6 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
 
-	@pytest.mark.run(order=8)
 	def test_008(self, des='点唱房-冠歌,礼物上架,用背包礼物支付,礼物个数>=所需个数,[背包支付],扣[背包]'):
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
@@ -319,7 +321,6 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
 
-	@pytest.mark.run(order=9)
 	def test_009(self, des='点唱房-冠歌,礼物下架,用背包礼物支付,礼物个数<所需个数,扣款失败[该礼物暂不支持购买]'):
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房
@@ -363,7 +364,6 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		case_list_b[des] = result
 
-	@pytest.mark.run(order=10)
 	def test_010(self, des='点唱房-冠歌,礼物下架,用背包礼物支付,礼物个数>=所需个数,[背包支付],扣[背包]'):
 		rid = gs_music_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-music")  # 确认rid是点唱房

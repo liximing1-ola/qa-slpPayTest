@@ -3,8 +3,6 @@ __desc__ = "公会主播-个人守护"
 
 import unittest
 
-import pytest
-
 from caseSlp.config import *
 from caseSlp.tools import prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
 from common.Assert import assert_code, assert_equal, assert_body
@@ -16,10 +14,11 @@ from common.method import reason
 from common.runFailed import Retry
 
 
+# 开守护关系功能已下线（SLP-5.18.0）：test_001 造关系被 skip 后，test_002/test_003 依赖它造出的关系，
+# 单独保留只会每次必输。整类 skip，待功能重新上线再恢复。
+@unittest.skip("开守护关系功能下线,SLP-5.18.0")
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
-	@pytest.mark.run(order=1)
-	@unittest.skip("""开守护关系功能下线,SLP-5.18.0""")
 	def test_001(self, des='给GS开通个人守护场景60%(mc)'):
 		"""
 		用例描述：
@@ -49,7 +48,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), defend['小宝贝']['price'] * rates['gs']['default'])
 		case_list_b2[des] = result
 
-	@pytest.mark.run(order=2)
 	def test_002(self, des='给GS开通个人守护进阶场景,不分成'):
 		"""
 		 用例描述：
@@ -104,7 +102,6 @@ class TestPayCreate(unittest.TestCase):
 
 		case_list_b2[des] = result
 
-	@pytest.mark.run(order=3)
 	def test_003(self, des='GS个人守护解除场景,不分成'):
 		"""
 		 用例描述：

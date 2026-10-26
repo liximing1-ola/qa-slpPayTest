@@ -27,7 +27,8 @@ class TestPayCreate(unittest.TestCase):
 		4.检查预期返回msg，预期：支付失败，提示Toast
 		5.检查被打赏者余额,预期：0
 		"""
-		prepare_test_data(payUid, normal_uid, money=None)
+		# 余额不足场景必须显式归零，money=None 不会重置余额，会沿用上次运行残留值导致误报
+		prepare_test_data(payUid, normal_uid, money=0)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
 		# mysql.deleteUserAccountSql('chatroom', normal_uid)
 		data = encodeData(payType='chat-gift',
@@ -51,7 +52,8 @@ class TestPayCreate(unittest.TestCase):
 		4.检查预期返回msg，预期：支付失败，提示Toast
 		5.检查被打赏者余额,预期：0
 		"""
-		prepare_test_data(payUid, normal_uid, money=None)
+		# 余额不足场景必须显式归零，money=None 不会重置余额，会沿用上次运行残留值导致误报
+		prepare_test_data(payUid, normal_uid, money=0)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
 		# mysql.deleteUserAccountSql('chatroom', normal_uid)
 		data = encodeData(payType='package',
