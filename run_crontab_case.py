@@ -72,7 +72,7 @@ def notify(test_result, app_info):
 
     if not PUSH_WX:
         print('企业微信推送已关闭（PUSH_WX=0），完整结果见上方输出与 log/notPassCase.log', flush=True)
-        return
+        return counts
 
     # 失败与异常分别遍历推送，不能用 elif 串起来，否则有失败时异常用例永远不会通知
     not_pass_cases = [case for case, _reason in failures + errors]
@@ -94,12 +94,14 @@ def notify(test_result, app_info):
     # 失败用例多时消息会超过企微单条上限，按字节拆成多条推送，避免结论被截断
     for chunk in split_message(lines):
         robot('markdown', chunk, bot='slp')
+    return counts
 
 
 def main(app_info):
+    """执行指定 App 的全部用例，返回 result_counts 的计数（供退出码判断）"""
     if app_info not in APP_SUPPORTED:
         Logs.get_log('runCode.log').error('{} 执行异常'.format(app_info))
-        return
+        return None
 
     # 定时任务是长期运行场景，先刷新一次 token，避免 token 过期导致全量失败
     try:
@@ -109,7 +111,7 @@ def main(app_info):
         Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(app_info, error))
 
     test_result = AllTestRunner(verbosity=2).run(all_case(app_info))
-    notify(test_result, app_info)
+    return notify(test_result, app_info)
 
 
 def parse_app(argv):
@@ -119,8 +121,12 @@ def parse_app(argv):
         return config.appName['不夜星球']
     if arg in (config.appName['小拾光'], 'xsg'):
         return config.appName['小拾光']
-    return config.appName['不夜星球']
+    # 手滑传错参数（如 slpp）时不能静默回落到某个 App，否则会悄悄地跑一轮并覆盖日志
+    print('未知参数: {}，可用取值: slp / xsg'.format(arg), flush=True)
+    sys.exit(2)
 
 
 if __name__ == "__main__":
-    main(parse_app(sys.argv))
+    counts = main(parse_app(sys.argv))
+    # 退出码：有失败/异常时返回 1，便于 cron、调度平台或 cmd && 后续命令感知本轮失败
+    sys.exit(1 if counts and (counts['fail'] or counts['error']) else 0)

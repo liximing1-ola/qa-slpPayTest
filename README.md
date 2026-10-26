@@ -34,6 +34,14 @@
 | `SLACK_BOT_SLP` | 内置 webhook | slack 通知地址（`to='slack'` 时使用） |
 | `DB_HOST` / `DB_USER` / `DB_PASS` | `192.168.1.24` / `root` / `root` | 测试库连接信息 |
 
+****退出码****
+
+| 退出码 | 含义 |
+|--------|------|
+| `0` | 全部用例通过 |
+| `1` | 存在失败或异常（跳过不计） |
+| `2` | 命令行参数错误（`run_crontab_case.py` 传了非 slp/xsg） |
+
 ****用例编写规则（unittest）****
 
 测试文件以test_开头（以_test结尾也可以）
@@ -46,4 +54,4 @@
 
 整理项目相关用例
 
-pip3 install gitpython
+pip3 install -r requirements.txt

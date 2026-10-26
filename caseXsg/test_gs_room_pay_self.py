@@ -122,9 +122,9 @@ class TestPayCreate(unittest.TestCase):
 		assert_between(mysql.selectUserInfoSql('sum_money', gs_A_uid_1), 0, base_amount * anchor_rate)
 
 		# todo 房主和公会长 分成待定
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * rate_money_cash_b))
+		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * rate_money_cash_b))
+		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
 		case_list_b2[des] = result
 
@@ -168,9 +168,9 @@ class TestPayCreate(unittest.TestCase):
 		assert_between(mysql.selectUserInfoSql('sum_money', gs_B_uid_1), 0, base_amount * anchor_rate)
 
 		# todo 房主和公会长 分成待定
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * rate_money_cash_b))
+		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * rate_money_cash_b))
+		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
 		case_list_b2[des] = result
 
@@ -214,9 +214,9 @@ class TestPayCreate(unittest.TestCase):
 		assert_between(mysql.selectUserInfoSql('sum_money', gs_A_uid_1), 0, base_amount * anchor_rate)
 
 		# todo 房主和公会长 分成待定
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * rate_money_cash_b))
+		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * rate_money_cash_b))
+		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
 		case_list_b2[des] = result
 

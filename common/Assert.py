@@ -2,6 +2,7 @@
 封装assert方法
 """
 import json
+import numbers
 import os
 import platform
 import time
@@ -41,21 +42,6 @@ def assert_code(actual_code, expected_code=200):
         raise AssertionError(reason) from None
 
 
-def assert_len(actual_len, expect_len):
-    """
-    实际长度不少于预期长度（注意语义是 >=，不是相等）
-    :param actual_len: 实际结果
-    :param expect_len: 预期结果
-    """
-    try:
-        assert actual_len >= expect_len
-        return True
-    except Exception:
-        reason = '实际结果: {}, 预期结果: {}, 验证结果不一致，用例执行失败，望严查!'.format(actual_len, expect_len)
-        Consts.fail_case_reason.append(reason)
-        raise AssertionError(reason) from None
-
-
 def assert_equal(actual_result, expect_result, tolerance=0.0001):
     """
     :param actual_result: 实际结果
@@ -63,8 +49,9 @@ def assert_equal(actual_result, expect_result, tolerance=0.0001):
     :param tolerance: 数值类型的允许误差，默认0.0001，设为0则严格相等
     """
     try:
-        # 对数值类型允许误差，覆盖int/float/Decimal混合比较场景
-        if isinstance(actual_result, (int, float)) and isinstance(expect_result, (int, float)):
+        # 对数值类型允许误差，覆盖 int/float/Decimal 混比场景
+        # （pymysql 对 DECIMAL 列返回 Decimal，不能用 isinstance(x, (int, float)) 判定）
+        if isinstance(actual_result, numbers.Number) and isinstance(expect_result, numbers.Number):
             if tolerance == 0:
                 assert actual_result == expect_result
             else:

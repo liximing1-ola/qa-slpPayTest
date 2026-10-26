@@ -148,7 +148,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
-                if len(res) > 0:
+                if res is not None:
                     return res[0]
                 else:
                     return None
@@ -200,7 +200,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
-                if len(res) > 0:
+                if res is not None:
                     return res[0]
             except Exception as error:
                 print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
@@ -209,7 +209,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
-                if len(res) > 0:
+                if res is not None:
                     return res[0]
             except Exception as error:
                 print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
@@ -218,7 +218,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
-                if len(res) > 0:
+                if res is not None:
                     return res[0]
             except Exception as error:
                 print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
@@ -227,7 +227,7 @@ class conMysql:
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
-                if len(res) > 0:
+                if res is not None:
                     return res[0]
             except Exception as error:
                 print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
@@ -239,7 +239,7 @@ class conMysql:
                 res = conMysql.cur.fetchone()
                 if res is None:
                     return 0
-                if len(res) > 0:
+                if res is not None:
                     return res[0]
             except Exception as error:
                 print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
@@ -704,7 +704,7 @@ class conMysql:
         try:
             conMysql.cur.execute(sql)
             res = conMysql.cur.fetchone()
-            if len(res) > 0:
+            if res is not None:
                 return res[0]
             else:
                 return None

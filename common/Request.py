@@ -13,11 +13,11 @@ from common.Session import Session
 
 # 单次请求超时时间（秒），避免网络异常时用例无限挂起
 REQUEST_TIMEOUT = 30
-# 同一账号两次请求的最小间隔（秒）：服务端对连续操作有频控，间隔不足会返回"请勿频繁操作"；
-# 需要提速时可用环境变量覆盖，例如 REQUEST_INTERVAL=0.5
-REQUEST_INTERVAL = float(os.environ.get('REQUEST_INTERVAL', 2))
+# 同一账号两次请求的最小间隔（秒），避免网络异常时用例无限挂起；需要提速时可用环境变量覆盖，
+# 例如 REQUEST_INTERVAL=0.5。注意用 or 而非默认参数：export REQUEST_INTERVAL= 这种空值会让 float('') 在 import 阶段抛错
+REQUEST_INTERVAL = float(os.environ.get('REQUEST_INTERVAL') or 2)
 # 命中频控后的最大重试次数：设为 0 表示不重试，直接把频控响应交给用例判断
-FREQUENT_RETRY = int(os.environ.get('FREQUENT_RETRY', 2))
+FREQUENT_RETRY = int(os.environ.get('FREQUENT_RETRY') or 2)
 FREQUENT_MSG = '请勿频繁操作'
 
 # 每个账号上一次请求的计划发起时间，用于补足最小间隔

@@ -26,7 +26,12 @@ def main(appInfo):
 		print('消息推送: {}'.format('{}（PUSH_WX=1）'.format(to) if PUSH_WX else '已关闭（PUSH_WX=0），结果只输出到控制台与日志'))
 		print("*" * 50)
 		# 刷新 Token（只调用一次）
-		Session.getSession(appInfo)
+		# 与 run_crontab_case 保持一致：token 服务异常时不直接带着 traceback 退出，记日志后继续跑，
+		# 用例会逐条报错，比"一条都没跑"更容易定位
+		try:
+			Session.getSession(appInfo)
+		except Exception as error:
+			Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(appInfo, error))
 
 		# 检查代码更新（不阻塞测试执行）
 		updateCode.autoGitPull('slp_php')
@@ -75,8 +80,10 @@ def main(appInfo):
 		if fail_count or error_count:
 			Logs.get_log('failCase.log', console=False, back_count=30).error(fail_detail_text(test_result))
 			print('失败/异常完整堆栈: log/failCase.log', flush=True)
+		return counts
 	else:
 		Logs.get_log('runCode.log').error('{} 执行异常'.format(appInfo))
+		return None
 
 
 def all_case(appInfo):
@@ -106,8 +113,11 @@ if __name__ == "__main__":
 		arg = None
 
 	if arg == config.appName['不夜星球'] or arg == 'slp':
-		main(config.appName['不夜星球'])
+		counts = main(config.appName['不夜星球'])
 	elif arg == config.appName['小拾光'] or arg == 'xsg':
-		main(config.appName['小拾光'])
+		counts = main(config.appName['小拾光'])
 	else:
-		main(config.appName['不夜星球'])
+		counts = main(config.appName['不夜星球'])
+
+	# 退出码：有失败/异常时返回 1，便于 cron、调度平台或 cmd && 后续命令感知本轮失败
+	sys.exit(1 if counts and (counts['fail'] or counts['error']) else 0)

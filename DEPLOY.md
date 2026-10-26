@@ -6,7 +6,7 @@
 |------|-----|
 | 代码仓库地址 | `https://github.com/liximing1-ola/qa-slpPayTest.git` |
 | 服务器部署路径 | `/home/ecs-user/qa-slpPayTest` |
-| Python 版本要求 | 3.6+ |
+| Python 版本要求 | 3.9+（当前服务器 3.11） |
 | 测试应用 | SLP（不夜星球）/ XSG（小拾光） |
 
 ---
@@ -52,7 +52,7 @@ apt update && apt install -y python3 python3-pip git gcc python3-dev
 
 验证：
 ```bash
-python3 --version   # 需要 3.6+
+python3 --version   # 需要 3.9+
 pip3 --version
 git --version
 ```
@@ -126,6 +126,19 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
    # 每天凌晨 2 点执行
    0 2 * * * cd /home/ecs-user/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
    ```
+4. **退出码**：`run_all_case.py` / `run_crontab_case.py` 执行结束后会按结果返回退出码，
+   可直接被 cron 告警、调度平台或 `cmd && 下一步` 识别：
+
+   | 退出码 | 含义 |
+   |--------|------|
+   | `0` | 全部用例通过 |
+   | `1` | 存在失败或异常（跳过不计） |
+   | `2` | 命令行参数错误（如 `run_crontab_case.py slpp`） |
+
+   ```bash
+   # 失败时让 cron 发邮件 / 触发告警（MAILTO 生效的前提就是非 0 退出码）
+   0 2 * * * cd /home/ecs-user/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
+   ```
 
 ---
 
@@ -133,7 +146,7 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
 
 | 问题 | 解决方案 |
 |------|---------|
-| pip install 报错 | 安装编译工具：`yum install gcc python3-devel` 或 `apt install gcc python3-dev` |
+| pip install 报错 | 先确认 `python3 --version` ≥ 3.9；`requirements.txt` 已精简为 requests / urllib3 / PyMySQL / redis 四个实际依赖 |
 | 数据库连接失败 | 检查服务器与 `192.168.1.24` 的网络连通性 |
 | Token 获取失败 | 检查 `192.168.1.23` 的 `/test/userToken` 接口是否可访问 |
 | ModuleNotFoundError | 重新执行 `pip3 install -r requirements.txt` |
