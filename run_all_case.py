@@ -1,4 +1,5 @@
 # coding=utf-8
+import inspect
 import unittest
 from time import time
 
@@ -40,12 +41,21 @@ class AllTestResult(unittest.TextTestResult):
 
     def startTest(self, test):
         super().startTest(test)
-        # 通过 str(test) 获取 docstring，提取用例描述
+        # 优先从方法签名的 des 默认参数获取，其次从 docstring 提取
         try:
-            docstring = str(test)
-            des = extract_des_from_docstring(docstring)
-            if des:
-                self.test_des_map[test] = des
+            method = getattr(test, test._testMethodName)
+            # 方式1: 从方法签名获取 des 默认值
+            sig = inspect.signature(method)
+            des_param = sig.parameters.get('des', None)
+            if des_param is not None and des_param.default is not inspect.Parameter.empty:
+                self.test_des_map[test] = des_param.default
+                return
+            # 方式2: 从 docstring 提取用例描述
+            docstring = test._testMethodDoc
+            if docstring:
+                des = extract_des_from_docstring(docstring)
+                if des:
+                    self.test_des_map[test] = des
         except Exception:
             pass
 
