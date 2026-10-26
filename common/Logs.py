@@ -5,18 +5,20 @@ from logging.handlers import TimedRotatingFileHandler
 from common.Config import config
 
 
-def get_log(log_name, level=logging.DEBUG, when='midnight', back_count=0):
+def get_log(log_name, level=logging.DEBUG, when='midnight', back_count=0, console=True):
     """
     :param log_name:
     :param level:
     :param when:
     :param back_count:
+    :param console: 是否同时打到控制台；False 时只写文件（比如已经自己 print 过的完整清单，避免重复输出）
     :return:
     """
     logs = logging.getLogger(log_name)
     logs.setLevel(level)  # log打印级别
     # 同名 logger 是全局单例，重复调用时再挂 handler 会让同一条日志被打印 N 次，
-    # 且每次都会新建 TimedRotatingFileHandler，造成文件句柄泄漏
+    # 且每次都会新建 TimedRotatingFileHandler，造成文件句柄泄漏；
+    # 因此 console / level / back_count 只在首次创建时生效
     if logs.handlers:
         return logs
     LOG_PATH = os.path.join(config.BASE_PATH, 'log')
@@ -37,6 +39,7 @@ def get_log(log_name, level=logging.DEBUG, when='midnight', back_count=0):
     fh.setLevel(level)
     fh.setFormatter(formatter)
     #  添加到logger对象里
-    logs.addHandler(ch)
+    if console:
+        logs.addHandler(ch)
     logs.addHandler(fh)
     return logs

@@ -60,6 +60,14 @@ class AllTestResult(unittest.TextTestResult):
         super().addSuccess(test)
         self.successes.append(test)
 
+    def printErrors(self):
+        """
+        unittest 默认会在结束前把每条失败的完整堆栈再打一遍（FAIL: / ERROR: 段落），
+        而失败多时这一步会刷满屏幕、淹没真正要看的结论。
+        控制台只保留 not_pass_report() 输出的清单，完整堆栈统一写进 log/failCase.log。
+        """
+        pass
+
 
 class AllTestRunner(unittest.TextTestRunner):
     """自定义测试运行器，返回 AllTestResult"""
@@ -69,6 +77,11 @@ class AllTestRunner(unittest.TextTestRunner):
 def case_name(case):
     """用例名称：去掉 caseSlp./caseXsg. 这类目录前缀，保留 模块.类.方法"""
     case_id = case.id()
+    # setUpClass/tearDownClass 报错时 unittest 抛给结果的是 _ErrorHolder，
+    # 它的 id 形如 "setUpClass (模块.类)"，没有方法名也没有可裁剪的目录前缀，
+    # 按模块拆分只会得到 "S)" 这种碎片，直接用它的 description
+    if not getattr(case, '_testMethodName', None):
+        return getattr(case, 'description', case_id)
     return case_id.split('.', 1)[-1] if '.' in case_id else case_id
 
 
@@ -78,6 +91,13 @@ def case_des(result, case):
     if des:
         return des
     return extract_des_from_docstring(getattr(case, '_testMethodDoc', None)) or ''
+
+
+def _des_fallback(case):
+    """des 取不到时的兜底说明：区分类级钩子报错与普通用例"""
+    if not getattr(case, '_testMethodName', None):
+        return '类级钩子（setUpClass/tearDownClass）报错，该类下的用例全部未执行'
+    return '(未取到用例描述)'
 
 
 # 企微机器人单条 markdown 内容上限 4096 字节，超过会被静默截断，
@@ -94,16 +114,40 @@ def reason_brief(reason_text, max_len=300):
     :param max_len: 单行最大长度
     """
     raw_lines = [line.strip() for line in str(reason_text).splitlines() if line.strip()]
+    if not raw_lines:
+        return ''
+    last_line = raw_lines[-1]
+    # 异常末行自带 message 时（如 "AssertionError: 实际结果: 1999, 预期结果: 2000"）信息量最大，优先用它；
+    # 空的 "AssertionError" 则退回下面的断言语句
+    if ': ' in last_line and last_line.split(': ', 1)[0].endswith(('Error', 'Exception')):
+        return last_line[:max_len]
     for line in raw_lines:
         # 覆盖 assert_x(...) / self.assert_x(...) / Assert.assert_x(...) 三种写法
         if line.startswith(('assert', 'self.assert', 'Assert.')):
             return line[:max_len]
-    return raw_lines[-1][:max_len] if raw_lines else ''
+    return last_line[:max_len]
 
 
 def not_pass_count(result):
     """未通过用例数量：失败 + 异常 + 跳过"""
     return len(result.failures) + len(result.errors) + len(result.skipped)
+
+
+def result_counts(result):
+    """
+    执行结果计数。setUpClass/tearDownClass 报错时 unittest 把它记进 errors 但**不计入** testsRun，
+    直接用 testsRun - 失败 - 异常 - 跳过 会把「通过」算成负数（实测 -1），
+    或在总数上出现「用例总数: 0, 异常: 1」这种自相矛盾的输出，所以把这类类级报错补进总数。
+    :return: {'total', 'pass', 'fail', 'error', 'skip'}
+    """
+    holder_errors = sum(1 for case, _reason in result.errors
+                        if not getattr(case, '_testMethodName', None))
+    return {'total': result.testsRun + holder_errors,
+            # successes 是我们自己的 AllTestResult 新增的属性，取不到时用默认值
+            'pass': len(getattr(result, 'successes', [])),
+            'fail': len(result.failures),
+            'error': len(result.errors),
+            'skip': len(result.skipped)}
 
 
 def not_pass_lines(result, with_detail=True):
@@ -141,6 +185,74 @@ def not_pass_summary(result, title='未通过用例', with_detail=True):
     if not lines:
         return '{}\n无，全部用例通过'.format(header)
     return '{}\n{}'.format(header, '\n'.join(lines))
+
+
+# 控制台 / 日志用的分隔线，宽度不用太长，云服务器上 80 列终端也能完整显示
+LINE_SEP = '-' * 88
+
+
+def not_pass_records(result):
+    """
+    把未通过用例整理成结构化列表，供控制台与日志输出使用
+    :return: [{'status': 'FAIL', 'case': '模块.类.方法', 'des': '用例描述', 'detail': '一行明细'}, ...]
+    """
+    records = []
+    for status, items in (('FAIL', result.failures),
+                          ('ERROR', result.errors),
+                          ('SKIP', result.skipped)):
+        for case, reason in items:
+            if status == 'SKIP':
+                detail = ' '.join(str(reason).split())  # 跳过原因可能多行，压成一行
+            else:
+                detail = reason_brief(reason, max_len=500)
+            records.append({
+                'status': status,
+                'case': case_name(case),
+                'des': case_des(result, case) or _des_fallback(case),
+                'detail': detail,
+            })
+    return records
+
+
+def fail_detail_text(result):
+    """
+    失败/异常的完整堆栈（保留真实换行，直接写文件用）
+    注意不要用 unittest 的 failures 列表直接 format：那是带 \n 转义的 repr，
+    整串会挤成一行，日志里根本看不清堆栈。
+    :return: 多行字符串，每段为 [FAIL] 用例名 | des 后接完整堆栈
+    """
+    sections = []
+    for status, items in (('FAIL', result.failures), ('ERROR', result.errors)):
+        for case, reason in items:
+            sections.append('[{}] {} | {}\n{}'.format(
+                status, case_name(case), case_des(result, case) or _des_fallback(case), str(reason).strip()))
+    return '\n{}\n'.format(LINE_SEP).join(sections) if sections else ''
+
+
+def not_pass_report(result, title='未通过用例'):
+    """
+    控制台 / 日志用的未通过用例完整清单：编号 + 状态 + 用例名称 + des + 失败明细
+    与 not_pass_summary 的区别：这里不带 4096 字节限制，有多少列多少，适合直接看日志
+    :return: 多行字符串
+    """
+    records = not_pass_records(result)
+    counts = {status: sum(1 for record in records if record['status'] == status)
+              for status in ('FAIL', 'ERROR', 'SKIP')}
+    lines = ['', LINE_SEP,
+             '{}（共 {} 条）  失败 {} / 异常 {} / 跳过 {}'.format(
+                 title, len(records), counts['FAIL'], counts['ERROR'], counts['SKIP']),
+             LINE_SEP]
+    if not records:
+        lines.append('无，全部用例通过')
+        lines.append(LINE_SEP)
+        return '\n'.join(lines)
+    for index, record in enumerate(records, 1):
+        lines.append('[{:>3}] {:<5} {}'.format(index, record['status'], record['case']))
+        lines.append('     用例: {}'.format(record['des'] or '(未取到用例描述)'))
+        if record['detail']:
+            lines.append('     原因: {}'.format(record['detail']))
+    lines.append(LINE_SEP)
+    return '\n'.join(lines)
 
 
 def _split_long_line(text, limit):

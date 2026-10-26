@@ -8,10 +8,13 @@ from autoGitPull import updateTime, updateCode
 from common import Logs, Consts
 from common.Config import config
 from common.Session import Session
-from common.report import AllTestRunner, not_pass_summary, split_message
+from common.report import (AllTestRunner, fail_detail_text, not_pass_report,
+						   not_pass_summary, result_counts, split_message)
 
-# 是否在通知里逐条列出通过的用例：默认关闭。通过用例动辄上百条，会把消息撞到企微 4096 字节上限，
-# 导致真正需要看的失败/异常清单被截断；需要看全量明细时用 LIST_PASS=1 临时打开
+# 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，企业微信的 markdown 展示效果不理想，
+# 需要恢复推送时用 PUSH_WX=1
+PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
+# 推送时是否额外逐条列出通过的用例：默认关闭，通过用例动辄上百条，会把真正要看的失败清单挤到后面
 LIST_PASS = os.environ.get('LIST_PASS', '0') == '1'
 
 
@@ -19,7 +22,8 @@ def main(appInfo):
 	if appInfo == config.appName['不夜星球'] or appInfo == config.appName['小拾光']:
 		to = 'wx'
 		print("*" * 50)
-		print(f"消息推送到:{to}")
+		# 开关关掉时不要再打"消息推送到:wx"，否则日志里会和后面的"推送已关闭"互相矛盾
+		print('消息推送: {}'.format('{}（PUSH_WX=1）'.format(to) if PUSH_WX else '已关闭（PUSH_WX=0），结果只输出到控制台与日志'))
 		print("*" * 50)
 		# 刷新 Token（只调用一次）
 		Session.getSession(appInfo)
@@ -30,35 +34,47 @@ def main(appInfo):
 		updateTime('write', now=str(int(time())))
 
 		# 执行测试
-		test_result = AllTestRunner(verbosity=0).run(all_case(appInfo))
+		test_result = AllTestRunner(verbosity=2).run(all_case(appInfo))
 		Consts.endTime = time()
 
-		pass_count = len(test_result.successes)
-		fail_count = len(test_result.failures)
-		error_count = len(test_result.errors)
-		skip_count = len(test_result.skipped)
+		# result_counts 会把 setUpClass/tearDownClass 报错补进总数，避免「总数: 0, 异常: 1」或「通过: -1」
+		counts = result_counts(test_result)
+		pass_count = counts['pass']
+		fail_count = counts['fail']
+		error_count = counts['error']
+		skip_count = counts['skip']
 		des = "用例总数: {}, 通过: {}, 失败: {}, 异常: {}, 跳过: {}".format(
-			test_result.testsRun, pass_count, fail_count, error_count, skip_count)
-		Logs.get_log('caseResult.log').info(des)
+			counts['total'], pass_count, fail_count, error_count, skip_count)
 
-		# 未通过用例放在最前面：企微单条 markdown 上限 4096 字节，超长会被静默截断，
-		# 通过用例若逐条列出会占满篇幅，把真正要看的结论挤到截断区之外
-		lines = [f"des: {des}", "", not_pass_summary(test_result)]
-		if LIST_PASS:
-			lines.append("")
-			lines.append("通过用例：")
-			for case in test_result.successes:
-				lines.append("{} - PASS".format(test_result.test_des_map.get(case, case.id())))
+		# 结果直接打到控制台（nohup / crontab 的输出日志里能直接看到），
+		# 同时落到 log/notPassCase.log（只写文件，不与上面的 print 重复）；
+		# flush=True：stdout 重定向到文件时是块缓冲，不刷会延迟到进程退出才落盘
+		print(des, flush=True)
+		Logs.get_log('caseResult.log', console=False).info(des)
+		report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(appInfo))
+		print(report_text, flush=True)
+		Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)
 
-		# 仍然超长时按字节拆成多条推送，避免被企微静默截断
-		for chunk in split_message(lines):
-			robot('markdown', chunk, bot='slp')
+		if PUSH_WX:
+			# 推送时才拼消息：未通过用例放在最前面，避免末尾结论被截断
+			lines = ["des: {}".format(des), "", not_pass_summary(test_result)]
+			if LIST_PASS:
+				lines.append("")
+				lines.append("通过用例：")
+				for case in test_result.successes:
+					lines.append("{} - PASS".format(test_result.test_des_map.get(case, case.id())))
+			# 仍然超长时按字节拆成多条推送
+			for chunk in split_message(lines):
+				robot('markdown', chunk, bot='slp')
+		else:
+			print('企业微信推送已关闭（PUSH_WX=0），完整结果见上方输出与 log/notPassCase.log', flush=True)
 
-		# 记录失败日志
-		if fail_count >= 1:
-			Logs.get_log('failCase.log').error("failures: {}".format(test_result.failures))
-		if error_count >= 1:
-			Logs.get_log('failCase.log').error("error: {}".format(test_result.errors))
+		# 失败/异常的完整堆栈只写文件、不打控制台：
+		# 1. 控制台已经有上方带编号的完整清单；
+		# 2. unittest 的 failures 列表直接 format 是一整行带 \n 转义的 repr，堆栈全糊在一起，没法看
+		if fail_count or error_count:
+			Logs.get_log('failCase.log', console=False, back_count=30).error(fail_detail_text(test_result))
+			print('失败/异常完整堆栈: log/failCase.log', flush=True)
 	else:
 		Logs.get_log('runCode.log').error('{} 执行异常'.format(appInfo))
 

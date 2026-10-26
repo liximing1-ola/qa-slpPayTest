@@ -36,7 +36,9 @@ def assert_code(actual_code, expected_code=200):
     except Exception:
         reason = 'Actual Code: {}, Expected Code: {}, 验证结果不一致，估计服务器开小差啦!'.format(actual_code, expected_code)
         Consts.fail_case_reason.append(reason)
-        raise
+        # from None：不链式展开原来的 AssertionError，否则堆栈会多一层"During handling..."；
+        # 带上 message 才能让日志里直接看到实际值/预期值
+        raise AssertionError(reason) from None
 
 
 def assert_len(actual_len, expect_len):
@@ -51,7 +53,7 @@ def assert_len(actual_len, expect_len):
     except Exception:
         reason = '实际结果: {}, 预期结果: {}, 验证结果不一致，用例执行失败，望严查!'.format(actual_len, expect_len)
         Consts.fail_case_reason.append(reason)
-        raise
+        raise AssertionError(reason) from None
 
 
 def assert_equal(actual_result, expect_result, tolerance=0.0001):
@@ -72,11 +74,11 @@ def assert_equal(actual_result, expect_result, tolerance=0.0001):
         return True
     except Exception:
         reason = '实际结果: {}, 预期结果: {}, 验证结果不一致，用例执行失败，望严查!'.format(actual_result, expect_result)
-        print("*"*30)
-        print(f"{actual_result}!={expect_result}")
-        print("*"*30)
+        # 不再在这里 print 实际值：失败明细会由 report 统一汇总（控制台清单 + log/failCase.log），
+        # 用例一多这里会刷屏且打断 unittest 的进度行；但必须把值带进异常 message，
+        # 否则堆栈末行只有空的 AssertionError，日志里看不到实际值
         Consts.fail_case_reason.append(reason)
-        raise
+        raise AssertionError(reason) from None
 
 
 def assert_in_text(body, expected_msg):
@@ -89,8 +91,9 @@ def assert_in_text(body, expected_msg):
         assert expected_msg in text
         return True
     except Exception:
-        Consts.fail_case_reason.append('fail')
-        raise
+        detail = '预期返回内容包含: {}, 实际返回: {}'.format(expected_msg, str(body)[:300])
+        Consts.fail_case_reason.append(detail)
+        raise AssertionError(detail) from None
 
 
 def assert_body(body, body_msg, expected_msg, reason):
@@ -107,8 +110,9 @@ def assert_body(body, body_msg, expected_msg, reason):
         assert msg == expected_msg
         return True
     except Exception:
-        Consts.fail_case_reason.append(reason)
-        raise
+        detail = '{}：实际返回值 {}, 预期 {}'.format(reason, body.get(body_msg, None) if isinstance(body, dict) else body, expected_msg)
+        Consts.fail_case_reason.append(detail)
+        raise AssertionError(detail) from None
 
 
 def assert_between(actual_result, lower_limit, upper_limit):
@@ -124,4 +128,4 @@ def assert_between(actual_result, lower_limit, upper_limit):
     except Exception:
         reason = f'实际结果: {actual_result}, 预期结果: {lower_limit} 至 {upper_limit}, 验证结果不一致，用例执行失败，望严查!'
         Consts.fail_case_reason.append(reason)
-        raise
+        raise AssertionError(reason) from None

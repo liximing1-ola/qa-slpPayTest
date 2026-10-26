@@ -94,7 +94,8 @@ pip3 install -r requirements.txt    # 依赖有变更时执行
 | `WX_BOT_SLP` | 内置测试群 webhook | 企微通知（换群/轮换 key） |
 | `ASSERT_SLEEP` | `0.3` | 断言前等待秒数，设 `0` 可提速 |
 | `REQUEST_INTERVAL` | `2` | 同账号请求最小间隔（频控） |
-| `LIST_PASS` | `0` | 设 `1` 时通知里列出通过用例 |
+| `PUSH_WX` | `0` | 是否推送到企业微信群，默认为关闭 |
+| `LIST_PASS` | `0` | 推送时列出通过用例（需 `PUSH_WX=1`） |
 
 ```bash
 export DB_HOST=192.168.1.24
@@ -111,7 +112,15 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
 ## 注意事项
 
 1. **测试用例范围**：`run_all_case.py` 的 `all_case()` 里 `pattern` 现为 `test_*.py`（全量），只调试单个文件时把这一行改成对应文件名
-2. **定时任务**（可选）：
+2. **查看执行结果**：执行结束会在控制台输出带编号的完整未通过清单（编号 / FAIL|ERROR|SKIP / 用例名 / des / 失败明细），
+   同时写入 `log/notPassCase.log`；失败与异常的完整堆栈只写 `log/failCase.log`，不在控制台刷屏。
+   云服务器上可直接：
+   ```bash
+   tail -n 100 log/notPassCase.log   # 未通过清单（先看这个）
+   tail -n 200 log/failCase.log      # 需要看堆栈时
+   ```
+   企业微信推送默认关闭，需要推送时：`PUSH_WX=1 python3 run_crontab_case.py slp`
+3. **定时任务**（可选）：
    ```bash
    crontab -e
    # 每天凌晨 2 点执行

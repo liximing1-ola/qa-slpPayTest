@@ -7,6 +7,7 @@
     python run_crontab_case.py slp
     python run_crontab_case.py xsg
 """
+import os
 import sys
 import unittest
 
@@ -14,9 +15,12 @@ from Robot import robot
 from common import Logs
 from common.Config import config
 from common.Session import Session
-from common.report import AllTestRunner, not_pass_summary, split_message
+from common.report import (AllTestRunner, fail_detail_text, not_pass_report,
+                           not_pass_summary, result_counts, split_message)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
+# 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，需要推送时用 PUSH_WX=1
+PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
 # 失败/异常逐条播报的条数上限：每条 icon 都会 @all 并在外网拉一次图，
 # 失败较多时刷屏又慢，完整清单在汇总消息里，这里只做提醒
 MAX_ICON_ALERT = 3
@@ -41,21 +45,34 @@ def all_case(app_info):
 
 
 def notify(test_result, app_info):
-    """汇总并推送执行结果：失败与异常互不覆盖，最后统一列出所有未通过的用例"""
-    total = test_result.testsRun
+    """汇总执行结果：未通过用例完整打到控制台与 log/notPassCase.log，企业微信推送默认关闭"""
     failures = test_result.failures
     errors = test_result.errors
     skipped = test_result.skipped
-    pass_count = total - len(failures) - len(errors) - len(skipped)
+    # 用 result_counts 而不是 testsRun - 失败 - 异常 - 跳过：
+    # setUpClass 报错时 testsRun 不含这条，相减会把「通过」算成负数
+    counts = result_counts(test_result)
+    pass_count = counts['pass']
 
     des = "[{}] 用例总数: {}, 通过: {}, 失败: {}, 异常: {}, 跳过: {}".format(
-        app_info, total, pass_count, len(failures), len(errors), len(skipped))
-    Logs.get_log('caseResult.log').info(des)
+        app_info, counts['total'], pass_count, counts['fail'], counts['error'], counts['skip'])
+    # flush=True：stdout 重定向到文件时是块缓冲，不刷会延迟到进程退出才落盘
+    print(des, flush=True)
+    Logs.get_log('caseResult.log', console=False).info(des)
 
-    if failures:
-        Logs.get_log('failCase.log').error("failures: {}".format(failures))
-    if errors:
-        Logs.get_log('failCase.log').error("error: {}".format(errors))
+    # 完整清单：编号 + 用例名称 + des + 失败明细，同时写一份到 log/notPassCase.log
+    report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(app_info))
+    print(report_text, flush=True)
+    Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)
+
+    # 失败/异常的完整堆栈只写文件、不打控制台（控制台已有上面带编号的完整清单）
+    if failures or errors:
+        Logs.get_log('failCase.log', console=False, back_count=30).error(fail_detail_text(test_result))
+        print('失败/异常完整堆栈: log/failCase.log', flush=True)
+
+    if not PUSH_WX:
+        print('企业微信推送已关闭（PUSH_WX=0），完整结果见上方输出与 log/notPassCase.log', flush=True)
+        return
 
     # 失败与异常分别遍历推送，不能用 elif 串起来，否则有失败时异常用例永远不会通知
     not_pass_cases = [case for case, _reason in failures + errors]
@@ -63,7 +80,7 @@ def notify(test_result, app_info):
         robot('icon', '[{}] {}'.format(app_info, case.id().split('.')[-1]), bot='slp')
     if len(not_pass_cases) > MAX_ICON_ALERT:
         print('失败/异常共 {} 条，逐条播报只发前 {} 条，完整清单见汇总消息'.format(
-            len(not_pass_cases), MAX_ICON_ALERT))
+            len(not_pass_cases), MAX_ICON_ALERT), flush=True)
 
     # 最后统一推一条汇总：未通过用例（失败/异常/跳过）逐条列出用例名称、des 与失败明细；
     # 不夜星球与小拾光共用同一个机器人，消息里必须带上 App 标识，否则无法区分是哪个应用的结果
@@ -88,7 +105,8 @@ def main(app_info):
     try:
         Session.getSession(app_info)
     except Exception as error:
-        Logs.get_log('caseResult.log').error('[{}] 刷新 token 失败: {}'.format(app_info, error))
+        # console=False：否则会先给 caseResult.log 挂上控制台 handler，导致 notify 里同名的 console=False 失效
+        Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(app_info, error))
 
     test_result = AllTestRunner(verbosity=2).run(all_case(app_info))
     notify(test_result, app_info)
