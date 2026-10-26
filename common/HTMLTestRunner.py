@@ -157,7 +157,8 @@ class Template_mixin(object):
     <script type="text/javascript">
         // 基于准备好的dom，初始化echarts实例
         var myChart = echarts.init(document.getElementById('chart'));
-        // 指定图表的配置项和数�?        var option = {
+        // 指定图表的配置项和数据
+        var option = {
             title : {
                 text: '测试执行情况',
                 x:'center'
@@ -193,7 +194,8 @@ class Template_mixin(object):
                 }
             ]
         };
-        // 使用刚指定的配置项和数据显示图表�?        myChart.setOption(option);
+        // 使用刚指定的配置项和数据显示图表。
+        myChart.setOption(option);
     </script>
     """  # variables: (Pass, fail, error)
 
@@ -563,9 +565,9 @@ class HTMLTestRunner(Template_mixin):
         else:
             status = 'none'
         return [
-            (u'开始时�?, startTime),
+            (u'开始时间', startTime),
             (u'运行时长', duration),
-            (u'状�?, status),
+            (u'状态', status),
         ]
 
     def generateReport(self, test, result):

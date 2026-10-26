@@ -23,7 +23,9 @@ def merge_dicts(*args):
 def create_sign(query, salt="!rilegoule#"):
     """
 	生成sign
-	:param query: 路径参数,以dict形式传�?	:param salt: �?可能不一�?	:return:
+	:param query: 路径参数,以dict形式传递
+	:param salt: 盐,可能不一样
+	:return:
 	"""
     keys = ['_abi', '_index', '_ipv', '_model', '_platform', '_timestamp', 'format', 'package']
     hashArgs = []
@@ -73,13 +75,15 @@ def check_vip_pop(uid, expect_show='vip'):
     """
     校验用户外显标签是否符合预期
     :param uid: 用户ID
-    :param expect_show: 预期标签 'vip' �?'pop'
+    :param expect_show: 预期标签 'vip' 或 'pop'
     :return: 是否符合预期
     """
     from common.conSlpXsgMysql import conMysql as mysql
 
-    user_broker_flag = mysql.checkUserBroker(uid)  # 在工�?    user_agreement_flag = mysql.checkUserAgreement(uid)  # 签署大神协议
-    user_white_flag = mysql.checkUserWhite(uid, 198)  # 在主播身份白名单198�?
+    user_broker_flag = mysql.checkUserBroker(uid)  # 在工会
+    user_agreement_flag = mysql.checkUserAgreement(uid)  # 签署大神协议
+    user_white_flag = mysql.checkUserWhite(uid, 198)  # 在主播身份白名单198中
+
     # 实际标签判断：同时满足三个条件为pop，否则为vip
     actual_result = "pop" if (user_broker_flag and user_agreement_flag and user_white_flag) else "vip"
 
@@ -90,11 +94,12 @@ def check_vip_pop(uid, expect_show='vip'):
 
 def prepare_test_data(pay_uid, *target_uids, money=None, clear_commodity=True, god_status=None):
     """
-    通用的测试数据准备方�?    :param pay_uid: 打赏者UID
+    通用的测试数据准备方法
+    :param pay_uid: 打赏者UID
     :param target_uids: 被打赏者UID列表
     :param money: 打赏者初始金额（None表示不设置）
     :param clear_commodity: 是否清理背包
-    :param god_status: 设置大神状�?{uid: status, ...}
+    :param god_status: 设置大神状态 {uid: status, ...}
     """
     from common.conSlpXsgMysql import conMysql as mysql
 
@@ -111,7 +116,8 @@ def prepare_test_data(pay_uid, *target_uids, money=None, clear_commodity=True, g
 
 def prepare_vip_pop_data(uid, pay_uid=None):
     """
-    准备 VIP/人气�?相关的数据清�?    :param uid: 被打赏者UID
+    准备 VIP/人气值 相关的数据清理
+    :param uid: 被打赏者UID
     :param pay_uid: 打赏者UID（可选）
     """
     from common.conSlpXsgMysql import conMysql as mysql
@@ -129,7 +135,8 @@ def prepare_room_data(rid, uid=None, position=0):
     """
     准备房间相关数据
     :param rid: 房间ID
-    :param uid: 上麦用户UID（None表示下麦�?    :param position: 麦位位置
+    :param uid: 上麦用户UID（None表示下麦）
+    :param position: 麦位位置
     """
     from common.conSlpXsgMysql import conMysql as mysql
 

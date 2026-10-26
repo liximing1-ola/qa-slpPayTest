@@ -1,5 +1,5 @@
 # -*- encoding=utf8 -*-
-__desc__ = "经验值相关用�?
+__desc__ = "经验值相关用例"
 
 import time
 import unittest
@@ -18,21 +18,26 @@ from common.runFailed import Retry
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
 
-	def test_001(self, des='打赏�?贵族爵位=骑士(lv1,1�?消费,vip经验�?:1增加'):
+	def test_001(self, des='打赏者,贵族爵位=骑士(lv1,1倍)消费,vip经验值1:1增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid不是工会成员
-		mysql.deleteUserAccountSql('user_popularity', uid)  # 修改pop�?还原数据
+		mysql.deleteUserAccountSql('user_popularity', uid)  # 修改pop值,还原数据
 		mysql.deleteUserAccountSql('user_title_new', uid)  # 关闭贵族,还原数据
-		mysql.deleteUserAccountSql('pay_room_money', uid)  # 修改vip�?还原数据
+		mysql.deleteUserAccountSql('pay_room_money', uid)  # 修改vip值,还原数据
 
-		mysql.deleteUserAccountSql('user_popularity', payUid)  # 修改pop�?还原数据
+		mysql.deleteUserAccountSql('user_popularity', payUid)  # 修改pop值,还原数据
 		mysql.deleteUserAccountSql('user_title_new', payUid)  # 关闭贵族,还原数据
-		mysql.deleteUserAccountSql('pay_room_money', payUid)  # 修改vip�?还原数据
+		mysql.deleteUserAccountSql('pay_room_money', payUid)  # 修改vip值,还原数据
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['骑士']['level'])
 		mysql.updateMoneySql(payUid, default_money)
 		mysql.deleteUserAccountSql('user_commodity', payUid)
@@ -58,10 +63,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_002(self, des='打赏�?贵族爵位=男爵(lv1,1�?消费,vip经验�?:1增加'):
+	def test_002(self, des='打赏者,贵族爵位=男爵(lv1,1倍)消费,vip经验值1:1增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -92,10 +102,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_003(self, des='打赏�?贵族爵位=子爵(lv1,1�?消费,vip经验�?:1增加'):
+	def test_003(self, des='打赏者,贵族爵位=子爵(lv1,1倍)消费,vip经验值1:1增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -126,10 +141,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_004(self, des='打赏�?贵族爵位=伯爵(1.05�?消费,vip经验�?:1.05增加'):
+	def test_004(self, des='打赏者,贵族爵位=伯爵(1.05倍)消费,vip经验值1:1.05增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -160,10 +180,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_005(self, des='打赏�?贵族爵位=侯爵(1.1�?消费,vip经验�?:1.1增加'):
+	def test_005(self, des='打赏者,贵族爵位=侯爵(1.1倍)消费,vip经验值1:1.1增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -194,10 +219,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_006(self, des='打赏�?贵族爵位=公爵(1.15�?消费,vip经验�?:1.15增加'):
+	def test_006(self, des='打赏者,贵族爵位=公爵(1.15倍)消费,vip经验值1:1.15增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -228,10 +258,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_007(self, des='打赏�?贵族爵位=亲王(1.2�?消费,vip经验�?:1.2增加'):
+	def test_007(self, des='打赏者,贵族爵位=亲王(1.2倍)消费,vip经验值1:1.2增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -262,10 +297,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_008(self, des='打赏�?贵族爵位=国王(1.25�?消费,vip经验�?:1.25增加'):
+	def test_008(self, des='打赏者,贵族爵位=国王(1.25倍)消费,vip经验值1:1.25增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -296,10 +336,15 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
 		case_list_b2[des] = result
 
-	def test_009(self, des='打赏�?贵族爵位=皇帝(1.3�?消费,vip经验�?:1.3增加'):
+	def test_009(self, des='打赏者,贵族爵位=皇帝(1.3倍)消费,vip经验值1:1.3增加'):
 		"""
-		用例描述�?		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		验证余额足够时，商业房打赏礼物给GS分成为：60，且收入在公会魅力值
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uid = gsUid
@@ -331,11 +376,15 @@ class TestPayCreate(unittest.TestCase):
 		case_list_b2[des] = result
 
 	@unittest.skip('多人场景后续维护') # todo
-	def test_010(self, des='打赏�?皇帝(1.3�?,被打赏者多�?多个礼物,分别加成计算'):
+	def test_010(self, des='打赏者=皇帝(1.3倍),被打赏者多人,多个礼物,分别加成计算'):
 		"""
-		用例描述�?		打赏�?皇帝(1.3�?,被打赏者多�?多个礼物,分别加成计算
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间打赏礼物（打�?00分）
-		3.校验接口状态和返回值数�?		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
+		用例描述：
+		打赏者=皇帝(1.3倍),被打赏者多人,多个礼物,分别加成计算
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.房间打赏礼物（打赏100分）
+		3.校验接口状态和返回值数据
+		4.检查被打赏者余额，预期为：1000 * 0.6 =600 (money_cash)
 		"""
 		rid = business_room_rid
 		uids = tuple([str(i) for i in [gs_A_uid, normal_uid]])
@@ -374,21 +423,30 @@ class TestPayCreate(unittest.TestCase):
 		             payUid_old_vip + len(uids) * num * juewei_level['皇帝']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
 		             payUid_old_pop + len(uids) * num * juewei_level['皇帝']['update'] * giftId['69']['price'] / 100)
-		# 收礼�?不加�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', normal_uid), normal_uid_old_vip + num * giftId['69']['price'])
+		# 收礼人 不加成
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', normal_uid), normal_uid_old_vip + num * giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', normal_uid), normal_uid_old_pop + num * giftId['69']['price'])
-		# 收礼�?不加�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', gs_A_uid), gs_A_uid_old_vip + num * giftId['69']['price'])
+		# 收礼人 不加成
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', gs_A_uid), gs_A_uid_old_vip + num * giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', gs_A_uid), gs_A_uid_old_pop + num * giftId['69']['price'])
 
 		case_list_b2[des] = result
 
-	def test_011(self, des='房间守护-双方均增加vip/人气�?):
+	def test_011(self, des='房间守护-双方均增加vip/人气值'):
 		"""
-		 用例描述�?		房间守护-双方均增加vip/人气�?		 脚本步骤�?		 1.构造开通者和被守护者数�?		 2.开通真爱守�?�?		 3.校验接口状态和返回值数�?		 4.检查打赏者余额，预期�?00000 - 99900 = 100
-		 5.检查公会长余额，预期为�?0(不分�?
-		 6.检查被打赏者余�?预期为：99900 * 0.6 = 59940
+		 用例描述：
+		房间守护-双方均增加vip/人气值
+		 脚本步骤：
+		 1.构造开通者和被守护者数据
+		 2.开通真爱守护 月
+		 3.校验接口状态和返回值数据
+		 4.检查打赏者余额，预期：100000 - 99900 = 100
+		 5.检查公会长余额，预期为： 0(不分成)
+		 6.检查被打赏者余额.预期为：99900 * 0.6 = 59940
 		 """
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		rid = gs_soundchat_rid
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
+		rid = gs_soundchat_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-soundchat")  # 确认rid是直播房
 
 		prepare_vip_pop_data(uid)
@@ -428,14 +486,22 @@ class TestPayCreate(unittest.TestCase):
 		case_list_b2[des] = result
 
 	@unittest.skip('功能下线')
-	def test_012(self, des='个人守护-双方均增加vip/人气�?):
+	def test_012(self, des='个人守护-双方均增加vip/人气值'):
 		"""
-		用例描述�?		个人守护-双方增加vip/人气�?		脚本步骤�?		1.构造开通者和被守护者数�?		2.开通价�?2000钻小宝贝守护（xs_relation_config id=2�?		3.校验接口状态和返回值数�?		4.检查打赏者余�?		5.检查被打赏者余�?预期�?2000 * 0.62 = 32240
+		用例描述：
+		个人守护-双方增加vip/人气值
+		脚本步骤：
+		1.构造开通者和被守护者数据
+		2.开通价值52000钻小宝贝守护（xs_relation_config id=2）
+		3.校验接口状态和返回值数据
+		4.检查打赏者余额
+		5.检查被打赏者余额,预期：52000 * 0.62 = 32240
 		"""
 
 		rid = business_room_rid
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_vip_pop_data(uid)
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
+		prepare_vip_pop_data(uid)
 		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['亲王']['level'])
 		prepare_vip_pop_data(payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['皇帝']['level'])
@@ -450,37 +516,44 @@ class TestPayCreate(unittest.TestCase):
 		data = encodeData(
 			uid=uid,
 			payType='defend',
-			defend_id=defend['小宝�?]['id'],
-			money=defend['小宝�?]['price']
+			defend_id=defend['小宝贝']['id'],
+			money=defend['小宝贝']['price']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		time.sleep(0.5)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['皇帝']['update'] * defend['小宝�?]['price'] / 100)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['皇帝']['update'] * defend['小宝�?]['price'] / 100)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + defend['小宝�?]['price'])
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + defend['小宝�?]['price'])
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['皇帝']['update'] * defend['小宝贝']['price'] / 100)
+		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['皇帝']['update'] * defend['小宝贝']['price'] / 100)
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + defend['小宝贝']['price'])
+		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + defend['小宝贝']['price'])
 		case_list_b2[des] = result
 
-	def test_013(self, des='使用vip/人气加速卡,直播开通房间守�?):
+	def test_013(self, des='使用vip/人气加速卡,直播开通房间守护'):
 		"""
-		 用例描述�?		房间守护-双方均增加vip/人气�?		 脚本步骤�?		 1.构造开通者和被守护者数�?		 2.开通真爱守�?�?		 3.校验接口状态和返回值数�?		 4.检查打赏者余额，预期�?00000 - 99900 = 100
-		 5.检查公会长余额，预期为�?0(不分�?
-		 6.检查被打赏者余�?预期为：99900 * 0.6 = 59940
+		 用例描述：
+		房间守护-双方均增加vip/人气值
+		 脚本步骤：
+		 1.构造开通者和被守护者数据
+		 2.开通真爱守护 月
+		 3.校验接口状态和返回值数据
+		 4.检查打赏者余额，预期：100000 - 99900 = 100
+		 5.检查公会长余额，预期为： 0(不分成)
+		 6.检查被打赏者余额.预期为：99900 * 0.6 = 59940
 		 """
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		rid = gs_soundchat_rid
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
+		rid = gs_soundchat_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-soundchat")  # 确认rid是直播房
 
-		mysql.deleteUserAccountSql('user_popularity', uid)  # 修改pop�?还原数据
+		mysql.deleteUserAccountSql('user_popularity', uid)  # 修改pop值,还原数据
 		mysql.deleteUserAccountSql('user_title_new', uid)  # 关闭贵族,还原数据
-		mysql.deleteUserAccountSql('pay_room_money', uid)  # 修改vip�?还原数据
+		mysql.deleteUserAccountSql('pay_room_money', uid)  # 修改vip值,还原数据
 		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['亲王']['level'])
 
-		mysql.deleteUserAccountSql('user_popularity', payUid)  # 修改pop�?还原数据
+		mysql.deleteUserAccountSql('user_popularity', payUid)  # 修改pop值,还原数据
 		mysql.deleteUserAccountSql('user_title_new', payUid)  # 关闭贵族,还原数据
-		mysql.deleteUserAccountSql('pay_room_money', payUid)  # 修改vip�?还原数据
+		mysql.deleteUserAccountSql('pay_room_money', payUid)  # 修改vip值,还原数据
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['皇帝']['level'])
 
 		mysql.updateUserGodSql(uid, 2)
@@ -524,9 +597,15 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_014(self, des='使用vip/人气加速卡,房间送礼,收礼方为人气标签,1倍vip'):
 		"""
-		 用例描述�?		房间守护-双方均增加vip/人气�?		 脚本步骤�?		 1.构造开通者和被守护者数�?		 2.开通真爱守�?�?		 3.校验接口状态和返回值数�?		 4.检查打赏者余额，预期�?00000 - 99900 = 100
-		 5.检查公会长余额，预期为�?0(不分�?
-		 6.检查被打赏者余�?预期为：99900 * 0.6 = 59940
+		 用例描述：
+		房间守护-双方均增加vip/人气值
+		 脚本步骤：
+		 1.构造开通者和被守护者数据
+		 2.开通真爱守护 月
+		 3.校验接口状态和返回值数据
+		 4.检查打赏者余额，预期：100000 - 99900 = 100
+		 5.检查公会长余额，预期为： 0(不分成)
+		 6.检查被打赏者余额.预期为：99900 * 0.6 = 59940
 		 """
 		rid = business_room_rid
 		uid = gsUid
@@ -563,19 +642,25 @@ class TestPayCreate(unittest.TestCase):
 		             payUid_old_vip + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
 		             payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		# 收礼�?开通爵位的vip加�?不会收礼时对vip值加�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
+		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
 		case_list_b2[des] = result
 
 	def test_015(self, des='使用vip/人气加速卡,私聊送礼,收礼方为人气标签,1倍vip'):
 		"""
-		用例描述�?		主播GS-私聊打赏分成60%进mc
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?        4.检查被打赏者余额和账户，预期为�?0 * 0.6 = 30(mc)
-        5.检查打赏者余�?预期为：1000 - 50 = 950
+		用例描述：
+		主播GS-私聊打赏分成60%进mc
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+        4.检查被打赏者余额和账户，预期为：50 * 0.6 = 30(mc)
+        5.检查打赏者余额.预期为：1000 - 50 = 950
 		"""
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['国王']['level'])
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['国王']['level'])
@@ -604,15 +689,22 @@ class TestPayCreate(unittest.TestCase):
 		             payUid_old_vip + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
 		             payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		# 收礼�?开通爵位的vip加�?不会收礼时对vip值加�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
+		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
 		case_list_b2[des] = result
 
 	def test_016(self, des='使用vip/人气加速卡,房间送礼,收礼方为vip标签,2倍vip'):
 		"""
-		 用例描述�?		房间守护-双方均增加vip/人气�?		 脚本步骤�?		 1.构造开通者和被守护者数�?		 2.开通真爱守�?�?		 3.校验接口状态和返回值数�?		 4.检查打赏者余额，预期�?00000 - 99900 = 100
-		 5.检查公会长余额，预期为�?0(不分�?
-		 6.检查被打赏者余�?预期为：99900 * 0.6 = 59940
+		 用例描述：
+		房间守护-双方均增加vip/人气值
+		 脚本步骤：
+		 1.构造开通者和被守护者数据
+		 2.开通真爱守护 月
+		 3.校验接口状态和返回值数据
+		 4.检查打赏者余额，预期：100000 - 99900 = 100
+		 5.检查公会长余额，预期为： 0(不分成)
+		 6.检查被打赏者余额.预期为：99900 * 0.6 = 59940
 		 """
 		rid = business_room_rid
 		uid = normal_uid
@@ -649,19 +741,25 @@ class TestPayCreate(unittest.TestCase):
 		             payUid_old_vip + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
 		             payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
-		# 收礼�?开通爵位的vip加�?不会收礼时对vip值加�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
+		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
 		case_list_b2[des] = result
 
 	def test_017(self, des='使用vip/人气加速卡,私聊送礼,收礼方为vip标签,2倍vip'):
 		"""
-		用例描述�?		主播GS-私聊打赏分成60%进mc
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?        4.检查被打赏者余额和账户，预期为�?0 * 0.6 = 30(mc)
-        5.检查打赏者余�?预期为：1000 - 50 = 950
+		用例描述：
+		主播GS-私聊打赏分成60%进mc
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+        4.检查被打赏者余额和账户，预期为：50 * 0.6 = 30(mc)
+        5.检查打赏者余额.预期为：1000 - 50 = 950
 		"""
 		uid = normal_uid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['国王']['level'])
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['国王']['level'])
@@ -690,6 +788,7 @@ class TestPayCreate(unittest.TestCase):
 		             payUid_old_vip + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
 		             payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
-		# 收礼�?开通爵位的vip加�?不会收礼时对vip值加�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
+		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
 		case_list_b2[des] = result

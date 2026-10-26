@@ -34,7 +34,8 @@ class conMysql:
     @staticmethod
     def selectUserInfoSql(accountType, uid="200254463", money_type='money_cash_b', cid=263, payuid="200254777", app_id=66):
         time.sleep(1)
-        if accountType == 'bean':  # 查询用户账户扩展表金豆余�?            sql = "select money_coupon from xs_user_money_extend where uid={}".format(uid)
+        if accountType == 'bean':  # 查询用户账户扩展表金豆余额
+            sql = "select money_coupon from xs_user_money_extend where uid={}".format(uid)
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
@@ -44,7 +45,7 @@ class conMysql:
                     return res[0]
             except Exception as error:
                 print(error)
-        elif accountType == 'cash':  # 查询用户账户扩展�?现金余额
+        elif accountType == 'cash':  # 查询用户账户扩展表 现金余额
             sql = "select cash from xs_user_money_extend where uid={}".format(uid)
             try:
                 conMysql.cur.execute(sql)
@@ -55,7 +56,8 @@ class conMysql:
                     return res[0]
             except Exception as error:
                 print(error)
-        elif accountType == 'sum_money':  # 查询用户所有账户数据之�?            sql = "select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid)
+        elif accountType == 'sum_money':  # 查询用户所有账户数据之和
+            sql = "select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid)
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
@@ -135,7 +137,8 @@ class conMysql:
                     return res[0]
             except Exception as error:
                 print(error)
-        elif accountType == 'growth':  # 查询用户成长�?            sql = "select growth from xs_user_title_new where uid={}".format(uid)
+        elif accountType == 'growth':  # 查询用户成长值
+            sql = "select growth from xs_user_title_new where uid={}".format(uid)
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
@@ -274,7 +277,8 @@ class conMysql:
                 print('delete fail', error)
             finally:
                 conMysql.con.commit()
-        elif tableName == 'chatroom':  # 删除用户商业�?            sql = "delete from xs_chatroom where uid ={} limit 1".format(uid)
+        elif tableName == 'chatroom':  # 删除用户商业房
+            sql = "delete from xs_chatroom where uid ={} limit 1".format(uid)
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
@@ -291,7 +295,8 @@ class conMysql:
                 print('delete fail', error)
             finally:
                 conMysql.con.commit()
-        elif tableName == 'user_title_new':  # xs_user_title_new每次跑都清一下subscribe_time，防止数据溢�?            sql = "update xs_user_title_new set subscribe_time=0 where uid={} limit 1".format(uid)
+        elif tableName == 'user_title_new':  # xs_user_title_new每次跑都清一下subscribe_time，防止数据溢出
+            sql = "update xs_user_title_new set subscribe_time=0 where uid={} limit 1".format(uid)
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
@@ -299,7 +304,8 @@ class conMysql:
                 print('update fail', error)
             finally:
                 conMysql.con.commit()
-        elif tableName == 'user_popularity':  # 人气�?            sql = "update xs_user_popularity set popularity=0 where uid ={};".format(uid)
+        elif tableName == 'user_popularity':  # 人气值
+            sql = "update xs_user_popularity set popularity=0 where uid ={};".format(uid)
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
@@ -322,7 +328,8 @@ class conMysql:
     # 更新用户数据
     @staticmethod
     def updateUserInfoSql(tableName, uid, level=10):
-        # if tableName == 'broker_user':  # 修改用户为打包结算主�?        #     sql = "update xs_broker_user set bid={}, uid={}, state=1, pack_cal=1 where id = 50 limit 1".format(bid, uid)
+        # if tableName == 'broker_user':  # 修改用户为打包结算主播
+        #     sql = "update xs_broker_user set bid={}, uid={}, state=1, pack_cal=1 where id = 50 limit 1".format(bid, uid)
         #     try:
         #         conMysql.cur.execute(sql)
         #     except Exception as error:
@@ -342,7 +349,8 @@ class conMysql:
         #     finally:
         #         conMysql.con.commit()
         #
-        # # elif tableName == 'chatroom':  # 修改用户为房间房�?        # #     sql = "update xs_chatroom set app_id=1, uid={}, settlement_channel='live', " \
+        # # elif tableName == 'chatroom':  # 修改用户为房间房主
+        # #     sql = "update xs_chatroom set app_id=1, uid={}, settlement_channel='live', " \
         # #           "room_factory_type='business-soundchat' where rid={} limit 1".format(uid, bid)
         # #     try:
         # #         conMysql.cur.execute(sql)
@@ -362,7 +370,7 @@ class conMysql:
         # #         print('update fail', error)
         # #     finally:
         # #         conMysql.con.commit()
-        # # elif tableName == 'user_title_new':  #dev开�?个月贵族
+        # # elif tableName == 'user_title_new':  #dev开通1个月贵族
         # #     sql = "update xs_user_title_new set subscribe_time={},growth=10,level=10 where uid={} limit 1".format(time.time()+30*60*60,uid)
         # #     try:
         # #         conMysql.cur.execute(sql)
@@ -499,12 +507,12 @@ class conMysql:
             conMysql.con.commit()
 
     @staticmethod
-    def checkXsCommodity(cid, name='青铜体验�?):
+    def checkXsCommodity(cid, name='青铜体验券'):
         sql = "select name from xs_commodity where cid={}".format(cid)
         conMysql.cur.execute(sql)
         res = conMysql.cur.fetchone()
         if res is None:
-            raise Exception('xs_commodity {}不存�?.format(name))
+            raise Exception('xs_commodity {}不存在'.format(name))
 
     # 查询工会是否存在
     @staticmethod
@@ -533,7 +541,7 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # 查询用户是否是师�?不是就把他变成一代宗师（level=4，一代宗师）
+    # 查询用户是否是师父.不是就把他变成一代宗师（level=4，一代宗师）
     @staticmethod
     def checkUserXsMentorLevel(uid, level=4):
         sql = 'select * from xs_mentor_exp where uid={}'.format(uid)
@@ -585,7 +593,8 @@ class conMysql:
     #     finally:
     #         conMysql.con.commit()
 
-    # # 查询用户分成�?    # @staticmethod
+    # # 查询用户分成比
+    # @staticmethod
     # def checkBrokerUserRate(uid, creater, rate=100):
     #     sql = 'select * from config.bbc_broker_user_rate where uid={}'.format(uid)
     #     try:
@@ -612,7 +621,8 @@ class conMysql:
     #     finally:
     #         conMysql.con.commit()
 
-    # 查询rid的房间类�?    @staticmethod
+    # 查询rid的房间类型
+    @staticmethod
     def checkRidFactoryType(rid):
         sql = 'select room_factory_type from xs_chatroom where rid={}'.format(rid)
         try:
@@ -625,7 +635,8 @@ class conMysql:
         except Exception as error:
             print(error)
 
-    # 修改大神认证 1=同意,0=不同�?    @staticmethod
+    # 修改大神认证 1=同意,0=不同意
+    @staticmethod
     def updateUserGodSql(uid, agreement_version):
         try:
             sql = f"update xs_user_settings set agreement_version={agreement_version} where uid={uid}"
@@ -636,7 +647,8 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # 查询甄选礼盒打赏数�?    @staticmethod
+    # 查询甄选礼盒打赏数据
+    @staticmethod
     def selectZxPayData(uid):
         sql = f"""
         SELECT JSON_EXTRACT(reason, '$.to') AS to_uid,JSON_EXTRACT(reason, '$.gid') AS gid,SUM(JSON_EXTRACT(reason, '$.num')) AS total_num FROM xs_pay_change WHERE uid = {uid} AND JSON_UNQUOTE(JSON_EXTRACT(reason, '$.obr')) IS NOT NULL GROUP BY gid, to_uid ORDER BY to_uid;
@@ -654,7 +666,7 @@ class conMysql:
 
     @staticmethod
     def checkUserBroker(uid):
-        """校验是否是公会成�?""
+        """校验是否是公会成员"""
         sql = f'select * from xs_broker_user where uid={uid} and deleted=0;'
         try:
             conMysql.cur.execute(sql)
@@ -688,7 +700,8 @@ class conMysql:
         except Exception as error:
             print(error)
 
-    # 修改守护关系有效�?    @staticmethod
+    # 修改守护关系有效期
+    @staticmethod
     def updateRelationExpire(uid1, uid2):
         expire_time = int(time.time()) + 30 * 24 * 60 * 60
         try:
@@ -713,10 +726,11 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # 添加并使�?vip/人气加速卡
+    # 添加并使用 vip/人气加速卡
     @staticmethod
     def insertXsUserAccelerationInfo(uid, speed=1.2):
-        # 89386  1.2�?  89387  1.4�?        try:
+        # 89386  1.2倍   89387  1.4倍
+        try:
             expire_time = int(time.time()) + 30 * 24 * 60 * 60
             sql2 = f"""INSERT INTO `xianshi`.`xs_user_acceleration_info`(`id`, `uid`, `speed`, `expired_time`, `create_time`) VALUES (0, {uid}, {speed}, {expire_time}, 1736481872);"""
             conMysql.cur.execute(sql2)
@@ -726,10 +740,12 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # 添加并使�?无损/有损优惠�?    @staticmethod
+    # 添加并使用 无损/有损优惠券
+    @staticmethod
     def insertXsUserCouponUse(uid, cid=89370):
-        # 89297 9折无�?有损
-        # 89370 9折无�?        try:
+        # 89297 9折无损 有损
+        # 89370 9折无损
+        try:
             # 先删除再添加使用
             sql1 = f"""delete from `xianshi`.`xs_user_coupon_use` where uid={uid}"""
             conMysql.cur.execute(sql1)
@@ -819,10 +835,11 @@ class conMysql:
         except Exception as error:
             print(error)
 
-    # 上周流水最高的�?删除
+    # 上周流水最高的厅 删除
     @staticmethod
     def deleteXsstRoomacsSum(uid):
-        # 先删�?        sql = f"""delete from xsst.xsst_roomacs_sum where uid={uid};"""
+        # 先删除
+        sql = f"""delete from xsst.xsst_roomacs_sum where uid={uid};"""
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
@@ -831,7 +848,7 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # 上周流水最高的�?插入
+    # 上周流水最高的厅 插入
     @staticmethod
     def insertXsstRoomacsSum(uid, rid):
         date = get_last_weekday_timestamp()

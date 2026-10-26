@@ -18,8 +18,8 @@ from common.runFailed import Retry
 
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
-	@unittest.skip("""测试造数�?"")
-	def test_001(self, des='造数�?):
+	@unittest.skip("""测试造数据""")
+	def test_001(self, des='造数据'):
 		results = mysql.select_uid_rid()
 		for row in results:
 			# 删除送礼上限的key

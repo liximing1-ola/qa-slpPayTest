@@ -6,7 +6,8 @@ from caseSlp.config import *
 def encodeData(
         payType='package',
         money=giftId['69']['price'] * default_num,
-        rid=business_room_rid,  # 商业标准9�?        uid=rewardUid,
+        rid=business_room_rid,  # 商业标准9麦
+        uid=rewardUid,
         giftId=giftId['69']['gid'],
         giftType='normal',
         cid=5,
@@ -271,7 +272,8 @@ def encodeData(
         d = urllib.parse.urlencode(data)
         data = d.replace('+', '').replace('%27', '%22')
         return data
-    elif payType == 'zx_box':  # 甄选礼�?        p = []
+    elif payType == 'zx_box':  # 甄选礼盒
+        p = []
         uid = ','.join(uids)
         num_more = len(uids)
         for i in range(len(uids)):

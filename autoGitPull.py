@@ -18,7 +18,7 @@ class updateCode:
         if appInfo == 'bb_php':
             gtr_path = config.codeInfo['bb_php_path']
             git_branch = config.codeInfo['bb_git_branch']
-        elif appInfo == 'slp_php':
+        elif appInfo == 'slp_php':#todo
             gtr_path = config.codeInfo['slp_php_path']
             git_branch = config.codeInfo['slp_git_branch']
         elif appInfo == 'slp_common_rpc':
@@ -28,25 +28,45 @@ class updateCode:
             Logs.get_log('gitBranchError.log').error("{} error".format(appInfo))
             return
 
+        # g = git.cmd.Git(gtr_path)
+        # g.pull() if not appInfo.startswith("slp") else print(f"{appInfo}不拉代码!")
+        # repo = Repo(gtr_path)
         Consts.startTime = time()
-        Session.getSession(env)
+        Session.getSession(env)  # 更新userToken
+        # commit_log = repo.git.log('--pretty={"commit":"%h","author":"%an","summary":"%s","date":"%cd"}', max_count=3,
+        #                           date='format:%Y-%m-%d %H:%M:%S')
         commit_log = str(datetime.datetime.now())
         log_list = commit_log.split("\n")
-        if "dev" == git_branch:
+        # Logs.get_log('gitCommitPull.log').info(
+        #     '当前分支: {}, 最新一条commit: {}'.format(repo.active_branch, log_list[0]))
+        # if str(repo.active_branch) == git_branch:  # 当前线上分支
+        if "dev" == git_branch:  # 当前线上分支
+            # times = int(
+            #    mktime(strptime([eval(item) for item in log_list][0]['date'], "%Y-%m-%d %H:%M:%S")))  # commit更新时间
             times = 9999999999
-            lastTime = int(updateTime('read'))
+            lastTime = int(updateTime('read'))  # 上次脚本执行时间
             if times > lastTime:
                 Logs.get_log('updateGitCode.log').info(
-                    '\u6700\u65b0\u4ee3\u7801\u63d0\u4ea4\u65f6\u95f4: {}, \u4e0a\u6b21\u4ee3\u7801\u66f4\u65b0\u65f6\u95f4: {}'.format(times, lastTime))
+                    '最新代码提交时间: {}, 上次代码更新时间: {}'.format(times, lastTime))
+                # 不发送 git commit 通知消息
+                # if appInfo == 'pt':
+                #     robot('slack_pt', log_list[0], bot=bot)
+                # elif appInfo in ['slp_php', 'slp_common_rpc']:
+                #     robot('slack', log_list[0], bot=bot, to=to) if to == 'slack' else robot('markdown', log_list[0], bot=bot, to=to)
+                # else:
+                #     robot('slack', log_list[0], bot=bot)
                 return True
             else:
+                # Logs.get_log('updateGitCode.log').info("未拉取到{}分支代码，最近代码提交时间: {}, 上次代码更新时间: {}"
+                #                                        .format(repo.active_branch, times, lastTime))
                 return False
         else:
+            # Logs.get_log('gitBranchError.log').error("git branch error： {}".format(repo.active_branch))
             return False
 
 
 def updateTime(operate, now=''):
-    default_time = '1600000000'
+    default_time = '1600000000'  # 默认时间戳
     txtPath = os.path.split(os.path.realpath(__file__))[0] + '/time.txt'
     if operate == 'write':
         with open(txtPath, 'w') as f:

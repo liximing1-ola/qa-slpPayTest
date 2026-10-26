@@ -9,24 +9,29 @@ import time
 
 class Retry(object):
     """
-类装饰器, 功能与Retry一�?# example_1: test_001默认重试1�?class ClassA(unittest.TestCase):
+类装饰器, 功能与Retry一样
+# example_1: test_001默认重试1次
+class ClassA(unittest.TestCase):
     @Retry
     def test_001(self):
         raise AttributeError
 
-# example_2: max_n=2,test_001重试2�?class ClassB(unittest.TestCase):
+# example_2: max_n=2,test_001重试2次
+class ClassB(unittest.TestCase):
     @Retry(max_n=2)
     def test_001(self):
         raise AttributeError
 
-# example_3: test_001重试3�? test_002重试3�?@Retry(max_n=3)
+# example_3: test_001重试3次; test_002重试3次
+@Retry(max_n=3)
 class ClassC(unittest.TestCase):
     def test_001(self):
         raise AttributeError
     def test_002(self):
         raise AttributeError
 
-# example_4: test_102重试2�? test_001不参与重试机�?@Retry(max_n=2, func_prefix="test_1")
+# example_4: test_102重试2次, test_001不参与重试机制
+@Retry(max_n=2, func_prefix="test_1")
 class ClassD(unittest.TestCase):
     def test_001(self):
         raise AttributeError

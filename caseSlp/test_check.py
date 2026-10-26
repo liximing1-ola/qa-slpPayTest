@@ -1,5 +1,5 @@
 # -*- encoding=utf8 -*-
-__desc__ = "异常/边界值用�?
+__desc__ = "异常/边界值用例"
 
 import unittest
 
@@ -16,12 +16,16 @@ from common.runFailed import Retry
 
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
-	def test_001(self, des='余额=0,私聊打赏的场�?):
+	def test_001(self, des='余额=0,私聊打赏的场景'):
 		"""
-		用例描述�?		检查账户余额不足时，私聊一对一打赏
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		检查账户余额不足时，私聊一对一打赏
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=None)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -36,11 +40,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 		case_list[des] = result
 
-	def test_002(self, des='余额=0,房间打赏的场�?):
+	def test_002(self, des='余额=0,房间打赏的场景'):
 		"""
-		用例描述�?		检查账户余额不足时，房间打�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		检查账户余额不足时，房间打赏
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=None)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -55,11 +64,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 		case_list[des] = result
 
-	def test_003(self, des='余额<礼物价�?私聊打赏的场�?):
+	def test_003(self, des='余额<礼物价值-私聊打赏的场景'):
 		"""
-		用例描述�?		余额<礼物价�?私聊打赏的场�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		余额<礼物价值-私聊打赏的场景
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=giftId['69']['price'] - 1)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -74,11 +88,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 		case_list[des] = result
 
-	def test_004(self, des='余额<礼物价�?房间打赏的场�?):
+	def test_004(self, des='余额<礼物价值-房间打赏的场景'):
 		"""
-		用例描述�?		检查账户余额不足时，房间打�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		检查账户余额不足时，房间打赏
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=giftId['69']['price'] - 1)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -93,11 +112,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 		case_list[des] = result
 
-	def test_005(self, des='余额=礼物价�?私聊打赏的场�?):
+	def test_005(self, des='余额=礼物价值-私聊打赏的场景'):
 		"""
-		用例描述�?		余额=礼物价�?私聊打赏的场�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		余额=礼物价值-私聊打赏的场景
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=giftId['69']['price'])
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -111,11 +135,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), 0)
 		case_list[des] = result
 
-	def test_006(self, des='余额=礼物价�?房间打赏的场�?):
+	def test_006(self, des='余额=礼物价值-房间打赏的场景'):
 		"""
-		用例描述�?		余额=礼物价�?房间打赏的场�?		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		余额=礼物价值-房间打赏的场景
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=giftId['69']['price'])
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -131,10 +160,14 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_007(self, des='验证扣费顺序,money>mcb>mc'):
 		"""
-		用例描述�?		验证扣费顺序,money>mcb>mc
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		验证扣费顺序,money>mcb>mc
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=None)
 		mysql.updateMoneySql(payUid,
@@ -157,10 +190,14 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_008(self, des='验证扣费顺序,mcb>mc'):
 		"""
-		用例描述�?		验证扣费顺序,money>mcb>mc
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		验证扣费顺序,money>mcb>mc
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, normal_uid, money=None)
 		mysql.updateMoneySql(payUid,
@@ -181,12 +218,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), giftId['69']['price'])
 		case_list[des] = result
 
-	def test_009(self, des='验证组合支付,m,mc,mcb同时扣费的场�?):
+	def test_009(self, des='验证组合支付,m,mc,mcb同时扣费的场景'):
 		"""
-		用例描述�?		验证扣费顺序,money>mcb>mc
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		验证扣费顺序,money>mcb>mc
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		num=3
 		prepare_test_data(payUid, normal_uid, money=None)
@@ -213,10 +254,14 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_010(self, des='api,自己打赏自己'):
 		"""
-		用例描述�?		api,自己打赏自己
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		api,自己打赏自己
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, money=default_money)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -232,12 +277,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
 		case_list[des] = result
 
-	def test_011(self, des='api,自己打赏自己的小�?同安全手机号)'):
+	def test_011(self, des='api,自己打赏自己的小号(同安全手机号)'):
 		"""
-		用例描述�?		api,自己打赏自己的小�?同安全手机号/身份�?
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		api,自己打赏自己的小号(同安全手机号/身份证)
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, payUid_subsidiary, money=default_money)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)
@@ -254,12 +303,16 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid_subsidiary), 0)
 		case_list[des] = result
 
-	def test_012(self, des='api,自己打赏自己的小�?同实名认�?'):
+	def test_012(self, des='api,自己打赏自己的小号(同实名认证)'):
 		"""
-		用例描述�?		api,自己打赏自己的小�?同安全手机号/身份�?
-		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
-		3.校验接口和返回值数�?		4.检查预期返回msg，预期：支付失败，提示Toast
-		5.检查被打赏者余�?预期�?
+		用例描述：
+		api,自己打赏自己的小号(同安全手机号/身份证)
+		脚本步骤：
+		1.构造打赏者和被打赏者数据
+		2.私聊一对一打赏流程(礼物:棒棒糖)
+		3.校验接口和返回值数据
+		4.检查预期返回msg，预期：支付失败，提示Toast
+		5.检查被打赏者余额,预期：0
 		"""
 		prepare_test_data(payUid, payUid_subsidiary2, money=default_money)
 		# mysql.deleteUserAccountSql('broker_user', normal_uid)

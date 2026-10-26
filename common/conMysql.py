@@ -27,7 +27,8 @@ class conMysql:
     # 查询用户账户信息
     @staticmethod
     def selectUserInfoSql(accountType, uid=config.rewardUid, money_type='money_cash_b', cid=263):
-        if accountType == 'bean':  # 查询用户账户扩展表金豆余�?            sql = "select money_coupon from xs_user_money_extend where uid={}".format(uid)
+        if accountType == 'bean':  # 查询用户账户扩展表金豆余额
+            sql = "select money_coupon from xs_user_money_extend where uid={}".format(uid)
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
@@ -37,7 +38,7 @@ class conMysql:
                     return res[0]
             except Exception as error:
                 print(error)
-        elif accountType == 'cash':  # 查询用户账户扩展�?现金余额
+        elif accountType == 'cash':  # 查询用户账户扩展表 现金余额
             sql = "select cash from xs_user_money_extend where uid={}".format(uid)
             try:
                 conMysql.cur.execute(sql)
@@ -48,7 +49,8 @@ class conMysql:
                     return res[0]
             except Exception as error:
                 print(error)
-        elif accountType == 'sum_money':  # 查询用户所有账户数据之�?            sql = "select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid)
+        elif accountType == 'sum_money':  # 查询用户所有账户数据之和
+            sql = "select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid)
             try:
                 conMysql.cur.execute(sql)
                 res = conMysql.cur.fetchone()
@@ -239,7 +241,8 @@ class conMysql:
                 print('delete fail', error)
             finally:
                 conMysql.con.commit()
-        elif tableName == 'chatroom':  # 删除用户商业�?            sql = "delete from xs_chatroom where uid ={} limit 1".format(uid)
+        elif tableName == 'chatroom':  # 删除用户商业房
+            sql = "delete from xs_chatroom where uid ={} limit 1".format(uid)
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
@@ -256,7 +259,8 @@ class conMysql:
                 print('delete fail', error)
             finally:
                 conMysql.con.commit()
-        elif tableName == 'user_title_new':  # xs_user_title_new每次跑都清一下subscribe_time，防止数据溢�?            sql = "update xs_user_title_new set subscribe_time=0 where uid={} limit 1".format(uid)
+        elif tableName == 'user_title_new':  # xs_user_title_new每次跑都清一下subscribe_time，防止数据溢出
+            sql = "update xs_user_title_new set subscribe_time=0 where uid={} limit 1".format(uid)
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
@@ -270,7 +274,8 @@ class conMysql:
     # 更新用户数据
     @staticmethod
     def updateUserInfoSql(tableName, uid, bid=config.live_role['pack_ceo']):
-        if tableName == 'broker_user':  # 修改用户为打包结算主�?            sql = "update xs_broker_user set bid={}, uid={}, state=1, pack_cal=1 where id = 50 limit 1".format(bid, uid)
+        if tableName == 'broker_user':  # 修改用户为打包结算主播
+            sql = "update xs_broker_user set bid={}, uid={}, state=1, pack_cal=1 where id = 50 limit 1".format(bid, uid)
             try:
                 conMysql.cur.execute(sql)
             except Exception as error:
@@ -290,7 +295,8 @@ class conMysql:
             finally:
                 conMysql.con.commit()
 
-        elif tableName == 'chatroom':  # 修改用户为房间房�?            sql = "update xs_chatroom set app_id=1, uid={}, settlement_channel='live', " \
+        elif tableName == 'chatroom':  # 修改用户为房间房主
+            sql = "update xs_chatroom set app_id=1, uid={}, settlement_channel='live', " \
                   "room_factory_type='business-soundchat' where rid={} limit 1".format(uid,
                                                                                        config.live_role['live_rid'])
             try:
@@ -408,12 +414,12 @@ class conMysql:
             conMysql.con.commit()
 
     @staticmethod
-    def checkXsCommodity(cid, name='青铜体验�?):
+    def checkXsCommodity(cid, name='青铜体验券'):
         sql = "select name from xs_commodity where cid={}".format(cid)
         conMysql.cur.execute(sql)
         res = conMysql.cur.fetchone()
         if res is None:
-            raise Exception('xs_commodity {}不存�?.format(name))
+            raise Exception('xs_commodity {}不存在'.format(name))
 
     # 查询工会是否存在
     @staticmethod
@@ -442,7 +448,7 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # 查询用户是否是师�?不是就把他变成一代宗师（level=4，一代宗师）
+    # 查询用户是否是师父.不是就把他变成一代宗师（level=4，一代宗师）
     @staticmethod
     def checkUserXsMentorLevel(uid, level=4):
         sql = 'select * from xs_mentor_exp where uid={}'.format(uid)
@@ -494,7 +500,8 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # 查询用户分成�?    @staticmethod
+    # 查询用户分成比
+    @staticmethod
     def checkBrokerUserRate(uid, creater, rate=100):
         sql = 'select * from config.bbc_broker_user_rate where uid={}'.format(uid)
         try:

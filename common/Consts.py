@@ -12,7 +12,7 @@ case_list_c = {}
 # 失败结果列表
 fail_case_reason = []
 # pass
-result = "✅"
+result = '✅'
 # 记录时间
 startTime = 0
 endTime = 0

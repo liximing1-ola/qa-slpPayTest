@@ -25,7 +25,7 @@ class TestPayCreate(unittest.TestCase):
 	def tearDown(self):
 		conRedis.delete(f"Xs.Traveler.XSG.{payUid}")
 
-	def test_001(self, des='非不�?新用�?商业�?打赏自己,94%(扣mc到账mc,扣其他到账mcb)'):
+	def test_001(self, des='非不夜-新用户,商业房,打赏自己,94%(扣mc到账mc,扣其他到账mcb)'):
 		rate_money = 0.1
 		rate_money_b = 0.2
 		rate_money_cash_b = 0.3
@@ -35,7 +35,8 @@ class TestPayCreate(unittest.TestCase):
 
 		rid = gs_A_rid_1
 		uid = payUid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		prepare_test_data(payUid, normal_uid, money=default_money, god_status={uid: 0})
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
+		prepare_test_data(payUid, normal_uid, money=default_money, god_status={uid: 0})
 
 		mysql.updateMoneySql(
 			payUid,
@@ -64,7 +65,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_between(mysql.selectUserInfoSql('sum_money', payUid), 0, int(base_amount * user_rate))
 		case_list_b2[des] = result
 
-	def test_002(self, des='不夜活跃-用户,商业�?打赏自己,94%(扣mc到账mc,扣其他到账mcb)'):
+	def test_002(self, des='不夜活跃-用户,商业房,打赏自己,94%(扣mc到账mc,扣其他到账mcb)'):
 		rate_money = 0
 		rate_money_b = 0
 		rate_money_cash_b = 0.71
@@ -74,7 +75,8 @@ class TestPayCreate(unittest.TestCase):
 
 		rid = gs_A_rid_1
 		uid = payUid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		prepare_test_data(payUid, normal_uid, money=default_money, god_status={uid: 0})
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
+		prepare_test_data(payUid, normal_uid, money=default_money, god_status={uid: 0})
 
 		mysql.updateMoneySql(
 			payUid,
@@ -103,10 +105,11 @@ class TestPayCreate(unittest.TestCase):
 		assert_between(mysql.selectUserInfoSql('sum_money', payUid), 0, int(base_amount * user_rate))
 		case_list_b2[des] = result
 
-	def test_003(self, des='个人�?普通用户打赏普通用户自�?94%(mcb)'):
+	def test_003(self, des='个人房,普通用户打赏普通用户自己,94%(mcb)'):
 		rid = mysql.selectUserInfoSql('vip',app_id=70)
 		uid = payUid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		mysql.updateUserMoneyClearSql(uid)
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
+		mysql.updateUserMoneyClearSql(uid)
 		mysql.updateMoneySql(uid, giftId['69']['price']* default_num)
 		data = encodeData(
 			rid=rid,
