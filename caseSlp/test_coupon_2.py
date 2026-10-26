@@ -1,8 +1,6 @@
 # -*- encoding=utf8 -*-
-__author__ = "Wu.Zhenxing"
 __title__ = ""
-__desc__ = "礼物优惠券-无损-收礼方不打折"  # 无损券 无私聊场景
-
+__desc__ = "礼物优惠�?无损-收礼方不打折"  # 无损�?无私聊场�?
 import time
 import unittest
 
@@ -22,10 +20,8 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_003(self, des='房间,9折券(无损),打赏1个人单个礼物'):
 		rid = gs_B_rid
-		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
-		uid = gs_B_uid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播�?		uid = gs_B_uid
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89370']['cid'], 1)
 		num = 1
@@ -54,10 +50,8 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_004(self, des='房间,9折券(无损),打赏1个人多个礼物'):
 		rid = gs_B_rid
-		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
-		uid = gs_B_uid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播�?		uid = gs_B_uid
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89370']['cid'], 1)
 		num = 10
@@ -85,12 +79,10 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 		case_list_b[des] = result
 
-	def test_005(self, des='房间,9折券(无损),打赏多个人单个礼物'):
+	def test_005(self, des='房间,9折券(无损),打赏多个人单个礼�?):
 		rid = gs_B_ceo_rid
 		uids = tuple([str(i) for i in [gs_A_uid, gs_B_uid, normal_uid]])
-		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
+		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
 
 		num = 1
 		prepare_test_data(payUid, gs_A_uid, gs_B_uid, normal_uid,
@@ -121,12 +113,10 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 		case_list_b[des] = result
 
-	def test_006(self, des='房间,9折券(无损),打赏多个人多个礼物'):
+	def test_006(self, des='房间,9折券(无损),打赏多个人多个礼�?):
 		rid = gs_B_ceo_rid
 		uids = tuple([str(i) for i in [gs_A_uid, gs_B_uid, normal_uid]])
-		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
+		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
 
 		num = 10
 		prepare_test_data(payUid, gs_A_uid, gs_B_uid, normal_uid,

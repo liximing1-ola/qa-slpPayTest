@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__author__ = "Wu.Zhenxing"
 __title__ = ""
 __desc__ = "用户,自刷"
 
@@ -19,7 +18,7 @@ from common.runFailed import Retry
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
 
-	def test_001(self, des='用户,商业房,自刷,80%(扣mc到账mc,扣其他到账mcb)'):
+	def test_001(self, des='用户,商业�?自刷,80%(扣mc到账mc,扣其他到账mcb)'):
 		rate_money = 0.1
 		rate_money_b = 0.2
 		rate_money_cash_b = 0.3
@@ -29,8 +28,7 @@ class TestPayCreate(unittest.TestCase):
 
 		rid = gs_A_rid_1
 		uid = payUid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
-		prepare_test_data(payUid, normal_uid, money=default_money, god_status={uid: 0})
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		prepare_test_data(payUid, normal_uid, money=default_money, god_status={uid: 0})
 
 		mysql.updateMoneySql(
 			payUid,
@@ -59,11 +57,10 @@ class TestPayCreate(unittest.TestCase):
 		assert_between(mysql.selectUserInfoSql('sum_money', payUid), 0, int(base_amount * user_rate))
 		case_list_b2[des] = result
 
-	def test_002(self, des='用户,个人房,自刷,90%(mcb)'):
+	def test_002(self, des='用户,个人�?自刷,90%(mcb)'):
 		rid = mysql.selectUserInfoSql('vip')
 		uid = payUid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
-		mysql.updateUserMoneyClearSql(uid)
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		mysql.updateUserMoneyClearSql(uid)
 		mysql.updateMoneySql(uid, giftId['69']['price']* default_num)
 		data = encodeData(
 			rid=rid,
@@ -78,11 +75,10 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-room-self'])
 		case_list_b2[des] = result
 
-	def test_003(self, des='用户,靓号房,自刷,90%(mcb)'):
+	def test_003(self, des='用户,靓号�?自刷,90%(mcb)'):
 		rid = gs_A_ceo_pretty_rid
 		uid = payUid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
-		mysql.updateUserMoneyClearSql(uid)
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		mysql.updateUserMoneyClearSql(uid)
 		mysql.updateMoneySql(uid, giftId['69']['price']* default_num)
 		data = encodeData(
 			rid=rid,
@@ -99,8 +95,7 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_004(self, des='用户,私聊,自刷,90%(mcb)'):
 		uid = payUid
-		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成员
-		mysql.updateUserMoneyClearSql(uid)
+		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid是工会成�?		mysql.updateUserMoneyClearSql(uid)
 		mysql.updateMoneySql(uid, giftId['69']['price']* default_num)
 
 		data = encodeData(

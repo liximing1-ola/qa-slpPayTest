@@ -9,7 +9,7 @@ from common.Config import config
 
 
 class AllTestResult(unittest.TextTestResult):
-    """自定义测试结果类，记录所有用例（通过/失败/异常）"""
+    """自定义测试结果类，记录所有用例（通过/失败/异常�?""
     def __init__(self, stream, descriptions, verbosity):
         super().__init__(stream, descriptions, verbosity)
         self.successes = []
@@ -20,12 +20,12 @@ class AllTestResult(unittest.TextTestResult):
 
 
 class AllTestRunner(unittest.TextTestRunner):
-    """自定义测试运行器，返回 AllTestResult"""
+    """自定义测试运行器，返�?AllTestResult"""
     resultclass = AllTestResult
 
 
 def main(appInfo):
-	if appInfo == config.appName['不夜星球'] or appInfo == config.appName['小拾光']:
+	if appInfo == config.appName['不夜星球'] or appInfo == config.appName['小拾�?]:
 		to = 'wx'
 		print("*" * 50)
 		print(f"消息推送到:{to}")
@@ -34,7 +34,7 @@ def main(appInfo):
 			updateTime('write', now=str(int(time())))
 			test_result = AllTestRunner(verbosity=0).run(all_case(appInfo))
 			Consts.endTime = time()
-			des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}" \
+			des = "用例总数: {}, 失败用例�? {}, 异常用例�? {}" \
 				.format(test_result.testsRun, len(test_result.failures), len(test_result.errors))
 			Logs.get_log('caseResult.log').info(des)
 
@@ -50,16 +50,13 @@ def main(appInfo):
 			lines.append(f"通过: {pass_count}  失败: {fail_count}  异常: {error_count}")
 			lines.append("")
 
-			# 列出所有通过的用例
-			for case in test_result.successes:
-				lines.append(f"✅ {case.id()} - PASS")
+			# 列出所有通过的用�?			for case in test_result.successes:
+				lines.append(f"�?{case.id()} - PASS")
 
-			# 列出失败的用例
-			for case, reason in test_result.failures:
-				lines.append(f"❌ {case.id()} - FAIL")
+			# 列出失败的用�?			for case, reason in test_result.failures:
+				lines.append(f"�?{case.id()} - FAIL")
 
-			# 列出异常的用例
-			for case, reason in test_result.errors:
+			# 列出异常的用�?			for case, reason in test_result.errors:
 				lines.append(f"⚠️ {case.id()} - ERROR")
 
 			message = "\n".join(lines)
@@ -80,7 +77,7 @@ def all_case(appInfo):
 	case_dir = config.BASE_PATH
 	if appInfo == config.appName['不夜星球']:
 		case_dir += '/caseSlp'
-	elif appInfo == config.appName['小拾光']:
+	elif appInfo == config.appName['小拾�?]:
 		case_dir += '/caseXsg'
 	else:
 		return
@@ -112,7 +109,7 @@ if __name__ == "__main__":
 
 	if arg == config.appName['不夜星球'] or arg == 'slp':
 		main(config.appName['不夜星球'])
-	elif arg == config.appName['小拾光'] or arg == 'xsg':
-		main(config.appName['小拾光'])
+	elif arg == config.appName['小拾�?] or arg == 'xsg':
+		main(config.appName['小拾�?])
 	else:
 		main(config.appName['不夜星球'])

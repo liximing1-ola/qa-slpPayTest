@@ -1,7 +1,6 @@
 # -*- encoding=utf8 -*-
-__author__ = "Wu.Zhenxing"
 __title__ = ""
-__desc__ = "普通用户-私聊"
+__desc__ = "普通用�?私聊"
 
 import unittest
 
@@ -19,16 +18,12 @@ from common.runFailed import Retry
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
 
-	def test_001(self, des='普通用户-私聊打赏分成90%(mcb)'):
+	def test_001(self, des='普通用�?私聊打赏分成90%(mcb)'):
 		"""
-		用例描述：
-		普通用户-私聊打赏分成60%(mcb)
-		脚本步骤：
-		1.构造打赏者和被打赏者数据
-		2.私聊一对一打赏流程(礼物:棒棒糖)
-		3.校验接口和返回值数据
-        4.检查被打赏者余额和账户，预期为：50 * 0.6 = 30(mcb)
-        5.检查打赏者余额.预期为：1000 - 50 = 950
+		用例描述�?		普通用�?私聊打赏分成60%(mcb)
+		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.私聊一对一打赏流程(礼物:棒棒�?
+		3.校验接口和返回值数�?        4.检查被打赏者余额和账户，预期为�?0 * 0.6 = 30(mcb)
+        5.检查打赏者余�?预期为：1000 - 50 = 950
 		"""
 		uid = rewardUid
 		assert_equal(mysql.checkUserBroker(uid), False)  # 确认 uid不是工会成员

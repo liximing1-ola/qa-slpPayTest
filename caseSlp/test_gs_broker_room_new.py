@@ -1,7 +1,6 @@
 # -*- encoding=utf8 -*-
-__author__ = "Wu.Zhenxing"
 __title__ = ""
-__desc__ = "非跨档主播分成"
+__desc__ = "非跨档主播分�?
 
 import unittest
 
@@ -18,12 +17,11 @@ from common.runFailed import Retry
 
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
-	def test_001(self, des='用户,商业房,非跨档,已配置<=总计80%,按配置分成(mc)'):
+	def test_001(self, des='用户,商业�?非跨�?已配�?=总计80%,按配置分�?mc)'):
 
 		rid = gs_A_rid_1
 		uid = gs_A_uid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -39,12 +37,11 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		case_list_b2[des] = result
 
-	def test_002(self, des='用户,商业房,非跨档,已配置>总计80%,按基础规则-兜底分成(mc)'):
+	def test_002(self, des='用户,商业�?非跨�?已配�?总计80%,按基础规则-兜底分成(mc)'):
 
 		rid = gs_A_rid_3
 		uid = gs_A_uid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -60,12 +57,11 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		case_list_b2[des] = result
 
-	def test_003(self, des='用户,商业房,非跨档,点唱,未配置,按结算频道-规则分成(mc)'):
+	def test_003(self, des='用户,商业�?非跨�?点唱,未配�?按结算频�?规则分成(mc)'):
 
 		rid = gs_A_rid_4
 		uid = gs_A_uid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -81,12 +77,11 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		case_list_b2[des] = result
 
-	def test_004(self, des='用户,商业房,非跨档,树洞,未配置,按未配置的结算频道兜底分成(mc)'):
+	def test_004(self, des='用户,商业�?非跨�?树洞,未配�?按未配置的结算频道兜底分�?mc)'):
 
 		rid = gs_A_rid_5
 		uid = gs_A_uid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, gs_A_uid, gs_A_room_owner_1_uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',

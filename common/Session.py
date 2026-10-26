@@ -18,8 +18,7 @@ class Session:
 	@staticmethod
 	def getSession(env):
 		"""
-		获取qq登陆session（默认uid）
-		:param env: 环境
+		获取qq登陆session（默认uid�?		:param env: 环境
 		:return: 登陆token
 		"""
 		urllib3.disable_warnings()
@@ -28,7 +27,7 @@ class Session:
 			print("slp")
 			from caseSlp.config import payUid, gsUid, gs_B_uid
 			from caseSlp.tools import get_test_token
-		elif env == config.appName['小拾光']:
+		elif env == config.appName['小拾�?]:
 			print("xsg")
 			from caseXsg.config import payUid, gsUid, gs_B_uid_1 as gs_B_uid
 			from caseXsg.tools import get_test_token

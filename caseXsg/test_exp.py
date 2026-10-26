@@ -1,7 +1,6 @@
 # -*- encoding=utf8 -*-
-__author__ = "Wu.Zhenxing"
 __title__ = ""
-__desc__ = "经验值相关用例"
+__desc__ = "经验值相关用�?
 
 import time
 import unittest
@@ -25,9 +24,9 @@ class TestPayCreate(unittest.TestCase):
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid不是工会成员
 		prepare_vip_pop_data(uid)
-		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['normal_uid']['殿']['level'])
+		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['normal_uid']['�?]['level'])
 		prepare_vip_pop_data(payUid)
-		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['normal_uid']['殿']['level'])
+		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['normal_uid']['�?]['level'])
 		mysql.updateMoneySql(payUid, default_money)
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 
@@ -52,9 +51,8 @@ class TestPayCreate(unittest.TestCase):
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		time.sleep(0.5)
 		clear_acceleration_card(uid, payUid)
-		# 贵族加速vip,加速卡加速vip和人气
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['normal_uid']['殿']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+		# 贵族加速vip,加速卡加速vip和人�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
+		             payUid_old_vip + juewei_level['normal_uid']['�?]['update'] * giftId['69']['price'] / 100 * payUid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
 		             payUid_old_pop + giftId['69']['price'] * payUid_speed * 3)
 
@@ -64,11 +62,10 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_002(self, des='vip人气计算,使用爵位+加速卡,私聊送礼'):
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		prepare_vip_pop_data(uid, payUid)
-		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['normal_uid']['帝']['level'])
-		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['normal_uid']['帝']['level'])
+		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['normal_uid']['�?]['level'])
+		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['normal_uid']['�?]['level'])
 
 		payUid_old_vip = mysql.selectUserInfoSql('pay_room_money', payUid)
 		payUid_old_pop = mysql.selectUserInfoSql('popularity', payUid)
@@ -90,9 +87,8 @@ class TestPayCreate(unittest.TestCase):
 
 		time.sleep(0.5)
 		clear_acceleration_card(uid, payUid)
-		# 贵族加速vip,加速卡加速vip和人气
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['normal_uid']['帝']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+		# 贵族加速vip,加速卡加速vip和人�?		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
+		             payUid_old_vip + juewei_level['normal_uid']['�?]['update'] * giftId['69']['price'] / 100 * payUid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
 		             payUid_old_pop + giftId['69']['price'] * payUid_speed * 3)
 

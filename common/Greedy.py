@@ -30,8 +30,7 @@ class Greedy:
     @staticmethod
     def bet(money_type):
         try:
-            # 获取摩天轮信息
-            greed_round_id = 0
+            # 获取摩天轮信�?            greed_round_id = 0
             greed_counter = []
             for i in range(10):
                 greed_index = Greedy.greedy_index(config.pt_payUid)
@@ -41,22 +40,19 @@ class Greedy:
                     greed_counter = greed_index['body']['data']['counter_range']
                     break
                 else:
-                    time.sleep(5)  # 等待摩天轮变为可投注状态
-                    continue
+                    time.sleep(5)  # 等待摩天轮变为可投注状�?                    continue
 
             # 下注
             for i in range(6):
                 greed_vid = random.randint(1, 8)
                 Greedy.greedy_stake(config.pt_payUid, greed_vid, greed_counter, greed_round_id, money_type)
 
-            # 获取开奖数据
-            greed_counter_all = 0
+            # 获取开奖数�?            greed_counter_all = 0
             greedy_prize = 0
             for i in range(10):
                 greedy_player_data = conMysql.select_greedy_prize(config.pt_payUid, greed_round_id)
                 if greedy_player_data == 0:
-                    time.sleep(5)  # 等待摩天轮开奖
-                    continue
+                    time.sleep(5)  # 等待摩天轮开�?                    continue
                 else:
                     greed_counter_all = greedy_player_data[0]
                     greedy_prize = greedy_player_data[1]

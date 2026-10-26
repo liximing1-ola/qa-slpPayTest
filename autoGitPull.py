@@ -47,8 +47,8 @@ class updateCode:
             lastTime = int(updateTime('read'))  # 上次脚本执行时间
             if times > lastTime:
                 Logs.get_log('updateGitCode.log').info(
-                    '最新代码提交时间: {}, 上次代码更新时间: {}'.format(times, lastTime))
-                # 不发送 git commit 通知消息
+                    '最新代码提交时�? {}, 上次代码更新时间: {}'.format(times, lastTime))
+                # 不发�?git commit 通知消息
                 # if appInfo == 'pt':
                 #     robot('slack_pt', log_list[0], bot=bot)
                 # elif appInfo in ['slp_php', 'slp_common_rpc']:
@@ -57,17 +57,16 @@ class updateCode:
                 #     robot('slack', log_list[0], bot=bot)
                 return True
             else:
-                # Logs.get_log('updateGitCode.log').info("未拉取到{}分支代码，最近代码提交时间: {}, 上次代码更新时间: {}"
+                # Logs.get_log('updateGitCode.log').info("未拉取到{}分支代码，最近代码提交时�? {}, 上次代码更新时间: {}"
                 #                                        .format(repo.active_branch, times, lastTime))
                 return False
         else:
-            # Logs.get_log('gitBranchError.log').error("git branch error： {}".format(repo.active_branch))
+            # Logs.get_log('gitBranchError.log').error("git branch error�?{}".format(repo.active_branch))
             return False
 
 
 def updateTime(operate, now=''):
-    default_time = '1600000000'  # 默认时间戳
-    txtPath = os.path.split(os.path.realpath(__file__))[0] + '/time.txt'
+    default_time = '1600000000'  # 默认时间�?    txtPath = os.path.split(os.path.realpath(__file__))[0] + '/time.txt'
     if operate == 'write':
         with open(txtPath, 'w') as f:
             f.write(now)

@@ -26,8 +26,7 @@ class mysql:
         cursor = con.cursor()
         return con, cursor
 
-    # 更新用户的账户余额
-    @staticmethod
+    # 更新用户的账户余�?    @staticmethod
     def updateMoneySql(uid, money=0, money_cash=0, money_cash_b=0, money_b=0, gold_coin=0):
         con, cur = mysql.conMysql()
         sql = "update xs_user_money set money={}, money_b={}, money_cash={}, money_cash_b={},gold_coin={} where uid={} limit 1" \
@@ -40,8 +39,7 @@ class mysql:
         finally:
             con.commit()
 
-    # 查询用户当前所有账户余额之和
-    @staticmethod
+    # 查询用户当前所有账户余额之�?    @staticmethod
     def selectAllMoneySql(uid):
         con, cur = mysql.conMysql()
         sql = "select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid)
@@ -68,8 +66,7 @@ class mysql:
         finally:
             con.commit()
 
-    # 检查用户背包指定物品数量
-    @staticmethod
+    # 检查用户背包指定物品数�?    @staticmethod
     def checkUserCommoditySql(uid, cid):
         con, cur = mysql.conMysql()
         sql = "select num from xs_user_commodity where cid={} and uid={}".format(cid, uid)
@@ -83,8 +80,7 @@ class mysql:
         except Exception as error:
             print(error)
 
-    # 检查用户背包所有物品数量
-    @staticmethod
+    # 检查用户背包所有物品数�?    @staticmethod
     def checkUserAllCommoditySql(uid):
         con, cur = mysql.conMysql()
         sql = 'select sum(num) from xs_user_commodity where uid ={}'.format(uid)

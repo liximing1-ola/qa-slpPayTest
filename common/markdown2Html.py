@@ -16,8 +16,7 @@ except ModuleNotFoundError as e:
 
 
 # pip3 install xx -i http://mirrors.aliyun.com/pypi/simple --trusted-host mirrors.aliyun.com
-# 如果不行换个源
-
+# 如果不行换个�?
 class mdtox:
     def __init__(self, md_filename, encoding='utf-8'):
         self.html = None
@@ -54,20 +53,16 @@ class mdtox:
         # 扩展配置
         self.extensions = [
             'toc',  # 目录，[toc]
-            'extra',  # 缩写词、属性列表、释义列表、围栏式代码块、脚注、在HTML的Markdown、表格
-        ]
+            'extra',  # 缩写词、属性列表、释义列表、围栏式代码块、脚注、在HTML的Markdown、表�?        ]
         third_party_extensions = [
-            'mdx_math',  # KaTeX数学公式，$E=mc^2$和$$E=mc^2$$
-            'markdown_checklist.extension',  # checklist，- [ ]和- [x]
-            'pymdownx.magiclink',  # 自动转超链接，
-            'pymdownx.caret',  # 上标下标，
-            'pymdownx.superfences',  # 多种块功能允许嵌套，各种图表
-            'pymdownx.betterem',  # 改善强调的处理(粗体和斜体)
+            'mdx_math',  # KaTeX数学公式�?E=mc^2$�?$E=mc^2$$
+            'markdown_checklist.extension',  # checklist�? [ ]�? [x]
+            'pymdownx.magiclink',  # 自动转超链接�?            'pymdownx.caret',  # 上标下标�?            'pymdownx.superfences',  # 多种块功能允许嵌套，各种图表
+            'pymdownx.betterem',  # 改善强调的处�?粗体和斜�?
             'pymdownx.mark',  # 亮色突出文本
             'pymdownx.highlight',  # 高亮显示代码
             'pymdownx.tasklist',  # 任务列表
-            'pymdownx.tilde',  # 删除线
-        ]
+            'pymdownx.tilde',  # 删除�?        ]
         self.extensions.extend(third_party_extensions)
         self.extension_configs = {
             'mdx_math': {
@@ -87,8 +82,7 @@ class mdtox:
                 'linenums_style': 'pymdownx-inline'  # 代码和行号分开
             },
             'pymdownx.tasklist': {
-                'clickable_checkbox': True,  # 任务列表可点击
-            }
+                'clickable_checkbox': True,  # 任务列表可点�?            }
         }
 
     def to_html(self, html_path):

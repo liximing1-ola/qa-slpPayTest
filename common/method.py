@@ -9,7 +9,7 @@ from common.Config import config
 
 
 def dictToListSlack(result_dict):
-    """slack机器人使用"""
+    """slack机器人使�?""
     case = []
     for k, v in result_dict.items():
         field = {
@@ -21,8 +21,7 @@ def dictToListSlack(result_dict):
     return case
 
 
-# 将列表生成支持markdown的形式
-def dictToList(result_dict):
+# 将列表生成支持markdown的形�?def dictToList(result_dict):
     list_case = []
     for k, v in result_dict.items():
         # list_case.append('<font color="comment">{}-</font>,<font color=\"info\">{}</font>'.format(v, k))
@@ -56,8 +55,7 @@ def getImage(mode=2):
         return 'http://xs-image.oss-cn-hangzhou.aliyuncs.com/static/gift_big/{}.png'.format(icon)
 
 
-# 检查当前字段是否在Json中存在
-def isExtend(data, tag):
+# 检查当前字段是否在Json中存�?def isExtend(data, tag):
     if type(data) != type({}):
         print('please input a json!')
     else:
@@ -98,7 +96,7 @@ def getValue(res):
         print('结果：{}, 时间：{}'.format(res['body']['success'], time.time()))
         Consts.success_num += 1
     else:
-        print('结果：{}， 时间：{}'.format(res['body'], time.time()))
+        print('结果：{}�?时间：{}'.format(res['body'], time.time()))
         Consts.fail_num += 1
 
 

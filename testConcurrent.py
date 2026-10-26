@@ -17,24 +17,16 @@ from time import sleep
 class TestPayConcurrent:
     php_urL = {
         'pay_url': config.appInfo['bb_dev'] + 'pay/create?package=com.imbb.banban.android',  # 内网支付接口
-        'commodity_present': config.appInfo['bb_dev'] + 'commodity/present?package=com.imbb.banban.android',  # 物品赠送接口
-        'commodity_use': config.appInfo['bb_dev'] + 'commodity/use?package=com.imbb.banban.android',  # 物品使用接口
+        'commodity_present': config.appInfo['bb_dev'] + 'commodity/present?package=com.imbb.banban.android',  # 物品赠送接�?        'commodity_use': config.appInfo['bb_dev'] + 'commodity/use?package=com.imbb.banban.android',  # 物品使用接口
     }
     commodity_id = {
-        'cid_340': 340,  # 小天使
-        'cid_264': 264,  # 头像框（5h）
-    }
+        'cid_340': 340,  # 小天�?        'cid_264': 264,  # 头像框（5h�?    }
     Session().getSession('dev')
 
     def startPayPackGiftReady(self):
         """
-        用例描述：
-        构造背包内购买礼物场景
-        脚本步骤：
-        1.构造购买者数据 （更新xs_user_money和xs_user_commodity）
-        2.商城内购买礼物道具*1（9900*1=9900）
-        3.校验【status code】和返回值【body】状态
-        4.检查购买者余额 (10000-9900=100)
+        用例描述�?        构造背包内购买礼物场景
+        脚本步骤�?        1.构造购买者数�?（更新xs_user_money和xs_user_commodity�?        2.商城内购买礼物道�?1�?900*1=9900�?        3.校验【status code】和返回值【body】状�?        4.检查购买者余�?(10000-9900=100)
         5.检查背包内物品
         """
         mysql.updateMoneySql(config.payUid, 10000)
@@ -50,21 +42,15 @@ class TestPayConcurrent:
 
     def payCreateConcurrent(self):
         """
-        用例描述：
-        验证商城购买的道具在房间内赠送给其他人
-        脚本步骤：
-        1.构造打赏者和被打赏者数据
-        2.打赏背包道具
-        3.校验【status code】和返回值【body】状态
-        4.检查背包内物品
-        5.检查被打赏者余额 9900*0.62 = 6138
+        用例描述�?        验证商城购买的道具在房间内赠送给其他�?        脚本步骤�?        1.构造打赏者和被打赏者数�?        2.打赏背包道具
+        3.校验【status code】和返回值【body】状�?        4.检查背包内物品
+        5.检查被打赏者余�?9900*0.62 = 6138
         """
         cid = int(mysql.getUserCommodityIdSql(self.commodity_id['cid_340'], config.payUid))
         payload = encodeData(payType='package',
                              rid=193185484,
                              uid=config.rewardUid,
-                             giftId=54,  # 小天使礼物
-                             money=9900,
+                             giftId=54,  # 小天使礼�?                             money=9900,
                              package_cid=cid,
                              ctype='gift',
                              num=1)
@@ -78,7 +64,7 @@ class TestPayConcurrent:
         assert_equal(Consts.success_num, 1)
         Consts.fail_num = 0
 
-    def test_01_payPackGift(self, num_times, des='打赏背包礼物的并发场景'):
+    def test_01_payPackGift(self, num_times, des='打赏背包礼物的并发场�?):
         print('----------------------------------------{}----------------------------------'.format(des))
         self.startPayPackGiftReady()
         threads = []
@@ -92,12 +78,7 @@ class TestPayConcurrent:
 
     def startCommodityUseReady(self):
         """
-        用例描述：
-        使用商城购买的道具
-        脚本步骤：
-        1.构造使用者数据
-        2.校验【status code】和返回值【body】状态
-        3.检查背包内物品
+        用例描述�?        使用商城购买的道�?        脚本步骤�?        1.构造使用者数�?        2.校验【status code】和返回值【body】状�?        3.检查背包内物品
         """
         mysql.insertXsUserCommodity(config.payUid, self.commodity_id['cid_264'], 1)
         assert_equal(mysql.checkUserCommoditySql(config.payUid, self.commodity_id['cid_264']), 1)
@@ -129,12 +110,8 @@ class TestPayConcurrent:
 
     def startCommodityPresentReady(self):
         """
-        用例描述：
-        赠送商城购买的道具
-        脚本步骤：
-        1.构造使用者数据
-        2.校验【status code】和返回值【body】状态
-        3.检查背包内物品
+        用例描述�?        赠送商城购买的道具
+        脚本步骤�?        1.构造使用者数�?        2.校验【status code】和返回值【body】状�?        3.检查背包内物品
         """
         mysql.updateMoneySql(config.payUid)
         mysql.updateMoneySql(config.rewardUid)
@@ -155,7 +132,7 @@ class TestPayConcurrent:
         assert_equal(mysql.checkUserCommoditySql(config.rewardUid, self.commodity_id['cid_264']), 2)
         assert_equal(Consts.success_num, 2)
 
-    def test_03_commodityPresent(self, num_times, des='赠送物品时的并发场景'):
+    def test_03_commodityPresent(self, num_times, des='赠送物品时的并发场�?):
         print('-----------------------------------{}---------------------------------'.format(des))
         self.startCommodityPresentReady()
         threads = []
@@ -170,23 +147,16 @@ class TestPayConcurrent:
     @staticmethod
     def startPayGiftCreateReady():
         """
-        脚本步骤：
-        构造购买者数据 （更新xs_user_money和xs_user_commodity）
-        """
+        脚本步骤�?        构造购买者数�?（更新xs_user_money和xs_user_commodity�?        """
         Consts.success_num = 0
         mysql.updateMoneySql(config.payUid, 400)
         mysql.updateMoneySql(config.masterUid)
 
     def payGiftCreateConcurrent(self):
         """
-        用例描述：
-        验证房间内打赏礼物给其他人
-        脚本步骤：
-        1.构造打赏者和被打赏者数据
-        2.礼物面板打赏礼物
-        3.校验【status code】和返回值【body】状态
-        4.打赏多次（>4）后，检查打赏者余额：0
-        5.打赏多次（>4）后，检查被打赏者余额：400 * 0.7 = 280
+        用例描述�?        验证房间内打赏礼物给其他�?        脚本步骤�?        1.构造打赏者和被打赏者数�?        2.礼物面板打赏礼物
+        3.校验【status code】和返回值【body】状�?        4.打赏多次�?4）后，检查打赏者余额：0
+        5.打赏多次�?4）后，检查被打赏者余额：400 * 0.7 = 280
         """
         payload = encodeData(payType='package',
                              money=100,
@@ -218,22 +188,16 @@ class TestPayConcurrent:
     @staticmethod
     def startPayShopReady():
         """
-        脚本步骤：
-        1.构造购买者数据 （更新xs_user_money和xs_user_commodity）
-        """
+        脚本步骤�?        1.构造购买者数�?（更新xs_user_money和xs_user_commodity�?        """
         Consts.success_num = 0
         mysql.updateMoneySql(config.payUid, 40000)
         mysql.deleteUserCommoditySql(config.payUid)
 
     def payShopCreateConcurrent(self):
         """
-        用例描述：
-        验证商城购买道具
-        脚本步骤：
-        1.构造打赏者和被打赏者数据
-        2.打赏背包道具
-        3.校验【status code】和返回值【body】状态
-        4.检查背包内物品
+        用例描述�?        验证商城购买道具
+        脚本步骤�?        1.构造打赏者和被打赏者数�?        2.打赏背包道具
+        3.校验【status code】和返回值【body】状�?        4.检查背包内物品
         """
         data = encodeData(payType='shop-buy',
                           cid=self.commodity_id['cid_340'],

@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__author__ = "Wu.Zhenxing"
 __title__ = ""
 __desc__ = "公会主播-私聊"
 
@@ -27,10 +26,9 @@ class TestPayCreate(unittest.TestCase):
 	def tearDown(self):
 		conRedis.delete(f"Xs.Traveler.XSG.{payUid}")
 
-	def test_001(self, des='非不夜-新用户,私聊,打赏主播,90%(mcb)'):
+	def test_001(self, des='非不�?新用�?私聊,打赏主播,90%(mcb)'):
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 
 		data = encodeData(payType='chat-gift',
 		                  num=default_num,
@@ -46,8 +44,7 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_002(self, des='不夜活跃-用户,私聊,打赏主播,60%(mc)'):
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 
 		data = encodeData(payType='chat-gift',
 		                  num=default_num,
@@ -63,8 +60,7 @@ class TestPayCreate(unittest.TestCase):
 
 	def test_003(self, des='主播,私聊,自刷,90%(mcb)'):
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateUserMoneyClearSql(uid)
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成�?		mysql.updateUserMoneyClearSql(uid)
 		mysql.updateMoneySql(uid, giftId['69']['price']* default_num)
 
 		data = encodeData(

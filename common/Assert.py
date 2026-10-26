@@ -20,7 +20,7 @@ def assert_code(actual_code, expected_code=200):
         assert actual_code == expected_code
         return True
     except:
-        reason = 'Actual Code: {}, Expected Code: {}, 验证结果不一致，估计服务器开小差啦!'.format(actual_code, expected_code)
+        reason = 'Actual Code: {}, Expected Code: {}, 验证结果不一致，估计服务器开小差�?'.format(actual_code, expected_code)
         Consts.fail_case_reason.append(reason)
         raise
 
@@ -43,8 +43,7 @@ def assert_equal(actual_result, expect_result, tolerance=0.0001):
     """
     :param actual_result: 实际结果
     :param expect_result: 预期结果
-    :param tolerance: 数值类型的允许误差，默认0.0001，设为0则严格相等
-    """
+    :param tolerance: 数值类型的允许误差，默�?.0001，设�?则严格相�?    """
     try:
         # 对数值类型允许误差，覆盖int/float/Decimal混合比较场景
         if isinstance(actual_result, (int, float)) and isinstance(expect_result, (int, float)):
@@ -66,8 +65,7 @@ def assert_equal(actual_result, expect_result, tolerance=0.0001):
 
 def assert_in_text(body, expected_msg):
     """
-    :param body: 返回值
-    :param expected_msg: 预期结果
+    :param body: 返回�?    :param expected_msg: 预期结果
     """
     try:
         text = json.dumps(body, ensure_ascii=False)
@@ -81,8 +79,7 @@ def assert_in_text(body, expected_msg):
 def assert_body(body, body_msg, expected_msg, reason):
     """
     验证response状态码
-    :param body: 返回值
-    :param body_msg: 参数
+    :param body: 返回�?    :param body_msg: 参数
     :param expected_msg: 预期结果
     :param reason: 原因
     """
@@ -101,6 +98,6 @@ def assert_between(actual_result, lower_limit, upper_limit):
         assert int(lower_limit) <= int(actual_result) <= int(upper_limit)
         return True
     except:
-        reason = f'实际结果: {actual_result}, 预期结果: {int(lower_limit)} 至 {int(upper_limit)}, 验证结果不一致，用例执行失败，望严查!'
+        reason = f'实际结果: {actual_result}, 预期结果: {int(lower_limit)} �?{int(upper_limit)}, 验证结果不一致，用例执行失败，望严查!'
         Consts.fail_case_reason.append(reason)
         raise

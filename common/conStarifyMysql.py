@@ -61,11 +61,9 @@ class conMysql:
         elif accountType == 'commodity_num':  # 查询用户背包某个物品总数
             sql = f'select sum(num) from xs_user_commodity where uid ={uid} and cid = {cid} and duration_time={duration_time};'
             return conMysql.sql_fetchone(sql)
-        elif accountType == 'wealth':  # 查询用户-财富值
-            sql = f'select wealth from xs_user_wealth where uid ={uid};'
+        elif accountType == 'wealth':  # 查询用户-财富�?            sql = f'select wealth from xs_user_wealth where uid ={uid};'
             return conMysql.sql_fetchone(sql)
-        elif accountType == 'charm':  # 查询用户-财富值
-            sql = f'select charm from xs_user_charm where uid ={uid};'
+        elif accountType == 'charm':  # 查询用户-财富�?            sql = f'select charm from xs_user_charm where uid ={uid};'
             return conMysql.sql_fetchone(sql)
 
     @staticmethod
@@ -76,13 +74,13 @@ class conMysql:
 
     @staticmethod
     def updateWealthSql(uid, wealth, pre_wealth=0):
-        """更新用户-财富值"""
+        """更新用户-财富�?""
         sql = f"UPDATE xs_user_wealth SET wealth={wealth},pre_wealth={pre_wealth} WHERE uid={uid};"
         conMysql.sql_execute(sql)
 
     @staticmethod
     def updateCharmSql(uid, charm):
-        """更新用户-魅力值"""
+        """更新用户-魅力�?""
         sql = f"UPDATE xs_user_charm SET charm={charm} WHERE uid={uid};"
         conMysql.sql_execute(sql)
 
@@ -91,8 +89,7 @@ class conMysql:
         if tableName == 'user_commodity':  # 清除用户背包数据
             sql = f"delete from xs_user_commodity where uid={uid}"
             conMysql.sql_execute(sql)
-        if tableName == 'user_work_reward':  # 清除用户打赏作品的标记
-            sql = f"delete from xs_user_work_reward where uid={uid} and wid={wid};"
+        if tableName == 'user_work_reward':  # 清除用户打赏作品的标�?            sql = f"delete from xs_user_work_reward where uid={uid} and wid={wid};"
             conMysql.sql_execute(sql)
 
     @staticmethod
@@ -104,8 +101,7 @@ class conMysql:
     @staticmethod
     def deleteProducerSinger(singer_uid):
         """
-        清除的制作人/歌手的关系
-        :param producer_uid: 制作人uid
+        清除的制作人/歌手的关�?        :param producer_uid: 制作人uid
         :param singer_uid: 歌手uid
         :return:
         """
@@ -118,8 +114,7 @@ class conMysql:
     @staticmethod
     def selectProducerSinger(producer_uid):
         """
-        已签约歌手人数
-        :param producer_uid: 制作人uid
+        已签约歌手人�?        :param producer_uid: 制作人uid
         :return:
         """
         sql1 = f"select count(1) from xs_audition_relation where producer_uid = {producer_uid};"
@@ -133,8 +128,7 @@ class conMysql:
     @staticmethod
     def updateSingerWorth(singer_uid, worth=100):
         """
-        修改歌手的身价
-        :param singer_uid: 歌手uid
+        修改歌手的身�?        :param singer_uid: 歌手uid
         :param worth: 身价
         :return:
         """

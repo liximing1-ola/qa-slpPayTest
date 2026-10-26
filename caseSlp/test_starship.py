@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__author__ = "Wu.Zhenxing"
 __title__ = ""
 __desc__ = "星舰相关"
 
@@ -19,22 +18,16 @@ from common.runFailed import Retry
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
 	@unittest.skip("""群组定期解散,不维护了""")
-	def test_001(self, des='星舰房-房间内打赏多人(gs(人气)-90%+gs(vip)-90%+normal-90%)多礼物场景(mcb)'):
+	def test_001(self, des='星舰�?房间内打赏多�?gs(人气)-90%+gs(vip)-90%+normal-90%)多礼物场�?mcb)'):
 		"""
-		用例描述：
-		验证非直播类型房间内一对多打赏场景
-		脚本步骤：
-		1.构造打赏者和被打赏者数据
-		2.房间内一对多打赏流程
-		3.校验接口状态和返回值数据
-		4.检查打赏者余额,预期为：20000-1000*6*3 = 2000
-		5.检查被打赏者余额，预期为：1000*6*0.62 = 3720(非一代宗师) 1000*6*0.7=4200(一代宗师) 1000*6*0.62=3720（公会）
+		用例描述�?		验证非直播类型房间内一对多打赏场景
+		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间内一对多打赏流程
+		3.校验接口状态和返回值数�?		4.检查打赏者余�?预期为：20000-1000*6*3 = 2000
+		5.检查被打赏者余额，预期为：1000*6*0.62 = 3720(非一代宗�? 1000*6*0.7=4200(一代宗�? 1000*6*0.62=3720（公会）
 		"""
 		rid = gs_A_ceo_starship_rid
 		uids = tuple([str(i) for i in [gs_B_uid, gs_A_uid, normal_uid]])
-		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
+		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
 
 		num = 5
 		mysql.updateUserGodSql(gs_B_uid, 1)
@@ -66,23 +59,17 @@ class TestPayCreate(unittest.TestCase):
 		case_list[des] = result
 
 	@unittest.skip("""群组定期解散,不维护了""")
-	def test_002(self, des='星舰群聊内,打赏多人(gs(人气)-910%+gs(vip)-90%+normal-90%)多礼物场景(mcb)'):
+	def test_002(self, des='星舰群聊�?打赏多人(gs(人气)-910%+gs(vip)-90%+normal-90%)多礼物场�?mcb)'):
 		"""
-		用例描述：
-		验证非直播类型房间内一对多打赏场景
-		脚本步骤：
-		1.构造打赏者和被打赏者数据
-		2.房间内一对多打赏流程
-		3.校验接口状态和返回值数据
-		4.检查打赏者余额,预期为：20000-1000*6*3 = 2000
-		5.检查被打赏者余额，预期为：1000*6*0.62 = 3720(非一代宗师) 1000*6*0.7=4200(一代宗师) 1000*6*0.62=3720（公会）
+		用例描述�?		验证非直播类型房间内一对多打赏场景
+		脚本步骤�?		1.构造打赏者和被打赏者数�?		2.房间内一对多打赏流程
+		3.校验接口状态和返回值数�?		4.检查打赏者余�?预期为：20000-1000*6*3 = 2000
+		5.检查被打赏者余额，预期为：1000*6*0.62 = 3720(非一代宗�? 1000*6*0.7=4200(一代宗�? 1000*6*0.62=3720（公会）
 		"""
 		group_id = gs_A_ceo_starship_group_id
 
 		uids = tuple([str(i) for i in [gs_A_uid, gs_B_uid, normal_uid]])
-		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成员
-		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
+		assert_equal(mysql.checkUserBroker(gs_A_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(gs_B_uid), True)  # 确认 uid是工会成�?		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
 
 		num = 5
 		mysql.updateUserGodSql(gs_A_uid, 1)

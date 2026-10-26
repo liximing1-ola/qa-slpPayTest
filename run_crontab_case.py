@@ -27,12 +27,12 @@ def all_case(appInfo):
 def main(appInfo):
     if appInfo == config.appName['Partying']:
         test_result = unittest.TextTestRunner(verbosity=3).run(all_case(appInfo))
-        des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}" \
+        des = "用例总数: {}, 失败用例�? {}, 异常用例�? {}" \
             .format(test_result.testsRun, len(test_result.failures), len(test_result.errors))
         Logs.get_log('caseResult_2.log').info(des)
         case_list = method.dictToList(Consts.case_list_c)
         if len(test_result.failures) == 0 and len(test_result.errors) == 0:
-            des = "{}：\n{}\n用例数: {}, 失败数: {}, 代码分支：{}".format(
+            des = "{}：\n{}\n用例�? {}, 失败�? {}, 代码分支：{}".format(
                 '定时任务',
                 case_list, test_result.testsRun,
                 len(test_result.failures) + len(test_result.errors),
@@ -48,12 +48,12 @@ def main(appInfo):
                 robot('icon', case.id().split('.')[2], bot='PT')
     elif appInfo == config.appName['伴伴']:
         test_result = unittest.TextTestRunner(verbosity=3).run(all_case(appInfo))
-        des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}" \
+        des = "用例总数: {}, 失败用例�? {}, 异常用例�? {}" \
             .format(test_result.testsRun, len(test_result.failures), len(test_result.errors))
         Logs.get_log('caseResult_2.log').info(des)
         case_list = method.dictToList(Consts.case_list_c)
         if len(test_result.failures) == 0 and len(test_result.errors) == 0:
-            des = "{}: \n{}\n用例数: {}, 失败数: {}, 代码分支：{}".format(
+            des = "{}: \n{}\n用例�? {}, 失败�? {}, 代码分支：{}".format(
                 '定时任务',
                 case_list, test_result.testsRun,
                 len(test_result.failures) + len(test_result.errors),
