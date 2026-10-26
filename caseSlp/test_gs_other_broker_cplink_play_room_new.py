@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "跨档-连连�?踢保(拍卖)-主播分成"
 
 import unittest

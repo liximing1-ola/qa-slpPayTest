@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "打赏多人多礼�?
 
 import unittest

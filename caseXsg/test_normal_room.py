@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "用户-房间打赏"
 
 import time

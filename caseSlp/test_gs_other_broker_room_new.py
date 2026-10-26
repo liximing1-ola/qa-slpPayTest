@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "跨档-非派�?主播分成"
 
 import unittest

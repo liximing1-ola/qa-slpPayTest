@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "主播,自刷"
 
 import unittest

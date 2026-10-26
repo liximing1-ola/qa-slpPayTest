@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "礼物优惠�?无损-收礼方不打折"  # 无损�?无私聊场�?
 import time
 import unittest

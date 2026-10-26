@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "个人靓号�?房间打赏"
 
 import unittest

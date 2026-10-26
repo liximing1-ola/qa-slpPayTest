@@ -1,5 +1,4 @@
 # -*- encoding=utf8 -*-
-__title__ = ""
 __desc__ = "公会主播-房间打赏,自刷"
 
 import random
