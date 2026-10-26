@@ -48,12 +48,13 @@ class updateCode:
             if times > lastTime:
                 Logs.get_log('updateGitCode.log').info(
                     '最新代码提交时间: {}, 上次代码更新时间: {}'.format(times, lastTime))
-                if appInfo == 'pt':
-                    robot('slack_pt', log_list[0], bot=bot)  # partying git commit update message
-                elif appInfo in ['slp_php', 'slp_common_rpc']:
-                    robot('slack', log_list[0], bot=bot, to=to) if to == 'slack' else robot('markdown', log_list[0], bot=bot, to=to)
-                else:
-                    robot('slack', log_list[0], bot=bot)  # git commit update message
+                # 不发送 git commit 通知消息
+                # if appInfo == 'pt':
+                #     robot('slack_pt', log_list[0], bot=bot)
+                # elif appInfo in ['slp_php', 'slp_common_rpc']:
+                #     robot('slack', log_list[0], bot=bot, to=to) if to == 'slack' else robot('markdown', log_list[0], bot=bot, to=to)
+                # else:
+                #     robot('slack', log_list[0], bot=bot)
                 return True
             else:
                 # Logs.get_log('updateGitCode.log').info("未拉取到{}分支代码，最近代码提交时间: {}, 上次代码更新时间: {}"

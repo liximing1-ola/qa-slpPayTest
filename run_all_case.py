@@ -8,6 +8,22 @@ from common import Logs, Consts
 from common.Config import config
 
 
+class AllTestResult(unittest.TextTestResult):
+    """自定义测试结果类，记录所有用例（通过/失败/异常）"""
+    def __init__(self, stream, descriptions, verbosity):
+        super().__init__(stream, descriptions, verbosity)
+        self.successes = []
+
+    def addSuccess(self, test):
+        super().addSuccess(test)
+        self.successes.append(test)
+
+
+class AllTestRunner(unittest.TextTestRunner):
+    """自定义测试运行器，返回 AllTestResult"""
+    resultclass = AllTestResult
+
+
 def main(appInfo):
 	if appInfo == config.appName['不夜星球'] or appInfo == config.appName['小拾光']:
 		to = 'wx'
@@ -16,7 +32,7 @@ def main(appInfo):
 		print("*" * 50)
 		if updateCode.autoGitPull('slp_php', bot='slp', to=to, env=appInfo) | updateCode.autoGitPull('slp_common_rpc', bot='slp', to=to, env=appInfo):
 			updateTime('write', now=str(int(time())))
-			test_result = unittest.TextTestRunner(verbosity=3).run(all_case(appInfo))
+			test_result = AllTestRunner(verbosity=0).run(all_case(appInfo))
 			Consts.endTime = time()
 			des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}" \
 				.format(test_result.testsRun, len(test_result.failures), len(test_result.errors))
@@ -27,12 +43,16 @@ def main(appInfo):
 			lines.append(f"des: {des}")
 			lines.append("")
 
-			pass_count = test_result.testsRun - len(test_result.failures) - len(test_result.errors)
+			pass_count = len(test_result.successes)
 			fail_count = len(test_result.failures)
 			error_count = len(test_result.errors)
 
 			lines.append(f"通过: {pass_count}  失败: {fail_count}  异常: {error_count}")
 			lines.append("")
+
+			# 列出所有通过的用例
+			for case in test_result.successes:
+				lines.append(f"✅ {case.id()} - PASS")
 
 			# 列出失败的用例
 			for case, reason in test_result.failures:
@@ -40,11 +60,7 @@ def main(appInfo):
 
 			# 列出异常的用例
 			for case, reason in test_result.errors:
-				lines.append(f" {case.id()} - ERROR")
-
-			# 如果全部通过
-			if fail_count == 0 and error_count == 0:
-				lines.append("✅ 全部通过")
+				lines.append(f"⚠️ {case.id()} - ERROR")
 
 			message = "\n".join(lines)
 			robot('markdown', message, bot='slp')
@@ -74,8 +90,8 @@ def all_case(appInfo):
 	#                                                pattern="test_pt_cnArea.py",
 	#                                                top_level_dir=None)
 	discover = unittest.defaultTestLoader.discover(case_dir,  # 指定待执行用例的目录
-	                                               # pattern="test_*.py",
-	                                               pattern="test_gs_other_broker_slporder_room_new.py",
+	                                               pattern="test_*.py",
+	                                               # pattern="test_gs_other_broker_slporder_room_new.py",
 	                                               # pattern="test_gs_room_pay_self.py",
 	                                               # pattern="test_naming_song.py",
 	                                               # pattern="test_001.py",
