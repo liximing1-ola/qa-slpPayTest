@@ -15,6 +15,9 @@ from common import Session
 # from common.Basic_starify import query_starify
 from common.Session import Session
 
+# 单次请求超时时间（秒），避免网络异常时用例无限挂起
+REQUEST_TIMEOUT = 30
+
 
 def post_request_session(url, data, tokenName='dev', pay_uid=None):
     """
@@ -25,7 +28,6 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
     :param pay_uid: 指定用户uid读取对应token
     :return:
     """
-    time.sleep(2)
     urllib3.disable_warnings()
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     header = {
@@ -38,31 +40,30 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
         url = '%s%s' % ('https://', url)
     try:
         if data is None:
-            response = requests.post(url=url, headers=header, verify=False)
+            response = requests.post(url=url, headers=header, verify=False, timeout=REQUEST_TIMEOUT)
         else:
-            response = requests.post(url=url, data=data, headers=header, verify=False)
-    except requests.RequestException as e:
-        print(e)
-        return ()
-    except Exception as e:
-        print(e)
-        return ()
+            response = requests.post(url=url, data=data, headers=header, verify=False, timeout=REQUEST_TIMEOUT)
+    except requests.RequestException as error:
+        # 不能返回空元组：调用方会直接 res['code'] 触发 TypeError，把真实失败原因（超时/证书错误）掩盖掉
+        raise AssertionError('接口请求失败: {}, 原因: {}'.format(url, error)) from error
+
+    try:
+        body = response.json()
+    except ValueError:
+        # 网关返回 html 等非 json 响应时保留原始文本，便于定位问题
+        body = response.text
+
     print("#"*100)
     print(response.status_code)
-    print(response.json())
+    print(body)
     print("#"*100)
-    time_consuming = response.elapsed.microseconds/1000
-    time_total = response.elapsed.total_seconds()
-    response_dicts = dict()
-    response_dicts['code'] = response.status_code
-    try:
-        response_dicts['body'] = response.json()
-    except Exception as e:
-        print(e)
-        response_dicts['body'] = ''
-    response_dicts['time_consuming'] = time_consuming
-    response_dicts['time_total'] = time_total
-    return response_dicts
+    return {
+        'code': response.status_code,
+        'body': body,
+        # elapsed.microseconds 只是秒以下的部分，total_seconds() 才是完整耗时
+        'time_consuming': response.elapsed.total_seconds() * 1000,
+        'time_total': response.elapsed.total_seconds(),
+    }
 
 
 # def post_request_session_starify(url, data, tokenName='starify', uid=starify_payUid):

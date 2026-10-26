@@ -4,7 +4,6 @@ import time
 import requests
 import Robot
 from common import Consts
-# from common.conMysql import conMysql as mysql
 from common.Config import config
 
 
@@ -94,18 +93,26 @@ def getKeys(data):
 
 
 def getValue(res):
-    if res['body']['success'] is True:
-        print('结果：{}, 时间：{}'.format(res['body']['success'], time.time()))
+    """
+    统计并发请求的成功/失败次数
+    注意：接口返回的 success 是整数 1，不能用 `is True` 判断（1 is True 结果为 False）
+    :param res: post_request_session 的返回值
+    """
+    body = res.get('body') if isinstance(res, dict) else None
+    success = body.get('success') if isinstance(body, dict) else None
+    if success in (1, True):
+        print('结果：{}, 时间：{}'.format(success, time.time()))
         Consts.success_num += 1
     else:
-        print('结果：{}， 时间：{}'.format(res['body'], time.time()))
+        print('结果：{}， 时间：{}'.format(body, time.time()))
         Consts.fail_num += 1
 
 
 def reason(des, res):
-    if res['body']['success'] == 0 and not isExtend(res['body'], 'msg'):
-        print(res['body'])
-    return 'Depiction: {},  failReason: {}'.format(des, res['body'])
+    body = res.get('body') if isinstance(res, dict) else None
+    if isinstance(body, dict) and body.get('success') == 0 and not isExtend(body, 'msg'):
+        print(body)
+    return 'Depiction: {},  failReason: {}'.format(des, body)
 
 
 # def reason_starify(des, res):

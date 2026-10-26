@@ -2,13 +2,13 @@
 
 `Request.py` 封装request方法，可以支持多协议扩展（get\post\put）
 
-`params-Yaml` 读取Conf内各种配置文件，包括：不同环境的配置
+`paramsYaml.py` 读取Conf内各种配置文件，包括：不同环境的配置
 
 `Logs.py` 封装记录log方法，分为：debug、info、warning、error、critical
 
-`getSession.py` 封装获取登录token方法
+`Session.py` 封装获取登录token方法
 
-`sqlScript.py operateMysql.py` 封装sql方法
+`conSlpXsgMysql.py` 封装 MySQL 操作（每线程独立连接、断线自动重连）
 
 `Basic.yml` 存放yaml文件
 
@@ -20,7 +20,7 @@
 
 `runFailed.py` 失败重试方法
 
-****Pytest使用规则****
+****用例编写规则（unittest）****
 
 测试文件以test_开头（以_test结尾也可以）
 

@@ -1,10 +1,80 @@
 # coding=utf-8
 import ast
+import threading
 import time
+import traceback
 
 import pymysql
 
 from caseSlp.tools import get_last_weekday_timestamp
+
+
+class _ClassProperty:
+    """把类属性访问（conMysql.cur / conMysql.con）转发为动态调用"""
+
+    def __init__(self, getter):
+        self._getter = getter
+
+    def __get__(self, instance, owner):
+        return self._getter(owner)
+
+
+class _ThreadLocalConnection:
+    """
+    按线程（gevent 下为 greenlet）隔离的 MySQL 连接。
+
+    历史实现把 con/cur 定义成类属性全局共享：
+    1. 所有用例、所有线程共用同一个游标，并发时 A 的查询结果会被 B 覆盖；
+    2. 只在 import 时 ping 一次，MySQL 连接超时后所有查询都会失败且异常被 print 吞掉。
+    这里改为每线程独立连接 + 取用前 ping 自动重连，对上层保持 con/cur 的原有用法。
+    """
+
+    def __init__(self, connect_kwargs, db_name):
+        self._connect_kwargs = connect_kwargs
+        self._db_name = db_name
+        self._local = threading.local()
+
+    def _open(self):
+        con = pymysql.connect(**self._connect_kwargs)
+        con.select_db(self._db_name)
+        return con
+
+    def connection(self):
+        """返回当前线程的连接，连接失效时自动重建"""
+        if getattr(self._local, 'con', None) is None:
+            self._local.con = self._open()
+            # 换连接必须同步换游标，否则会拿着已失效的游标继续查询
+            self._local.cur = self._local.con.cursor()
+            return self._local.con
+        try:
+            self._local.con.ping(reconnect=True)
+        except Exception:
+            try:
+                self._local.con.close()
+            except Exception:
+                pass
+            self._local.con = self._open()
+            self._local.cur = self._local.con.cursor()
+        return self._local.con
+
+    def cursor(self):
+        self.connection()
+        return self._local.cur
+
+    def commit(self):
+        self.connection().commit()
+
+    def rollback(self):
+        self.connection().rollback()
+
+    def close(self):
+        con = getattr(self._local, 'con', None)
+        if con is not None:
+            try:
+                con.close()
+            finally:
+                self._local.con = None
+                self._local.cur = None
 
 
 class conMysql:
@@ -19,21 +89,25 @@ class conMysql:
     _password = db_config['ali_pas']
     _dbName = 'xianshi'
     _dbPort = 3306
-    con = pymysql.connect(host=_dbUrl,
-                          port=_dbPort,
-                          user=_user,
-                          passwd=_password,
-                          charset='utf8',
-                          autocommit=True)
-    con.select_db(_dbName)
-    con.ping(reconnect=True)
-    cur = con.cursor()
+    # 连接改为首次使用时才建立，避免 import 阶段就去连数据库
+    _db = _ThreadLocalConnection(
+        {
+            'host': _dbUrl,
+            'port': _dbPort,
+            'user': _user,
+            'passwd': _password,
+            'charset': 'utf8',
+            'autocommit': True,
+        },
+        _dbName,
+    )
+    con = _ClassProperty(lambda cls: cls._db.connection())
+    cur = _ClassProperty(lambda cls: cls._db.cursor())
 
 
     # 查询用户账户信息
     @staticmethod
     def selectUserInfoSql(accountType, uid="200254463", money_type='money_cash_b', cid=263, payuid="200254777", app_id=66):
-        time.sleep(1)
         if accountType == 'bean':  # 查询用户账户扩展表金豆余额
             sql = "select money_coupon from xs_user_money_extend where uid={}".format(uid)
             try:
@@ -44,7 +118,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'cash':  # 查询用户账户扩展表 现金余额
             sql = "select cash from xs_user_money_extend where uid={}".format(uid)
             try:
@@ -55,7 +129,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'sum_money':  # 查询用户所有账户数据之和
             sql = "select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid)
             try:
@@ -66,7 +140,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'single_money':  # 查询用户单个账户数据
             sql = "select {} from xs_user_money where uid={}".format(money_type, uid)
             try:
@@ -77,7 +151,7 @@ class conMysql:
                 else:
                     return None
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'sum_commodity':  # 查询用户背包物品总数
             sql = 'select sum(num) from xs_user_commodity where uid ={}'.format(uid)
             try:
@@ -85,7 +159,7 @@ class conMysql:
                 res = conMysql.cur.fetchone()
                 return int(res[0])
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'num_commodity':  # 查询用户背包物品数量
             sql = "select num from xs_user_commodity where cid={} and uid={}".format(cid, uid)
             try:
@@ -96,7 +170,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'pay_room_money':  # 用户vip等级经验
             sql = "select pay_room_money from xs_user_profile where uid={}".format(uid)
             try:
@@ -107,7 +181,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'popularity':  # 用户人气等级经验
             sql = "select popularity from xs_user_popularity where uid={}".format(uid)
             try:
@@ -118,7 +192,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'id_commodity':  # 查询用户背包物品ID
             sql = "select id from xs_user_commodity where cid={} and uid={}".format(cid, uid)
             try:
@@ -127,7 +201,7 @@ class conMysql:
                 if len(res) > 0:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'level':  # 查询用户爵位等级
             sql = "select level from xs_user_title_new where uid={}".format(uid)
             try:
@@ -136,7 +210,7 @@ class conMysql:
                 if len(res) > 0:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'growth':  # 查询用户成长值
             sql = "select growth from xs_user_title_new where uid={}".format(uid)
             try:
@@ -145,7 +219,7 @@ class conMysql:
                 if len(res) > 0:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'user_index':  # 查询用户salt
             sql = "select salt from xs_user_index where uid = {}".format(uid)
             try:
@@ -154,7 +228,7 @@ class conMysql:
                 if len(res) > 0:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'relation_id':  # 查询用户守护关系id
             sql = "select id from xs_relation_defend where uid={} and defend_uid={} and relation_id={}". \
                 format(payuid, uid, cid)
@@ -166,7 +240,7 @@ class conMysql:
                 if len(res) > 0:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'relation_config':  # 查询守护关系配置
             sql = "select id, name, money_value, break_money, upgrade_money from xs_relation_config where id={}".format(
                 uid)
@@ -177,7 +251,7 @@ class conMysql:
                 data_dict = [dict(zip(column, row)) for row in res]
                 return data_dict[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'union':
             sql = " select rid from xs_chatroom where property='{}' limit 1".format(accountType)
             try:
@@ -188,7 +262,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         elif accountType == 'vip':
             sql = "select rid from xs_chatroom where property='{}' and app_id={} limit 1".format(accountType,app_id)
             try:
@@ -199,7 +273,7 @@ class conMysql:
                 else:
                     return res[0]
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         # elif accountType == 'fleet':
         #     sql = " select rid from xs_chatroom where property='{}' limit 1".format(accountType)
         #     try:
@@ -225,7 +299,7 @@ class conMysql:
                 else:
                     return 0
             except Exception as error:
-                print(error)
+                print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         else:
             print('{} Error'.format(accountType))
 
@@ -238,7 +312,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('delete fail', error)
+                print('delete fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         elif tableName == 'user_title':  # 清除用户爵位数据
@@ -247,7 +321,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('delete fail', error)
+                print('delete fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         # elif tableName == 'user_profile':  # 修改用户profile爵位数据
@@ -265,7 +339,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('update fail', error)
+                print('update fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         elif tableName == 'broker_user':  # 删除用户工会记录
@@ -274,7 +348,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('delete fail', error)
+                print('delete fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         elif tableName == 'chatroom':  # 删除用户商业房
@@ -283,7 +357,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('delete fail', error)
+                print('delete fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         elif tableName == 'user_box':  # 清除xs_user_box用户数据
@@ -292,7 +366,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('delete fail', error)
+                print('delete fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         elif tableName == 'user_title_new':  # xs_user_title_new每次跑都清一下subscribe_time，防止数据溢出
@@ -301,7 +375,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('update fail', error)
+                print('update fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         elif tableName == 'user_popularity':  # 人气值
@@ -310,7 +384,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('update fail', error)
+                print('update fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         elif tableName == 'pay_change':  # 送礼流水
@@ -319,7 +393,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('update fail', error)
+                print('update fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         else:
@@ -407,7 +481,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
             except Exception as error:
                 conMysql.con.rollback()
-                print('update fail', error)
+                print('update fail:\n{}'.format(traceback.format_exc()))
             finally:
                 conMysql.con.commit()
         else:
@@ -435,7 +509,7 @@ class conMysql:
                 conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('update fail', error)
+            print('update fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -448,7 +522,7 @@ class conMysql:
             conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('update fail', error)
+            print('update fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -535,9 +609,9 @@ class conMysql:
                     conMysql.cur.execute(sql)
                 except Exception as error:
                     conMysql.con.rollback()
-                    print('update fail', error)
+                    print('update fail:\n{}'.format(traceback.format_exc()))
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -561,9 +635,9 @@ class conMysql:
                     conMysql.cur.execute(sql)
                 except Exception as error:
                     conMysql.con.rollback()
-                    print('update fail', error)
+                    print('update fail:\n{}'.format(traceback.format_exc()))
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -587,7 +661,7 @@ class conMysql:
     #                 conMysql.cur.execute(sql)
     #             except Exception as error:
     #                 conMysql.con.rollback()
-    #                 print('update fail', error)
+    #                 print('update fail:\n{}'.format(traceback.format_exc()))
     #     except Exception as error:
     #         print(error)
     #     finally:
@@ -615,7 +689,7 @@ class conMysql:
     #                 conMysql.cur.execute(sql)
     #             except Exception as error:
     #                 conMysql.con.rollback()
-    #                 print('update fail', error)
+    #                 print('update fail:\n{}'.format(traceback.format_exc()))
     #     except Exception as error:
     #         print(error)
     #     finally:
@@ -633,7 +707,7 @@ class conMysql:
             else:
                 return None
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
 
     # 修改大神认证 1=同意,0=不同意
     @staticmethod
@@ -643,7 +717,7 @@ class conMysql:
             conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('update fail', error)
+            print('update fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -654,15 +728,16 @@ class conMysql:
         SELECT JSON_EXTRACT(reason, '$.to') AS to_uid,JSON_EXTRACT(reason, '$.gid') AS gid,SUM(JSON_EXTRACT(reason, '$.num')) AS total_num FROM xs_pay_change WHERE uid = {uid} AND JSON_UNQUOTE(JSON_EXTRACT(reason, '$.obr')) IS NOT NULL GROUP BY gid, to_uid ORDER BY to_uid;
         """
         try:
-            cur = conMysql.con.cursor(cursor=pymysql.cursors.DictCursor)
-            cur.execute(sql)
-            res = cur.fetchall()
+            # 用 with 自动关闭游标，避免每次查询都泄漏一个游标对象
+            with conMysql.con.cursor(cursor=pymysql.cursors.DictCursor) as cur:
+                cur.execute(sql)
+                res = cur.fetchall()
             if res is None:
                 return 0
             else:
                 return res
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
 
     @staticmethod
     def checkUserBroker(uid):
@@ -676,7 +751,7 @@ class conMysql:
             else:
                 return False
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
 
     @staticmethod
     def select_uid_rid():
@@ -687,7 +762,7 @@ class conMysql:
             print(res)
             return res
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
 
     @staticmethod
     def selectGiftId():
@@ -698,7 +773,7 @@ class conMysql:
             print(res)
             return res
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
 
     # 修改守护关系有效期
     @staticmethod
@@ -709,7 +784,7 @@ class conMysql:
             conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('update fail', error)
+            print('update fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -719,10 +794,9 @@ class conMysql:
         sql = f"""delete from `xianshi`.`xs_user_acceleration_info` where uid={uid}"""
         try:
             conMysql.cur.execute(sql)
-            time.sleep(0.5)
         except Exception as error:
             conMysql.con.rollback()
-            print('delete fail', error)
+            print('delete fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -766,7 +840,7 @@ class conMysql:
             conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('update fail', error)
+            print('update fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -778,7 +852,7 @@ class conMysql:
             conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('update fail', error)
+            print('update fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -790,7 +864,7 @@ class conMysql:
             conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('update fail', error)
+            print('update fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -800,10 +874,9 @@ class conMysql:
         sql = f"""delete from `xianshi`.`xs_mic_permission` where rid={rid}"""
         try:
             conMysql.cur.execute(sql)
-            time.sleep(0.5)
         except Exception as error:
             conMysql.con.rollback()
-            print('delete fail', error)
+            print('delete fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
@@ -819,7 +892,7 @@ class conMysql:
             else:
                 return False
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
 
     @staticmethod
     def checkUserWhite(uid,type_=198):
@@ -833,7 +906,7 @@ class conMysql:
             else:
                 return False
         except Exception as error:
-            print(error)
+            print('SQL 执行异常:\n{}'.format(traceback.format_exc()))
 
     # 上周流水最高的厅 删除
     @staticmethod
@@ -844,7 +917,7 @@ class conMysql:
             conMysql.cur.execute(sql)
         except Exception as error:
             conMysql.con.rollback()
-            print('delete fail', error)
+            print('delete fail:\n{}'.format(traceback.format_exc()))
         finally:
             conMysql.con.commit()
 
