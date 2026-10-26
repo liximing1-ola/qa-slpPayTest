@@ -1,16 +1,16 @@
 # coding=utf-8
 import unittest
-from time import time, sleep
+from time import time
 
 from Robot import robot
 from autoGitPull import updateTime, updateCode
-from common import Logs, method, Consts
+from common import Logs, Consts
 from common.Config import config
 
 
 def main(appInfo):
 	if appInfo == config.appName['不夜星球'] or appInfo == config.appName['小拾光']:
-		to = 'slack'
+		to = 'wx'
 		print("*" * 50)
 		print(f"消息推送到:{to}")
 		print("*" * 50)
@@ -21,36 +21,39 @@ def main(appInfo):
 			des = "用例总数: {}, 失败用例数: {}, 异常用例数: {}" \
 				.format(test_result.testsRun, len(test_result.failures), len(test_result.errors))
 			Logs.get_log('caseResult.log').info(des)
-			case_list = method.dictToList(Consts.case_list)
-			case_list_2 = method.dictToList(Consts.case_list_b)
-			case_list_3 = method.dictToList(Consts.case_list_b2)
-			use_time = str(int(Consts.endTime - Consts.startTime)) + 's'
-			if len(test_result.failures) == 0 and len(test_result.errors) == 0:
-				des = "{}\n".format(case_list)
-				des_2 = "{}\n".format(case_list_2)
-				des_3 = "{}\n用例数: {}, 失败数: {}, 总耗时: {}, 代码分支：{}".format(
-					case_list_3, test_result.testsRun,
-					len(test_result.failures) + len(test_result.errors),
-					use_time,
-					config.codeInfo['slp_git_branch'])
-				robot('slack', des, bot='slp', to=to) if to == 'slack' else robot('markdown', des, bot='slp')
-				sleep(0.1)
-				robot('slack', des_2, bot='slp', to=to) if to == 'slack' else robot('markdown', des_2, bot='slp')
-				sleep(0.1)
-				robot('slack', des_3, bot='slp', to=to) if to == 'slack' else robot('markdown', des_3, bot='slp')
-			if len(test_result.failures) >= 1:
+
+			# 构建消息内容
+			lines = []
+			lines.append(f"des: {des}")
+			lines.append("")
+
+			pass_count = test_result.testsRun - len(test_result.failures) - len(test_result.errors)
+			fail_count = len(test_result.failures)
+			error_count = len(test_result.errors)
+
+			lines.append(f"通过: {pass_count}  失败: {fail_count}  异常: {error_count}")
+			lines.append("")
+
+			# 列出失败的用例
+			for case, reason in test_result.failures:
+				lines.append(f"❌ {case.id()} - FAIL")
+
+			# 列出异常的用例
+			for case, reason in test_result.errors:
+				lines.append(f" {case.id()} - ERROR")
+
+			# 如果全部通过
+			if fail_count == 0 and error_count == 0:
+				lines.append("✅ 全部通过")
+
+			message = "\n".join(lines)
+			robot('markdown', message, bot='slp')
+
+			# 记录失败日志
+			if fail_count >= 1:
 				Logs.get_log('failCase.log').error("failures: {}".format(test_result.failures))
-				robot('slack', des, bot='slp', to=to) if to == 'slack' else robot('fail', des, bot='slp')
-				for case, reason in test_result.failures:
-					robot('slack', Consts.fail_case_reason[0], title=case.id(), color='danger', bot='slp', to=to) if to == 'slack' \
-						else robot('fail', Consts.fail_case_reason[0], title=case.id(), color='danger', bot='slp')
-					break
-			if len(test_result.errors) >= 1:
+			if error_count >= 1:
 				Logs.get_log('failCase.log').error("error: {}".format(test_result.errors))
-				for case, reason in test_result.errors:
-					robot('slack', reason, case.id(), color='danger', bot='slp', to=to) if to == 'slack' \
-						else robot('fail', reason, case.id(), color='danger', bot='slp')
-					break
 		else:
 			Logs.get_log('runCode.log').info('NoRun')
 	else:

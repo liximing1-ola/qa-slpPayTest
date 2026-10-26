@@ -10,7 +10,7 @@ def robot(mode, reason, title='', bot='BB', color="good", to='wx'):
         'BB': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=f9d916cb-6b93-4389-8aa4-f51c755faa0e',
         'test': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=0179d8d1-2078-41ba-a8da-0fb11bd51880',
         'PT': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b05a239e-3cc3-4faf-a3cc-c77e200ae1e6',
-        'slp': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=476b7d79-a611-4200-b0a6-60222c227432',
+        'slp': 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=998f0f30-0a19-4551-a9c5-def001c69908',
     }
     #  slack
     robot_dict = {
