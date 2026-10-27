@@ -15,7 +15,8 @@ from common import Logs
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
-                           not_pass_summary, parse_app, result_counts, split_message)
+                           not_pass_summary, parse_app, result_counts, retry_report, retry_summary,
+                           split_message)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，需要推送时用 PUSH_WX=1
@@ -69,6 +70,7 @@ def notify(test_result, app_info):
     lines = [
         "定时任务[{}]：".format(app_info),
         des,
+        retry_summary(test_result),
         not_pass_summary(test_result),
         "代码分支: {}".format(branch),
     ]
@@ -92,6 +94,12 @@ def main(app_info):
         Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(app_info, error))
 
     test_result = AllTestRunner(verbosity=2).run(build_suite(app_info))
+    # 重试后才通过的用例：最终状态是 PASS，但每条背后都是一次真实的断言失败。
+    # 定时任务场景控制台没人看，所以完整清单落 log/retryCase.log，推送里只带一行摘要
+    retry_text = retry_report(test_result)
+    if retry_text:
+        print(retry_text, flush=True)
+        Logs.get_log('retryCase.log', console=False, back_count=30).info(retry_text)
     return notify(test_result, app_info)
 
 

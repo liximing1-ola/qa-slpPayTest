@@ -12,7 +12,7 @@ import sys
 import time
 import unittest
 
-from common import Assert, Logs, Scene
+from common import Assert, Logs, Scene, runFailed
 from common.Config import config
 
 
@@ -48,6 +48,8 @@ class AllTestResult(unittest.TextTestResult):
         self.index = 0          # 已结束的用例数，用于进度日志的 [37/136]
         self.total_cases = 0    # 总用例数，由 AllTestRunner 从 suite 上取后注入
         self._case_started = 0.0
+        self.retried = {}       # 用例 id -> 该用例“重试后才通过”的记录
+        self._retry_mark = 0
 
     def startTest(self, test):
         super().startTest(test)
@@ -58,6 +60,8 @@ class AllTestResult(unittest.TextTestResult):
         # 失败现场也按用例隔离：清掉上一条的请求缓存，开始录本条的
         Scene.begin_case(test.id())
         self._case_started = time.time()
+        # 记下重试计数基线：用例结束时做差就是它重试了几轮
+        self._retry_mark = runFailed.retry_event_count()
         # 优先从方法签名的 des 默认参数获取，其次从 docstring 提取
         try:
             method = getattr(test, test._testMethodName)
@@ -75,22 +79,45 @@ class AllTestResult(unittest.TextTestResult):
     def addSuccess(self, test):
         super().addSuccess(test)
         self.successes.append(test)
+        self._collect_retries(test)
         self._progress(test, 'PASS')
 
     def addFailure(self, test, err):
         super().addFailure(test, err)
+        self._collect_retries(test)
         # 先把现场归档再记进度：归档要在缓冲被下一条用例清掉之前完成
         Scene.archive(test.id())
         self._progress(test, 'FAIL')
 
     def addError(self, test, err):
         super().addError(test, err)
+        self._collect_retries(test)
         Scene.archive(test.id())
         self._progress(test, 'ERROR')
 
     def addSkip(self, test, reason):
         super().addSkip(test, reason)
         self._progress(test, 'SKIP')
+
+    def _collect_retries(self, test):
+        """把这条用例期间发生的重试归档，供 retry_report 拼清单
+
+        重试成功后用例在报告里的状态是 PASS，和一次就过的用例长得一模一样。
+        实测一轮全量 54 次重试，也就是 54 次真实断言失败被重试掩盖了——它们才是最
+        值得看的线索：重试能救回来只能说明“等一会儿就对”，不代表被测逻辑没问题。
+        """
+        start = self._retry_mark
+        events = runFailed.retry_events()[start:]
+        # 推进基线：同一条用例不会重复统计（如 addFailure 后又进 addError 的异常路径）
+        self._retry_mark = start + len(events)
+        if not events or not getattr(test, '_testMethodName', None):
+            return 0
+        self.retried[test.id()] = {
+            'case': case_name(test),
+            'des': self.test_des_map.get(test, ''),
+            'events': events,
+        }
+        return len(events)
 
     def _progress(self, test, status):
         """实时进度落盘：另开窗口 tail -f log/progress.log 就能看到跑到第几条、每条多久
@@ -100,8 +127,11 @@ class AllTestResult(unittest.TextTestResult):
         """
         self.index += 1
         elapsed = time.time() - self._case_started
-        line = '[{:>3}/{}] {:<5} {:>7.2f}s  {}'.format(
-            self.index, self.total_cases or '?', status, elapsed, case_name(test))
+        # 重试过的用例在行尾标出来：耗时里含重试轮，只看 PASS 会误以为它一次就过
+        retries = len((self.retried.get(test.id()) or {}).get('events', []))
+        line = '[{:>3}/{}] {:<5} {:>7.2f}s  {}{}'.format(
+            self.index, self.total_cases or '?', status, elapsed, case_name(test),
+            '  [重试×{}]'.format(retries) if retries else '')
         try:
             Logs.get_log('progress.log', console=False, back_count=30,
                          fmt='%(asctime)s  %(message)s').info(line)
@@ -125,6 +155,8 @@ class AllTestRunner(unittest.TextTestRunner):
     def run(self, test):
         # 进度日志要显示「第几条/共几条」，总数只能从 suite 上取
         self._total_cases = test.countTestCases()
+        # 重试记录按轮次隔离：同一进程里多次 run 时不会把上轮的重试算进本轮
+        runFailed.reset_retry_events()
         # 开跑前先把本轮生效的环境参数打出来：补偿/间隔这类值一旦被环境变量改动又忘了改回，
         # 光看报告只会觉得「这轮快得反常」，说不清到底按什么参数跑的
         for line in Assert.environment_summary():
@@ -377,6 +409,40 @@ def not_pass_report(result, title='未通过用例'):
             lines.append('     原因: {}'.format(record['detail']))
     lines.append(LINE_SEP)
     return '\n'.join(lines)
+
+
+def retry_report(result, title='重试后才通过的用例'):
+    """列出「重试后才通过」的用例：最终状态是 PASS，但每条背后都是一次真实断言失败
+
+    一轮全量实测 54 次重试。它们不会出现在 failCase.log（最终没失败），也不会被
+    notPassCase.log 提到，此前唯一的痕迹是控制台里滚过的那行 print——一轮全量上千行，
+    没人会盯着找。而这条清单恰恰是最该看的：同一个断言第一轮读到 0、第二轮读到正确值，
+    要么是等得不够，要么被测逻辑真的有时序问题，两种都不是「通过」可以盖过的。
+    """
+    records = getattr(result, 'retried', None) or {}
+    if not records:
+        return ''
+    total = sum(len(item['events']) for item in records.values())
+    lines = ['', LINE_SEP,
+             '{}（共 {} 条用例，累计重试 {} 次）'.format(title, len(records), total),
+             LINE_SEP]
+    # 重试次数多的排前面：重试 2 次才过的比 1 次的更值得先看
+    for item in sorted(records.values(), key=lambda one: -len(one['events'])):
+        lines.append('[重试 {} 次] {}'.format(len(item['events']), item['case']))
+        lines.append('     用例: {}'.format(item['des'] or '(未取到用例描述)'))
+        for _, round_no, detail in item['events']:
+            lines.append('     第 {} 轮失败: {}'.format(round_no, str(detail).replace('\n', ' ')))
+    lines.append(LINE_SEP)
+    return '\n'.join(lines)
+
+
+def retry_summary(result):
+    """推送用的一行摘要：没有重试时也要明确写「无」，否则分不清是没重试还是没统计"""
+    records = getattr(result, 'retried', None) or {}
+    if not records:
+        return '重试后才通过: 无'
+    total = sum(len(item['events']) for item in records.values())
+    return '重试后才通过: {} 条 / 共 {} 次，明细见 log/retryCase.log'.format(len(records), total)
 
 
 def _split_long_line(text, limit):

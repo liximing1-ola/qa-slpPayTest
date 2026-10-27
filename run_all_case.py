@@ -9,7 +9,7 @@ from common import Logs, Consts
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
-						   not_pass_summary, parse_app, result_counts, split_message)
+						   not_pass_summary, parse_app, result_counts, retry_report, split_message)
 
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，企业微信的 markdown 展示效果不理想，
 # 需要恢复推送时用 PUSH_WX=1
@@ -64,6 +64,13 @@ def main(appInfo):
 		report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(appInfo))
 		print(report_text, flush=True)
 		Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)
+
+		# 重试后才通过的用例：最终状态是 PASS，但每条背后都是一次真实的断言失败。
+		# 一轮全量实测 54 次，不看这份就等于每轮主动丢掉几十条排查线索
+		retry_text = retry_report(test_result)
+		if retry_text:
+			print(retry_text, flush=True)
+			Logs.get_log('retryCase.log', console=False, back_count=30).info(retry_text)
 
 		if PUSH_WX:
 			# 推送时才拼消息：未通过用例放在最前面，避免末尾结论被截断

@@ -12,6 +12,27 @@ from common import Consts, Request
 # 白白烧掉重试次数。按轮次退避（第 n 次等 n × 间隔），用 RETRY_SLEEP 可调，设 0 回到立即重试
 RETRY_SLEEP = float(os.environ.get('RETRY_SLEEP') or '1')
 
+# 本轮发生的所有重试：(用例方法名, 第几轮失败, 失败明细)
+# 重试成功后用例在报告里的状态是 PASS，这行 print 是它唯一的痕迹，滚过屏幕就没了。
+# 实测一轮全量 54 次重试——也就是说 54 次真实的断言失败被重试掩盖成了绿。
+# 这里记一笔，由 report 按用例归档成 log/retryCase.log，不再靠人肉盯屏幕。
+_retry_events = []
+
+
+def retry_events():
+    """本轮已发生的重试事件（副本，调用方只读）"""
+    return list(_retry_events)
+
+
+def retry_event_count():
+    """本轮已发生的重试次数：用例开始时记下基线，结束时做差得到本条用例的重试轮次"""
+    return len(_retry_events)
+
+
+def reset_retry_events():
+    """清空重试记录：由 runner 在每轮开跑前调用一次"""
+    del _retry_events[:]
+
 
 class Retry(object):
     """
@@ -88,6 +109,9 @@ class ClassD(unittest.TestCase):
                         new_reasons = Consts.fail_case_reason[reason_mark:]
                         del Consts.fail_case_reason[reason_mark:]
                         detail = new_reasons[-1] if new_reasons else repr(error)
+                        # 先记一笔再打日志：这条用例最终若重试成功，报告里就是 PASS，
+                        # 除了这行 print 没有任何地方能看出它曾经失败过
+                        _retry_events.append((func_or_cls.__name__, n, detail))
                         print('[Retry {}/{}] {}: {}'.format(n, self._max_n, func_or_cls.__name__, detail))
                         # 先等一会再重跑：异步结算、缓存刷新都有耗时，刚失败就重试大概率还是旧值
                         if self._sleep > 0:
