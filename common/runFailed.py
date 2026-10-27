@@ -2,9 +2,15 @@
 # Describe : 失败用例重跑
 import functools
 import inspect
+import os
+import time
 import unittest
 
 from common import Consts, Request
+
+# 重试间隔（秒）：分成/人气等结算走异步，断言失败后立刻重跑往往读到同一份旧数据，
+# 白白烧掉重试次数。按轮次退避（第 n 次等 n × 间隔），用 RETRY_SLEEP 可调，设 0 回到立即重试
+RETRY_SLEEP = float(os.environ.get('RETRY_SLEEP') or '1')
 
 
 class Retry(object):
@@ -39,17 +45,19 @@ class ClassD(unittest.TestCase):
         raise AttributeError
     """
 
-    def __new__(cls, func_or_cls=None, max_n=1, func_prefix="test"):
+    def __new__(cls, func_or_cls=None, max_n=1, func_prefix="test", sleep=None):
         self = object.__new__(cls)
         if func_or_cls:
-            self.__init__(func_or_cls, max_n, func_prefix)
+            self.__init__(func_or_cls, max_n, func_prefix, sleep)
             return self(func_or_cls)
         else:
             return self
 
-    def __init__(self, func_or_cls=None, max_n=1, func_prefix="test"):
+    def __init__(self, func_or_cls=None, max_n=1, func_prefix="test", sleep=None):
         self._prefix = func_prefix
         self._max_n = max_n
+        # sleep=None 表示用全局默认 RETRY_SLEEP，传 0 才是“不等待”
+        self._sleep = RETRY_SLEEP if sleep is None else sleep
 
     def __call__(self, func_or_cls=None):
         if inspect.isfunction(func_or_cls):
@@ -81,6 +89,9 @@ class ClassD(unittest.TestCase):
                         del Consts.fail_case_reason[reason_mark:]
                         detail = new_reasons[-1] if new_reasons else repr(error)
                         print('[Retry {}/{}] {}: {}'.format(n, self._max_n, func_or_cls.__name__, detail))
+                        # 先等一会再重跑：异步结算、缓存刷新都有耗时，刚失败就重试大概率还是旧值
+                        if self._sleep > 0:
+                            time.sleep(self._sleep * n)
                         # 下一轮：下单类写请求复用上一轮的响应、非幂等的数据准备跳过，
                         # 让重试只重新做"读库断言"，避免每次重试都多下一单
                         Request.begin_replay()
