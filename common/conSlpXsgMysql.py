@@ -491,7 +491,8 @@ class conMysql:
         SELECT JSON_EXTRACT(reason, '$.to') AS to_uid,JSON_EXTRACT(reason, '$.gid') AS gid,SUM(JSON_EXTRACT(reason, '$.num')) AS total_num FROM xs_pay_change WHERE uid = {uid} AND JSON_UNQUOTE(JSON_EXTRACT(reason, '$.obr')) IS NOT NULL GROUP BY gid, to_uid ORDER BY to_uid;
         """
         res = _query_all_dict(sql)
-        # 没有打赏记录时是空列表，不能退回 0：调用方直接 for 遍历，0 会抛 TypeError
+        # 没有打赏记录时是空的查询结果（pymysql 的 fetchall 返回空 tuple，可迭代），
+        # 不能退回 0：调用方直接 for 遍历，0 会抛 TypeError
         return res
 
     @staticmethod
