@@ -1027,7 +1027,11 @@ class conMysql:
     # 上周流水最高的厅 插入
     @staticmethod
     def insertXsstRoomacsSum(uid, rid):
-        date = get_last_weekday_timestamp()
+        # 取上周中间（周四 0 点）而不是窗口起点（周一 0 点）：服务端 buyeLastWeekRange()
+        # 按自己的时区算 [上周一 00:00, 本周一 00:00)，date 若恰好等于起点，
+        # 任何时区偏差（比如 RPC 机跑 UTC）或边界比较差异都会让它掉出窗口，
+        # 放到周中后即使偏差一两天也仍在区间内
+        date = get_last_weekday_timestamp() + 3 * 86400
         # join_uid_datetype_date 是 uid-1-date 的拼接值，原来写死成 '200255342-1-1772380800'
         # （uid 是别人、1772380800 是 2026-03-02 造数据时的那一周），和本次插入的 uid/date
         # 完全对不上。服务端若按这个字段（或它上的唯一索引）定位上周厅，就永远查不到，
