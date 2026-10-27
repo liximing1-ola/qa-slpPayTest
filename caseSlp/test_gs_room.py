@@ -7,7 +7,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop, prepare_test_data, insert_package_gift
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -46,7 +45,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_002(self, des='商业房-直播,房间私聊打赏GS到账60%(mc)'):
 		"""
@@ -76,7 +74,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_003(self, des='商业房-直播,背包礼物打赏GS到账60%(mc)'):
 		"""
@@ -111,8 +108,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)  # 不扣费
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=giftId['69']['cid']), 0)
 
-		case_list_b2[des] = result
-
 	def test_004(self, des='商业房-非直播,礼物打赏GS到账60%(mc)'):
 		"""
 		用例描述：
@@ -141,7 +136,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_005(self, des='商业房-非直播,房间私聊打赏GS到账60%(mc)'):
 		"""
@@ -171,7 +165,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_006(self, des='商业房-非直播,背包礼物打赏GS到账60%(mc)'):
 		"""
@@ -206,8 +199,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)  # 不扣费
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=giftId['69']['cid']), 0)
 
-		case_list_b2[des] = result
-
 	def test_007(self, des='个人房,外显人气-礼物打赏GS到账90%(mcb)'):
 		"""
 		用例描述：
@@ -239,7 +230,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['pop']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['pop']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_008(self, des='个人房,外显人气-房间私聊打赏GS到账90%(mcb)'):
 		"""
@@ -272,7 +262,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['pop']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['pop']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_009(self, des='个人房,外显人气-背包礼物打赏GS到账90%(mcb)'):
 		"""
@@ -310,8 +299,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)  # 不扣费
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=giftId['69']['cid']), 0)
 
-		case_list_b2[des] = result
-
 	def test_010(self, des='商业房-直播,礼物打赏GS(签署大神且是房主),到账60%(mc)'):
 		"""
 		用例描述：
@@ -343,7 +330,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_011(self, des='商业房-直播,礼物打赏GS(签署大神且非房主),到账60%(mc)'):
 		"""
@@ -376,7 +362,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_012(self, des='商业房-直播,礼物打赏GS(不签署大神且是房主),到账60%(mcb)'):
 		"""
@@ -409,7 +394,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_013(self, des='商业房-直播,礼物打赏GS(不签署大神且非房主),到账60%(mcb)'):
 		"""
@@ -442,7 +426,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_014(self, des='商业房-非直播,礼物打赏GS(签署大神且是房主)到账60%(mc)'):
 		"""
@@ -475,7 +458,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_015(self, des='商业房-非直播,房间私聊打赏GS(签署大神且非房主)到账60%(mc)'):
 		"""
@@ -508,7 +490,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_016(self, des='***商业房-非直播,礼物打赏GS(不签署大神且是房主)到账80%(mcb)'):
 		"""
@@ -541,7 +522,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_017(self, des='商业房-非直播,房间私聊打赏GS(不签署大神且非房主)到账60%(mcb)'):
 		"""
@@ -573,7 +553,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_018(self, des='商业房-才艺厅-购买观众位,表演者=主播到账60%(mc)'):
 		"""
@@ -616,7 +595,6 @@ class TestPayCreate(unittest.TestCase):
 		             talent_show_config['真爱']["1"]['price'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), talent_show_config['真爱']["1"]['price'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - talent_show_config['真爱']["1"]['price'])
-		case_list_b2[des] = result
 
 	def test_019(self, des='个人房,外显vip-礼物打赏GS到账90%(mcb)'):
 		"""
@@ -652,7 +630,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_020(self, des='个人房,外显vip-房间私聊打赏GS到账90%(mcb)'):
 		"""
@@ -688,7 +665,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_021(self, des='个人房,外显vip-背包礼物打赏GS到账90%(mcb)'):
 		"""
@@ -729,5 +705,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)  # 不扣费
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=giftId['69']['cid']), 0)
-
-		case_list_b2[des] = result

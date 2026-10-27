@@ -6,7 +6,6 @@ import unittest
 
 from caseSlp.config import *
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -107,5 +106,3 @@ class TestPayCreate(unittest.TestCase):
 			total_num = int(data['total_num'])
 			pay_total_money += price * total_num
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), base_money - pay_total_money)
-
-		case_list[des] = result

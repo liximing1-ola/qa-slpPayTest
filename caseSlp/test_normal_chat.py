@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop, prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -46,4 +45,3 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['69']['price'] * default_num * rates['vip']['chat'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
 		             default_money - giftId['69']['price'] * default_num)
-		case_list[des] = result

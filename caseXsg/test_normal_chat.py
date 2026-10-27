@@ -6,7 +6,6 @@ import unittest
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conRedis import conRedis
@@ -40,7 +39,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['normal_uid']['chat']['user_rate'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_002(self, des='不夜活跃-用户,私聊,打赏普通用户,90%(mcb)'):  # todo
 		uid = normal_uid
@@ -57,7 +55,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['normal_uid']['chat']['user_rate'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
-		case_list_b2[des] = result
 
 	def test_003(self, des='用户,私聊,自刷,90%(mcb)'):
 		uid = payUid
@@ -76,4 +73,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal_uid']['chat']['user_self_rate'])
-		case_list_b2[des] = result

@@ -7,7 +7,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data, prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -61,7 +60,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['骑士']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_002(self, des='打赏者,贵族爵位=男爵(lv1,1倍)消费,vip经验值1:1增加'):
 		"""
@@ -100,7 +98,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['男爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_003(self, des='打赏者,贵族爵位=子爵(lv1,1倍)消费,vip经验值1:1增加'):
 		"""
@@ -139,7 +136,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['子爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_004(self, des='打赏者,贵族爵位=伯爵(1.05倍)消费,vip经验值1:1.05增加'):
 		"""
@@ -178,7 +174,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['伯爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_005(self, des='打赏者,贵族爵位=侯爵(1.1倍)消费,vip经验值1:1.1增加'):
 		"""
@@ -217,7 +212,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['侯爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_006(self, des='打赏者,贵族爵位=公爵(1.15倍)消费,vip经验值1:1.15增加'):
 		"""
@@ -256,7 +250,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_007(self, des='打赏者,贵族爵位=亲王(1.2倍)消费,vip经验值1:1.2增加'):
 		"""
@@ -295,7 +288,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['亲王']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_008(self, des='打赏者,贵族爵位=国王(1.25倍)消费,vip经验值1:1.25增加'):
 		"""
@@ -334,7 +326,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	def test_009(self, des='打赏者,贵族爵位=皇帝(1.3倍)消费,vip经验值1:1.3增加'):
 		"""
@@ -373,7 +364,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['皇帝']['update'] * giftId['69']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'])
-		case_list_b2[des] = result
 
 	@unittest.skip('多人场景后续维护') # todo
 	def test_010(self, des='打赏者=皇帝(1.3倍),被打赏者多人,多个礼物,分别加成计算'):
@@ -430,8 +420,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', gs_A_uid), gs_A_uid_old_vip + num * giftId['69']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', gs_A_uid), gs_A_uid_old_pop + num * giftId['69']['price'])
 
-		case_list_b2[des] = result
-
 	def test_011(self, des='房间守护-双方均增加vip/人气值'):
 		"""
 		 用例描述：
@@ -483,7 +471,6 @@ class TestPayCreate(unittest.TestCase):
 		             payUid_old_pop + juewei_level['皇帝']['update'] * room_defend['zhenai']['month']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + room_defend['zhenai']['month']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + room_defend['zhenai']['month']['price'])
-		case_list_b2[des] = result
 
 	@unittest.skip('功能下线')
 	def test_012(self, des='个人守护-双方均增加vip/人气值'):
@@ -527,7 +514,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['皇帝']['update'] * defend['小宝贝']['price'] / 100)
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + defend['小宝贝']['price'])
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + defend['小宝贝']['price'])
-		case_list_b2[des] = result
 
 	def test_013(self, des='使用vip/人气加速卡,直播开通房间守护'):
 		"""
@@ -593,8 +579,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + room_defend['zhenai']['month']['price'] * uid_speed)
 
 
-		case_list_b2[des] = result
-
 	def test_014(self, des='使用vip/人气加速卡,房间送礼,收礼方为人气标签,1倍vip'):
 		"""
 		 用例描述：
@@ -645,7 +629,6 @@ class TestPayCreate(unittest.TestCase):
 		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
-		case_list_b2[des] = result
 
 	def test_015(self, des='使用vip/人气加速卡,私聊送礼,收礼方为人气标签,1倍vip'):
 		"""
@@ -692,7 +675,6 @@ class TestPayCreate(unittest.TestCase):
 		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
-		case_list_b2[des] = result
 
 	def test_016(self, des='使用vip/人气加速卡,房间送礼,收礼方为vip标签,2倍vip'):
 		"""
@@ -744,7 +726,6 @@ class TestPayCreate(unittest.TestCase):
 		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
-		case_list_b2[des] = result
 
 	def test_017(self, des='使用vip/人气加速卡,私聊送礼,收礼方为vip标签,2倍vip'):
 		"""
@@ -791,4 +772,3 @@ class TestPayCreate(unittest.TestCase):
 		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
-		case_list_b2[des] = result

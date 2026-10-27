@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body, assert_between
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -64,7 +63,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
-		case_list_b2[des] = result
 
 	def test_002(self, des='主播,商业房-非派单,跨档,自刷,上周厅存在,已配置<=总计80%,且主播>=60%,按跨档最高60%规则分成(扣mcb到账mcb,扣其他到账mc)'):
 		rate_money = 0.1
@@ -114,7 +112,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
-		case_list_b2[des] = result
 
 	def test_003(self, des='主播,商业房-派单,跨档,自刷,上周厅存在,已配置<=总计80%,按配置规则分成(扣mcb到账mcb,扣其他到账mc)'):
 		rate_money = 0.1
@@ -164,7 +161,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
-		case_list_b2[des] = result
 
 	def test_004(self, des='主播,商业房-派单,跨档,自刷,上周厅不存在,按特殊规则分成(扣mcb到账mcb,扣其他到账mc)'):
 		rate_money = 0.1
@@ -214,7 +210,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
-		case_list_b2[des] = result
 
 	def test_005(self, des='主播,个人房,自刷,90%(mcb)'):
 		rid = mysql.selectUserInfoSql('vip')
@@ -233,7 +228,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['vip-room-self'])
-		case_list_b2[des] = result
 
 	def test_006(self, des='主播,靓号房,自刷,80%(扣mcb到账mcb,扣其他到账mc)'):
 		rate_money = 0.1
@@ -282,7 +276,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
-		case_list_b2[des] = result
 
 	def test_007(self, des='主播,私聊,自刷,90%(mcb)'):
 		uid = gs_A_uid
@@ -301,4 +294,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['chat-self'])
-		case_list_b2[des] = result

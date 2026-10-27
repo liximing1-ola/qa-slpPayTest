@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body, assert_between
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -55,7 +54,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), int(base_amount * user_rate * normal_rate_money_base) + int(base_amount * user_rate * rate_money_cash_b))
 		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), int(base_amount * user_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', payUid), 0, int(base_amount * user_rate))
-		case_list_b2[des] = result
 
 	def test_002(self, des='用户,个人房,自刷,90%(mcb)'):
 		rid = mysql.selectUserInfoSql('vip')
@@ -74,7 +72,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-room-self'])
-		case_list_b2[des] = result
 
 	def test_003(self, des='用户,靓号房,自刷,90%(mcb)'):
 		rid = gs_A_ceo_pretty_rid
@@ -93,7 +90,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-pretty-room-self'])
-		case_list_b2[des] = result
 
 	def test_004(self, des='用户,私聊,自刷,90%(mcb)'):
 		uid = payUid
@@ -112,4 +108,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['chat-self'])
-		case_list_b2[des] = result

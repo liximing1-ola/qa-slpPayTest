@@ -7,7 +7,6 @@ import unittest
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data, prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -58,7 +57,6 @@ class TestPayCreate(unittest.TestCase):
 
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
-		case_list_b2[des] = result
 
 	def test_002(self, des='vip人气计算,使用爵位+加速卡,私聊送礼'):
 		uid = gsUid
@@ -96,4 +94,3 @@ class TestPayCreate(unittest.TestCase):
 
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
-		case_list_b2[des] = result

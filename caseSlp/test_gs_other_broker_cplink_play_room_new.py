@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -42,8 +41,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
 
-		case_list_b2[des] = result
-
 	def test_002(self, des='主播,商业房-踢保(拍卖),跨档,按所在厅配置分成,已配置<=总计80%,按配置规则分成(mc)'):
 
 		rid = gs_A_rid_7
@@ -70,8 +67,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
 
-		case_list_b2[des] = result
-
 	def test_003(self, des='主播,商业房-连连看,跨档,按所在厅配置分成,已配置>总计80%,基础规则兜底(mc)'):
 
 		rid = gs_A_rid_10
@@ -97,7 +92,6 @@ class TestPayCreate(unittest.TestCase):
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
-		case_list_b2[des] = result
 
 	def test_004(self, des='主播,商业房-踢保(拍卖),跨档,按所在厅配置分成,已配置>总计80%,基础规则兜底(mc)'):
 
@@ -124,7 +118,6 @@ class TestPayCreate(unittest.TestCase):
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
-		case_list_b2[des] = result
 
 	def test_005(self, des='主播,商业房-连连看,跨档,按所在厅配置分成,连连看,未配置,按结算频道-规则分成(mc)'):
 
@@ -151,7 +144,6 @@ class TestPayCreate(unittest.TestCase):
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
-		case_list_b2[des] = result
 
 	def test_006(self, des='主播,商业房-踢保(拍卖),跨档,按所在厅配置分成,踢保(拍卖),未配置,按结算频道-规则分成(mc)'):
 
@@ -178,4 +170,3 @@ class TestPayCreate(unittest.TestCase):
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
-		case_list_b2[des] = result

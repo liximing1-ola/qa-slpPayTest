@@ -8,7 +8,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import result, case_list_b
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conRedis import conRedis
@@ -83,7 +82,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_002(self, des='点唱房-点歌,多首歌'):
 		rid = gs_music_rid
@@ -114,7 +112,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_003(self, des='点唱房-冠歌'):
 		rid = gs_music_rid
@@ -152,7 +149,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 		TestPayCreate._naming_ready = True  # 冠歌记录已就绪，后续依赖用例可以执行
 
 	def test_004(self, des='点唱房-冠歌[未过期]后,冠歌同一首歌.同倍数,失败'):
@@ -191,7 +187,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_body(res['body'], 'msg', '冠名等级需高于当前等级', reason(des, res))
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_005(self, des='点唱房-冠歌[已过期]后,冠歌同一首歌.同倍数,成功'):
 		if not TestPayCreate._naming_ready:
@@ -232,7 +227,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_006(self, des='点唱房-抢冠-高倍数,成功'):
 		if not TestPayCreate._naming_ready:
@@ -272,7 +266,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_007(self, des='点唱房-冠歌,礼物上架,用背包礼物支付,礼物个数<所需个数,[混合支付],扣[背包+钻石]'):
 		rid = gs_music_rid
@@ -317,7 +310,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_008(self, des='点唱房-冠歌,礼物上架,用背包礼物支付,礼物个数>=所需个数,[背包支付],扣[背包]'):
 		rid = gs_music_rid
@@ -361,7 +353,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_009(self, des='点唱房-冠歌,礼物下架,用背包礼物支付,礼物个数<所需个数,扣款失败[该礼物暂不支持购买]'):
 		rid = gs_music_rid
@@ -405,7 +396,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 1)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result
 
 	def test_010(self, des='点唱房-冠歌,礼物下架,用背包礼物支付,礼物个数>=所需个数,[背包支付],扣[背包]'):
 		rid = gs_music_rid
@@ -449,4 +439,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
-		case_list_b[des] = result

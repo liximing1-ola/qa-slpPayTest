@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop, prepare_test_data, insert_coupon
 from common.Assert import assert_code, assert_equal, assert_equal_eventually, assert_body
-from common.Consts import case_list_b, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -51,7 +50,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
 		             default_money - giftId['937']['price'] * num * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
-		case_list_b[des] = result
 
 	@unittest.skip("""优惠券,不支持私聊""")
 	def test_002(self, des='私聊,9折券(有损),打赏多个礼物'):
@@ -92,8 +90,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['937']['price'] * (num - 1))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-		case_list_b[des] = result
-
 	def test_003(self, des='房间,9折券(有损),打赏1个人单个礼物'):
 		rid = gs_B_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
@@ -126,8 +122,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
 		             default_money - giftId['937']['price'] * num * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
-
-		case_list_b[des] = result
 
 	def test_004(self, des='房间,9折券(有损),打赏1个人多个礼物'):
 		rid = gs_B_rid
@@ -164,8 +158,6 @@ class TestPayCreate(unittest.TestCase):
 		             - giftId['937']['price'] * (num - 1))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-		case_list_b[des] = result
-
 	def test_005(self, des='房间,9折券(有损),打赏多个人单个礼物'):
 		rid = gs_B_ceo_rid
 		uids = tuple([str(i) for i in [gs_A_uid, gs_B_uid, normal_uid]])
@@ -201,8 +193,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId['937']['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89297']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
-
-		case_list_b[des] = result
 
 	def test_006(self, des='房间,9折券(有损),打赏多个人多个礼物'):
 		rid = gs_B_ceo_rid
@@ -248,8 +238,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89297']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-		case_list_b[des] = result
-
 	@unittest.skip("""优惠券,不支持私聊""")
 	def test_007(self, des='私聊,9折券(有损),打赏单个礼物,大额礼物,折扣无上限'):
 		uid = gsUid
@@ -286,8 +274,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
 		             default_money - giftId['211026']['price'] * num * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
-
-		case_list_b[des] = result
 
 	@unittest.skip("""优惠券,不支持私聊""")
 	def test_008(self, des='私聊,9折券(有损),打赏多个礼物,大额礼物,折扣无上限'):
@@ -329,8 +315,6 @@ class TestPayCreate(unittest.TestCase):
 		             giftId['211026']['price'] * (num - 1))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-		case_list_b[des] = result
-
 	def test_009(self, des='房间,9折券(有损),打赏1个人单个礼物,大额礼物,折扣无上限'):
 		rid = gs_B_rid
 		default_money = 99999999
@@ -369,8 +353,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
 		             default_money - giftId['211026']['price'] * num * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
-
-		case_list_b[des] = result
 
 	def test_010(self, des='房间,9折券(有损),打赏1个人多个礼物,大额礼物,折扣无上限'):
 		rid = gs_B_rid
@@ -414,8 +396,6 @@ class TestPayCreate(unittest.TestCase):
 		             - giftId['211026']['price'] * (num - 1))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-		case_list_b[des] = result
-
 	def test_011(self, des='房间,9折券(有损),打赏多个人单个礼物,大额礼物,折扣无上限'):
 		rid = gs_B_ceo_rid
 		uids = tuple([str(i) for i in [gs_A_uid, gs_B_uid, normal_uid]])
@@ -455,8 +435,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId['211026']['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['211026']['price'] * commodityId['89297']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
-
-		case_list_b[des] = result
 
 	def test_012(self, des='房间,9折券(有损),打赏多个人多个礼物,大额礼物,折扣无上限'):
 		rid = gs_B_ceo_rid
@@ -503,5 +481,3 @@ class TestPayCreate(unittest.TestCase):
 			giftId['211026']['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['211026']['price'] * commodityId['89297']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
-
-		case_list_b[des] = result

@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -52,7 +51,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'), giftId['69']['price'] * rates['gs']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId['69']['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), 0)
-		case_list[des] = result
 
 	def test_002(self, des='房间内打赏多人-涂鸦礼物场景'):
 		"""
@@ -93,4 +91,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'), giftId[gid]['price'] * rates['gs']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId[gid]['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), 0)
-		case_list[des] = result

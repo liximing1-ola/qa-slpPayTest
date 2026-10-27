@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import result, case_list
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -61,7 +60,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * rates['vip']['starship-room'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), 0)
-		case_list[des] = result
 
 	@unittest.skip("""群组定期解散,不维护了""")
 	def test_002(self, des='星舰群聊内,打赏多人(gs(人气)-910%+gs(vip)-90%+normal-90%)多礼物场景(mcb)'):
@@ -109,4 +107,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * rates['vip']['starship-im'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), 0)
-		case_list[des] = result

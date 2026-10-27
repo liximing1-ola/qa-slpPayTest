@@ -147,6 +147,22 @@ class _ThreadLocalConnection:
                 self._local.cur = None
 
 
+# 清理用户数据：表名 -> (SQL 模板, 动作)。SQL 只用 {uid} 占位，动作只用于异常文案。
+# 以前每个表一个 if/elif 分支，9 个分支套着同一份 8 行 try/except/finally，加一张表要复制
+# 一遍样板；改成表驱动后新增表只需在这里添一行
+_ACCOUNT_CLEANUP_SQL = {
+    'user_commodity': ('delete from xs_user_commodity where uid={uid}', '数据删除'),
+    'user_title': ('delete from xs_user_title where uid = {uid} limit 5', '数据删除'),
+    'pay_room_money': ('update xs_user_profile set pay_room_money=0 where uid={uid} limit 1', '数据更新'),
+    'broker_user': ('delete from xs_broker_user where uid ={uid} limit 1', '数据删除'),
+    'chatroom': ('delete from xs_chatroom where uid ={uid} limit 1', '数据删除'),
+    'user_box': ('delete from xs_user_box where uid={uid} limit 1', '数据删除'),
+    'user_title_new': ('update xs_user_title_new set subscribe_time=0 where uid={uid} limit 1', '数据更新'),
+    'user_popularity': ('update xs_user_popularity set popularity=0 where uid ={uid};', '数据更新'),
+    'pay_change': ('delete from xs_pay_change WHERE uid = {uid};', '数据删除'),
+}
+
+
 class conMysql:
     db_config = {
         # 测试库连接信息可用环境变量覆盖（DB_HOST / DB_USER / DB_PASS），换环境无需改代码
@@ -396,89 +412,23 @@ class conMysql:
     # 删除用户账户数据
     @staticmethod
     def deleteUserAccountSql(tableName, uid):
-        if tableName == 'user_commodity':  # 清除用户背包数据
-            sql = "delete from xs_user_commodity where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'user_title':  # 清除用户爵位数据
-            sql = "delete from xs_user_title where uid = {} limit 5".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'pay_room_money':  # VIP 修改用户pay_room_money爵位数据
-            sql = "update xs_user_profile set pay_room_money=0 where uid={} limit 1".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'broker_user':  # 删除用户工会记录
-            sql = "delete from xs_broker_user where uid ={} limit 1".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'chatroom':  # 删除用户商业房
-            sql = "delete from xs_chatroom where uid ={} limit 1".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'user_box':  # 清除xs_user_box用户数据
-            sql = "delete from xs_user_box where uid={} limit 1".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'user_title_new':  # xs_user_title_new每次跑都清一下subscribe_time，防止数据溢出
-            sql = "update xs_user_title_new set subscribe_time=0 where uid={} limit 1".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'user_popularity':  # 人气值
-            sql = "update xs_user_popularity set popularity=0 where uid ={};".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        elif tableName == 'pay_change':  # 送礼流水
-            sql = f"delete from xs_pay_change WHERE uid = {uid};"
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
-        else:
+        """按表名清理用户数据，表名与 SQL 的对应关系见 _ACCOUNT_CLEANUP_SQL
+
+        未知表名保持原有行为：打一行日志、不做任何操作（调用方传错名字时不应该抛错，
+        因为不少用例把它当“尽力清理”在用）。
+        """
+        item = _ACCOUNT_CLEANUP_SQL.get(tableName)
+        if item is None:
             print('{} Error'.format(tableName))
+            return
+        sql = item[0].format(uid=uid)
+        try:
+            conMysql.cur.execute(sql)
+        except Exception as error:
+            _safe_rollback()
+            raise DbQueryError('{}失败, SQL: {}, 原因: {}'.format(item[1], sql, error)) from error
+        finally:
+            conMysql.con.commit()
 
     # 更新用户数据
     @staticmethod

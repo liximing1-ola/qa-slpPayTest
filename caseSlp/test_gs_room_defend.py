@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -50,4 +49,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             room_defend['zhenai']['month']['price'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', gs_A_ceo_uid), 0)
-		case_list_b2[des] = result

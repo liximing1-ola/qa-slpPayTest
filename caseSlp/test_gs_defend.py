@@ -6,7 +6,6 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -46,7 +45,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['price'])
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), defend['小宝贝']['price'] * rates['gs']['default'])
-		case_list_b2[des] = result
 
 	def test_002(self, des='给GS开通个人守护进阶场景,不分成'):
 		"""
@@ -100,8 +98,6 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + defend['小宝贝']['upgrade_price'] * uid_speed)
 		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + defend['小宝贝']['upgrade_price'] * uid_speed)
 
-		case_list_b2[des] = result
-
 	def test_003(self, des='GS个人守护解除场景,不分成'):
 		"""
 		 用例描述：
@@ -130,4 +126,3 @@ class TestPayCreate(unittest.TestCase):
 		assert_body(res['body'], 'success', 1, reason(des, res))
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['break_price'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), 0)
-		case_list_b2[des] = result
