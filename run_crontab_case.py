@@ -9,13 +9,12 @@
 """
 import os
 import sys
-import unittest
 
 from Robot import robot
 from common import Logs
 from common.Config import config
 from common.Session import Session
-from common.report import (AllTestRunner, fail_detail_text, not_pass_report,
+from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
                            not_pass_summary, result_counts, split_message)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
@@ -24,24 +23,6 @@ PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
 # 失败/异常逐条播报的条数上限：每条 icon 都会 @all 并在外网拉一次图，
 # 失败较多时刷屏又慢，完整清单在汇总消息里，这里只做提醒
 MAX_ICON_ALERT = 3
-
-
-def all_case(app_info):
-    """按 App 名组装对应用例目录下的全部用例"""
-    case_dir = config.BASE_PATH
-    if app_info == config.appName['不夜星球']:
-        case_dir += '/caseSlp'
-    elif app_info == config.appName['小拾光']:
-        case_dir += '/caseXsg'
-    else:
-        raise ValueError('不支持的 App: {}, 仅支持 {}'.format(app_info, APP_SUPPORTED))
-
-    discover = unittest.defaultTestLoader.discover(case_dir,
-                                                   pattern='test_*.py',
-                                                   top_level_dir=config.BASE_PATH)
-    testcase = unittest.TestSuite()
-    testcase.addTests(discover)
-    return testcase
 
 
 def notify(test_result, app_info):
@@ -110,7 +91,7 @@ def main(app_info):
         # console=False：否则会先给 caseResult.log 挂上控制台 handler，导致 notify 里同名的 console=False 失效
         Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(app_info, error))
 
-    test_result = AllTestRunner(verbosity=2).run(all_case(app_info))
+    test_result = AllTestRunner(verbosity=2).run(build_suite(app_info))
     return notify(test_result, app_info)
 
 

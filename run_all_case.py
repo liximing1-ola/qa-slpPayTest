@@ -1,6 +1,5 @@
 # coding=utf-8
 import os
-import unittest
 from time import time
 
 from Robot import robot
@@ -8,7 +7,7 @@ from autoGitPull import updateTime, updateCode
 from common import Logs, Consts
 from common.Config import config
 from common.Session import Session
-from common.report import (AllTestRunner, fail_detail_text, not_pass_report,
+from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
 						   not_pass_summary, result_counts, split_message)
 
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，企业微信的 markdown 展示效果不理想，
@@ -44,7 +43,7 @@ def main(appInfo):
 		updateTime('write', now=str(int(time())))
 
 		# 执行测试
-		test_result = AllTestRunner(verbosity=2).run(all_case(appInfo))
+		test_result = AllTestRunner(verbosity=2).run(build_suite(appInfo, CASE))
 		Consts.endTime = time()
 
 		# result_counts 会把 setUpClass/tearDownClass 报错补进总数，避免「总数: 0, 异常: 1」或「通过: -1」
@@ -91,56 +90,23 @@ def main(appInfo):
 		return None
 
 
-def all_case(appInfo):
-	case_dir = config.BASE_PATH
-	if appInfo == config.appName['不夜星球']:
-		case_dir += '/caseSlp'
-	elif appInfo == config.appName['小拾光']:
-		case_dir += '/caseXsg'
-	else:
-		return
-
-	testcase = unittest.TestSuite()
-	# 全量执行；要单跑某几条用例用环境变量 CASE（见文件头），不设就是原来的全量
-	if CASE:
-		app_dir = os.path.basename(case_dir)  # caseSlp / caseXsg，拼完整用例名时要带上前缀
-		loader = unittest.defaultTestLoader
-		for item in CASE.split(','):
-			item = item.strip()
-			if not item:
-				continue
-			if '.' in item:
-				# 完整用例名（可只写到类）：直接按名字加载，找不到时 unittest 会造一条报错用例，不会静默跳过
-				testcase.addTests(loader.loadTestsFromName('{}.{}'.format(app_dir, item)))
-				continue
-			# 文件名（带不带 test_ 前缀、.py 后缀都行）
-			name = item if item.endswith('.py') else '{}.py'.format(item)
-			testcase.addTests(loader.discover(case_dir,
-			                                  pattern=name if name.startswith('test_') else 'test_' + name,
-			                                  top_level_dir=config.BASE_PATH))
-		return testcase
-
-	discover = unittest.defaultTestLoader.discover(case_dir,  # 指定待执行用例的目录
-	                                               pattern="test_*.py",
-	                                               top_level_dir=config.BASE_PATH)
-	testcase.addTests(discover)
-	return testcase
-
-
 if __name__ == "__main__":
 	import sys
 
+	# 不支持时显式报错退出：以前手滑传错参数（如 slpp）会静默落到全量 slp，
+	# 悄悄跑完一轮并覆盖日志；这里与 run_crontab_case 的处理保持一致
 	if len(sys.argv) >= 2:
 		arg = sys.argv[1].strip().lower()
 	else:
 		arg = None
 
-	if arg == config.appName['不夜星球'] or arg == 'slp':
+	if arg in (None, config.appName['不夜星球'], 'slp'):
 		counts = main(config.appName['不夜星球'])
-	elif arg == config.appName['小拾光'] or arg == 'xsg':
+	elif arg in (config.appName['小拾光'], 'xsg'):
 		counts = main(config.appName['小拾光'])
 	else:
-		counts = main(config.appName['不夜星球'])
+		print('未知参数: {}，可用取值: slp / xsg'.format(arg), flush=True)
+		sys.exit(2)
 
 	# 退出码：有失败/异常时返回 1，便于 cron、调度平台或 cmd && 后续命令感知本轮失败
 	sys.exit(1 if counts and (counts['fail'] or counts['error']) else 0)

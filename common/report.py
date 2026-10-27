@@ -3,11 +3,14 @@
 用例执行结果汇总
 
 run_all_case.py（全量执行、逐条播报）与 run_crontab_case.py（定时任务、只报失败）
-都需要两件事：收集每条用例的 des、执行结束后统一列出所有未通过的用例。
-放在一处实现，避免两个入口的展示口径不一致。
+都需要两件事：按 App 名装配用例集、收集每条用例的 des 并在结束后统一列出未通过用例。
+放在一处实现，避免两个入口的装配口径与展示口径各自跑偏。
 """
 import inspect
+import os
 import unittest
+
+from common.Config import config
 
 
 def extract_des_from_docstring(docstring):
@@ -76,6 +79,45 @@ class AllTestResult(unittest.TextTestResult):
 class AllTestRunner(unittest.TextTestRunner):
     """自定义测试运行器，返回 AllTestResult"""
     resultclass = AllTestResult
+
+
+def build_suite(app_info, case_expr=''):
+    """按 App 名装配用例集
+
+    :param app_info: config.appName 里的中文名；不支持时抛 ValueError，让入口显式报错
+    :param case_expr: 逗号分隔的混合写法，空则全量执行（run_crontab_case 不传，行为与全量一致）
+        省略：test_check                             只跑 caseSlp/test_check.py
+        带点：test_check.TestPayCreate.test_002      按完整用例名加载（可只写到类）
+    unittest 的 discover 只能按**文件名** glob，写用例名是匹配不到文件的，所以两种写法分开处理
+    """
+    case_dir = config.BASE_PATH
+    if app_info == config.appName['不夜星球']:
+        case_dir += '/caseSlp'
+    elif app_info == config.appName['小拾光']:
+        case_dir += '/caseXsg'
+    else:
+        raise ValueError('不支持的 App: {}, 仅支持 {}'.format(app_info, config.appName))
+
+    testcase = unittest.TestSuite()
+    loader = unittest.defaultTestLoader
+    if case_expr:
+        app_dir = os.path.basename(case_dir)  # caseSlp / caseXsg，拼完整用例名时要带上前缀
+        for item in case_expr.split(','):
+            item = item.strip()
+            if not item:
+                continue
+            if '.' in item:
+                # 找不到时 unittest 会造一条报错用例，不会静默跳过
+                testcase.addTests(loader.loadTestsFromName('{}.{}'.format(app_dir, item)))
+                continue
+            name = item if item.endswith('.py') else '{}.py'.format(item)
+            testcase.addTests(loader.discover(case_dir,
+                                              pattern=name if name.startswith('test_') else 'test_' + name,
+                                              top_level_dir=config.BASE_PATH))
+        return testcase
+
+    testcase.addTests(loader.discover(case_dir, pattern='test_*.py', top_level_dir=config.BASE_PATH))
+    return testcase
 
 
 def case_name(case):
