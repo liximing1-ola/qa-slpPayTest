@@ -43,6 +43,75 @@ class DbQueryError(Exception):
     """
 
 
+# ===== SQL 执行模板 =====
+# 全文件曾有 40+ 处逐字相同的 try/execute/except/fetch 样板，只有 SQL 字符串和异常文案不同，
+# 加一个查询就要复制八行。收成下面几个函数后，各处只留自己的 SQL 和取值语义。
+def _query_one(sql):
+    """执行查询并取第一行；SQL 故障统一抛 DbQueryError。返回 None 表示没有数据"""
+    try:
+        conMysql.cur.execute(sql)
+        return conMysql.cur.fetchone()
+    except Exception as error:
+        raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+
+
+def _query_all(sql):
+    """执行查询并取全部行；SQL 故障统一抛 DbQueryError"""
+    try:
+        conMysql.cur.execute(sql)
+        return conMysql.cur.fetchall()
+    except Exception as error:
+        raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+
+
+def _query_all_dict(sql):
+    """用字典游标查询，返回 [{列名: 值}]；游标用 with 自动关闭"""
+    try:
+        with conMysql.con.cursor(cursor=pymysql.cursors.DictCursor) as cur:
+            cur.execute(sql)
+            return cur.fetchall()
+    except Exception as error:
+        raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+
+
+def _query_dict_row(sql):
+    """查询并把第一行转成 {列名: 值}；SQL 故障与空结果统一抛 DbQueryError"""
+    try:
+        conMysql.cur.execute(sql)
+        rows = conMysql.cur.fetchall()
+        column = [index[0] for index in conMysql.cur.description]
+        return [dict(zip(column, row)) for row in rows][0]
+    except Exception as error:
+        raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+
+
+def _exec_write(sql, action):
+    """执行写 SQL：失败先回滚再抛 DbQueryError，成功失败都 commit
+
+    commit 放 finally 是历史行为（失败路径等于“回滚后再提交一次空事务”），
+    调用方依赖“每次调用后连接上不残留未提交事务”，这里原样保留。
+    """
+    try:
+        conMysql.cur.execute(sql)
+    except Exception as error:
+        _safe_rollback()
+        raise DbQueryError('{}, SQL: {}, 原因: {}'.format(action, sql, error)) from error
+    finally:
+        conMysql.con.commit()
+
+
+def _exec_writes(sqls, action):
+    """按顺序执行多条写 SQL，任一条失败即回滚并抛 DbQueryError（报出失败的那条）"""
+    try:
+        for sql in sqls:
+            conMysql.cur.execute(sql)
+    except Exception as error:
+        _safe_rollback()
+        raise DbQueryError('{}, SQL: {}, 原因: {}'.format(action, sql, error)) from error
+    finally:
+        conMysql.con.commit()
+
+
 class _ClassProperty:
     """把类属性访问（conMysql.cur / conMysql.con）转发为动态调用"""
 
@@ -223,189 +292,74 @@ class conMysql:
     def _query_user_info(accountType, uid, money_type, cid, payuid, app_id):
         """实际执行某个 accountType 对应的查询，失败抛 DbQueryError"""
         if accountType == 'bean':  # 查询用户账户扩展表金豆余额
-            sql = "select money_coupon from xs_user_money_extend where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is None:
-                    return 0
-                else:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select money_coupon from xs_user_money_extend where uid={}".format(uid))
+            return 0 if row is None else row[0]
         elif accountType == 'cash':  # 查询用户账户扩展表 现金余额
-            sql = "select cash from xs_user_money_extend where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is None:
-                    return 0
-                else:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select cash from xs_user_money_extend where uid={}".format(uid))
+            return 0 if row is None else row[0]
         elif accountType == 'sum_money':  # 查询用户所有账户数据之和
-            sql = "select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is None:
-                    return 0
-                else:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select money+money_b+money_cash_b+money_cash from xs_user_money where uid={}".format(uid))
+            return 0 if row is None else row[0]
         elif accountType == 'single_money':  # 查询用户单个账户数据
-            sql = "select {} from xs_user_money where uid={}".format(money_type, uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is not None:
-                    return res[0]
-                else:
-                    return None
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select {} from xs_user_money where uid={}".format(money_type, uid))
+            return None if row is None else row[0]
         elif accountType == 'sum_commodity':  # 查询用户背包物品总数
-            sql = 'select sum(num) from xs_user_commodity where uid ={}'.format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                # 没有背包数据时 sum() 返回 NULL，属于合法空结果，不能当成 SQL 异常
-                if res is None or res[0] is None:
-                    return 0
-                return int(res[0])
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one('select sum(num) from xs_user_commodity where uid ={}'.format(uid))
+            # 没有背包数据时 sum() 返回 NULL，属于合法空结果，不能当成 SQL 异常
+            if row is None or row[0] is None:
+                return 0
+            return int(row[0])
         elif accountType == 'num_commodity':  # 查询用户背包物品数量
-            sql = "select num from xs_user_commodity where cid={} and uid={}".format(cid, uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is None:
-                    return 0
-                else:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select num from xs_user_commodity where cid={} and uid={}".format(cid, uid))
+            return 0 if row is None else row[0]
         elif accountType == 'pay_room_money':  # 用户vip等级经验
-            sql = "select pay_room_money from xs_user_profile where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is None:
-                    return 0
-                else:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select pay_room_money from xs_user_profile where uid={}".format(uid))
+            return 0 if row is None else row[0]
         elif accountType == 'popularity':  # 用户人气等级经验
-            sql = "select popularity from xs_user_popularity where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is None:
-                    return 0
-                else:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select popularity from xs_user_popularity where uid={}".format(uid))
+            return 0 if row is None else row[0]
         elif accountType == 'id_commodity':  # 查询用户背包物品ID
-            sql = "select id from xs_user_commodity where cid={} and uid={}".format(cid, uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is not None:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select id from xs_user_commodity where cid={} and uid={}".format(cid, uid))
+            return None if row is None else row[0]
         elif accountType == 'level':  # 查询用户爵位等级
-            sql = "select level from xs_user_title_new where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is not None:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select level from xs_user_title_new where uid={}".format(uid))
+            return None if row is None else row[0]
         elif accountType == 'growth':  # 查询用户成长值
-            sql = "select growth from xs_user_title_new where uid={}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is not None:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select growth from xs_user_title_new where uid={}".format(uid))
+            return None if row is None else row[0]
         elif accountType == 'user_index':  # 查询用户salt
-            sql = "select salt from xs_user_index where uid = {}".format(uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is not None:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select salt from xs_user_index where uid = {}".format(uid))
+            return None if row is None else row[0]
         elif accountType == 'relation_id':  # 查询用户守护关系id
-            sql = "select id from xs_relation_defend where uid={} and defend_uid={} and relation_id={}". \
-                format(payuid, uid, cid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                if res is None:
-                    return 0
-                if res is not None:
-                    return res[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            row = _query_one("select id from xs_relation_defend where uid={} and defend_uid={} and relation_id={}"
+                             .format(payuid, uid, cid))
+            return 0 if row is None else row[0]
         elif accountType == 'relation_config':  # 查询守护关系配置
-            sql = "select id, name, money_value, break_money, upgrade_money from xs_relation_config where id={}".format(
-                uid)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchall()
-                column = [index[0] for index in conMysql.cur.description]
-                data_dict = [dict(zip(column, row)) for row in res]
-                return data_dict[0]
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            return _query_dict_row("select id, name, money_value, break_money, upgrade_money "
+                                   "from xs_relation_config where id={}".format(uid))
         elif accountType == 'union':
-            sql = " select rid from xs_chatroom where property='{}' limit 1".format(accountType)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
-            if res is None:
+            row = _query_one("select rid from xs_chatroom where property='{}' limit 1".format(accountType))
+            if row is None:
                 # 这是环境的房间数据缺失，不是 SQL 故障，单独抛出便于区分
                 raise EnvironmentError('库表无联盟房')
-            return res[0]
+            return row[0]
         elif accountType == 'vip':
-            sql = "select rid from xs_chatroom where property='{}' and app_id={} limit 1".format(accountType,app_id)
-            try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-            except Exception as error:
-                raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
-            if res is None:
+            row = _query_one("select rid from xs_chatroom where property='{}' and app_id={} limit 1"
+                             .format(accountType, app_id))
+            if row is None:
                 raise EnvironmentError('库表无个人房')
-            return res[0]
+            return row[0]
         elif accountType == 'pay_change':  # 查询用户消费记录数据
             sql = 'select reason from xs_pay_change where uid={} order by id desc LIMIT 1'.format(uid)
+            row = _query_one(sql)
+            # 没有消费记录属于合法空结果
+            if row is None:
+                return 0
             try:
-                conMysql.cur.execute(sql)
-                res = conMysql.cur.fetchone()
-                # 没有消费记录属于合法空结果
-                if res is None:
-                    return 0
-                res_dict = ast.literal_eval(res[0])
-                reason_value = '{}'.format(money_type)
-                if reason_value in res_dict.keys():
-                    return res_dict[reason_value]
-                else:
-                    return 0
+                reason_dict = ast.literal_eval(row[0])
             except Exception as error:
                 raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+            return reason_dict.get('{}'.format(money_type), 0)
         else:
             raise ValueError('未知的查询类型: {}, 可选值见 selectUserInfoSql 的 if 分支'.format(accountType))
 
@@ -422,13 +376,7 @@ class conMysql:
             print('{} Error'.format(tableName))
             return
         sql = item[0].format(uid=uid)
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('{}失败, SQL: {}, 原因: {}'.format(item[1], sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(sql, item[1] + '失败')
 
     # 更新用户数据
     @staticmethod
@@ -448,13 +396,7 @@ class conMysql:
             }
             subscribe_time = int(time.time()) + 1 * 24 * 60 * 60
             sql = f"""update xs_user_title_new set level={level},growth={jw_config[str(level)]},effective_value={jw_config[str(level)]},subscribe_time={subscribe_time},effective_time={subscribe_time} where uid ={uid};"""
-            try:
-                conMysql.cur.execute(sql)
-            except Exception as error:
-                _safe_rollback()
-                raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            finally:
-                conMysql.con.commit()
+            _exec_write(sql, '数据更新失败')
         else:
             print('{} Error'.format(tableName))
 
@@ -462,29 +404,15 @@ class conMysql:
     # 清空用户账户
     @staticmethod
     def updateUserMoneyClearSql(*uids):
-        try:
-            for uid in uids:
-                sql = "update xs_user_money set money=0, money_b=0, money_cash=0, money_cash_b=0, gold_coin=0, " \
-                      "money_debts=0 where uid={}".format(uid)
-                conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_writes(["update xs_user_money set money=0, money_b=0, money_cash=0, money_cash_b=0, gold_coin=0, "
+                      "money_debts=0 where uid={}".format(uid) for uid in uids], '数据更新失败')
 
     # 更新用户账户余额
     @staticmethod
     def updateMoneySql(uid, money=0, money_cash=0, money_cash_b=0, money_b=0, gold_coin=0, money_debts=0):
         sql = "update xs_user_money set money={}, money_b={}, money_cash={}, money_cash_b={},gold_coin={}, money_debts={} " \
               "where uid={} limit 1".format(money, money_b, money_cash, money_cash_b, gold_coin, money_debts, uid)
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(sql, '数据更新失败')
 
 
 
@@ -494,13 +422,7 @@ class conMysql:
         conMysql.checkXsCommodity(cid)
         sql = "insert into xs_user_commodity (uid, cid, num, state) values ({}, {}, {}, {})".format(uid, cid, num,
                                                                                                     state)
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(sql, '数据插入失败')
 
     @staticmethod
     def checkXsCommodity(cid, name='青铜体验券'):
@@ -513,82 +435,31 @@ class conMysql:
     # 查询工会是否存在
     @staticmethod
     def checkUserXsBroker(bid):
-        sql = 'select * from xs_broker where bid={}'.format(bid)
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchone()
-            if res is None:
-                sql = "insert into xs_broker (bid,app_id,bname,creater,dateline,types) values({}, {}, '{}', {}, {}, '{}')" \
-                    .format(bid, 1, '10086', bid, 1571481302, 'live')
-                try:
-                    conMysql.cur.execute(sql)
-                except Exception as error:
-                    _safe_rollback()
-                    raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            else:
-                sql = 'update xs_broker set creater={} where bid={} limit 1'.format(bid, bid)
-                try:
-                    conMysql.cur.execute(sql)
-                except Exception as error:
-                    _safe_rollback()
-                    raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        if _query_one('select * from xs_broker where bid={}'.format(bid)) is None:
+            _exec_write("insert into xs_broker (bid,app_id,bname,creater,dateline,types) values({}, {}, '{}', {}, {}, '{}')"
+                        .format(bid, 1, '10086', bid, 1571481302, 'live'), '数据插入失败')
+        else:
+            _exec_write('update xs_broker set creater={} where bid={} limit 1'.format(bid, bid), '数据更新失败')
 
     # 查询用户是否是师父.不是就把他变成一代宗师（level=4，一代宗师）
     @staticmethod
     def checkUserXsMentorLevel(uid, level=4):
-        sql = 'select * from xs_mentor_exp where uid={}'.format(uid)
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchone()
-            if res is None:
-                sql = 'insert into xs_mentor_exp (uid, level) values({}, {})'.format(uid, level)
-                try:
-                    conMysql.cur.execute(sql)
-                except Exception as error:
-                    _safe_rollback()
-                    raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-            else:
-                sql = "update xs_mentor_exp set level={} where uid={} limit 1".format(level, uid)
-                try:
-                    conMysql.cur.execute(sql)
-                except Exception as error:
-                    _safe_rollback()
-                    raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        if _query_one('select * from xs_mentor_exp where uid={}'.format(uid)) is None:
+            _exec_write('insert into xs_mentor_exp (uid, level) values({}, {})'.format(uid, level), '数据插入失败')
+        else:
+            _exec_write("update xs_mentor_exp set level={} where uid={} limit 1".format(level, uid), '数据更新失败')
 
 
     # 查询rid的房间类型
     @staticmethod
     def checkRidFactoryType(rid):
-        sql = 'select room_factory_type from xs_chatroom where rid={}'.format(rid)
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchone()
-            if res is not None:
-                return res[0]
-            else:
-                return None
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+        row = _query_one('select room_factory_type from xs_chatroom where rid={}'.format(rid))
+        return None if row is None else row[0]
 
     # 修改大神认证 1=同意,0=不同意
     @staticmethod
     def updateUserGodSql(uid, agreement_version):
-        try:
-            sql = f"update xs_user_settings set agreement_version={agreement_version} where uid={uid}"
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(f"update xs_user_settings set agreement_version={agreement_version} where uid={uid}", '数据更新失败')
 
     # 查询甄选礼盒打赏数据
     @staticmethod
@@ -596,78 +467,40 @@ class conMysql:
         sql = f"""
         SELECT JSON_EXTRACT(reason, '$.to') AS to_uid,JSON_EXTRACT(reason, '$.gid') AS gid,SUM(JSON_EXTRACT(reason, '$.num')) AS total_num FROM xs_pay_change WHERE uid = {uid} AND JSON_UNQUOTE(JSON_EXTRACT(reason, '$.obr')) IS NOT NULL GROUP BY gid, to_uid ORDER BY to_uid;
         """
-        try:
-            # 用 with 自动关闭游标，避免每次查询都泄漏一个游标对象
-            with conMysql.con.cursor(cursor=pymysql.cursors.DictCursor) as cur:
-                cur.execute(sql)
-                res = cur.fetchall()
-            if res is None:
-                return 0
-            else:
-                return res
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+        res = _query_all_dict(sql)
+        return 0 if res is None else res
 
     @staticmethod
     def checkUserBroker(uid):
         """校验是否是公会成员"""
-        sql = f'select * from xs_broker_user where uid={uid} and deleted=0;'
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchone()
-            if res:
-                return True
-            else:
-                return False
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+        return bool(_query_one(f'select * from xs_broker_user where uid={uid} and deleted=0;'))
 
     @staticmethod
     def select_uid_rid():
         sql = """select uid,rid,room_factory_type from xs_chatroom where uid in (select uid from xs_user_mobile where mobile LIKE '%15008521%' or mobile like '%152%') and property='business';"""
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchall()
-            print(res)
-            return res
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+        res = _query_all(sql)
+        print(res)
+        return res
 
     @staticmethod
     def selectGiftId():
         sql=f"""select a.id as gid,b.cid,a.name,a.price*100 from xs_gift as a left join xs_commodity as b on a.id=b.ext_id where b.cid is not null and b.type='gift';"""
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchall()
-            print(res)
-            return res
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+        res = _query_all(sql)
+        print(res)
+        return res
 
     # 修改守护关系有效期
     @staticmethod
     def updateRelationExpire(uid1, uid2):
         expire_time = int(time.time()) + 30 * 24 * 60 * 60
-        try:
-            sql = f"""update xs_relation_defend set expire_time={expire_time},upgrade=0 where (uid={uid1} and defend_uid={uid2}) or (uid={uid2} and defend_uid={uid1}); """
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        sql = f"""update xs_relation_defend set expire_time={expire_time},upgrade=0 where (uid={uid1} and defend_uid={uid2}) or (uid={uid2} and defend_uid={uid1}); """
+        _exec_write(sql, '数据更新失败')
 
     # 删除用户账户数据
     @staticmethod
     def deleteXsUserAccelerationInfo(uid):
         sql = f"""delete from `xianshi`.`xs_user_acceleration_info` where uid={uid}"""
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(sql, '数据删除失败')
 
     # 添加并使用 vip/人气加速卡
     @staticmethod
@@ -675,13 +508,7 @@ class conMysql:
         # 89386  1.2倍   89387  1.4倍
         expire_time = int(time.time()) + 30 * 24 * 60 * 60
         sql = f"""INSERT INTO `xianshi`.`xs_user_acceleration_info`(`id`, `uid`, `speed`, `expired_time`, `create_time`) VALUES (0, {uid}, {speed}, {expire_time}, 1736481872);"""
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(sql, '数据插入失败')
 
     # 添加并使用 无损/有损优惠券
     @staticmethod
@@ -692,103 +519,46 @@ class conMysql:
         # 先删除再添加使用
         sql1 = f"""delete from `xianshi`.`xs_user_coupon_use` where uid={uid}"""
         sql2 = f"""INSERT INTO `xianshi`.`xs_user_coupon_use`(`id`, `uid`, `coupon_type`, `cid`, `create_time`, `update_time`) VALUES (0, {uid}, 'pro_gift_discount', {cid}, {now_time}, {now_time});"""
-        try:
-            conMysql.cur.execute(sql1)
-            conMysql.cur.execute(sql2)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据写入失败, SQL1: {}, SQL2: {}, 原因: {}'.format(sql1, sql2, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_writes([sql1, sql2], '数据写入失败')
 
     # 更新房间 麦上用户信息
     @staticmethod
     def updateXsChatroomConfig(rid, uid=0, position=0):
-        try:
-            sql = f"""update xs_chatroom_config set uid={uid} where rid={rid} AND position = {position} limit 1;"""
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        sql = f"""update xs_chatroom_config set uid={uid} where rid={rid} AND position = {position} limit 1;"""
+        _exec_write(sql, '数据更新失败')
 
     # 删除冠歌信息
     @staticmethod
     def updateXsRoomUserMusicList(song_id):
-        try:
-            sql = f"""update xs_room_user_music_list set naming_id=0 where id={song_id};"""
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        sql = f"""update xs_room_user_music_list set naming_id=0 where id={song_id};"""
+        _exec_write(sql, '数据更新失败')
 
     # 修改冠歌信息-过期
     @staticmethod
     def updateXsRoomUserMusicNaming(song_id):
-        try:
-            sql = f"""update xs_room_user_music_naming set expire_time=expire_time-24*3600*365 where song_id={song_id} order by id desc limit 1;;"""
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据更新失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        sql = f"""update xs_room_user_music_naming set expire_time=expire_time-24*3600*365 where song_id={song_id} order by id desc limit 1;;"""
+        _exec_write(sql, '数据更新失败')
 
     # 删除才艺厅购买观众位记录
     @staticmethod
     def deleteXsMicPermission(rid):
-        sql = f"""delete from `xianshi`.`xs_mic_permission` where rid={rid}"""
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(f"""delete from `xianshi`.`xs_mic_permission` where rid={rid}""", '数据删除失败')
 
     @staticmethod
     def checkUserAgreement(uid):
         """校验是否签署大神协议"""
-        sql = f'select * from xs_user_settings where uid={uid} and agreement_version>=1;'
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchone()
-            if res:
-                return True
-            else:
-                return False
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+        return bool(_query_one(f'select * from xs_user_settings where uid={uid} and agreement_version>=1;'))
 
     @staticmethod
     def checkUserWhite(uid,type_=198):
         """校验是否在人气标签白名单"""
-        sql = f'select * from config.xsst_ktv_uid_white where uid={uid} and type={type_};'
-        try:
-            conMysql.cur.execute(sql)
-            res = conMysql.cur.fetchone()
-            if res:
-                return True
-            else:
-                return False
-        except Exception as error:
-            raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+        return bool(_query_one(f'select * from config.xsst_ktv_uid_white where uid={uid} and type={type_};'))
 
     # 上周流水最高的厅 删除
     @staticmethod
     def deleteXsstRoomacsSum(uid):
         # 先删除
-        sql = f"""delete from xsst.xsst_roomacs_sum where uid={uid};"""
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(f"""delete from xsst.xsst_roomacs_sum where uid={uid};""", '数据删除失败')
 
     # 上周流水最高的厅 插入
     @staticmethod
@@ -804,13 +574,7 @@ class conMysql:
         # 所有跳档分成用例都会掉进“上周厅不存在”的兜底比例（实测 0.6 / 0.2）
         join_key = '{}-1-{}'.format(uid, date)
         sql = f"""INSERT INTO `xsst`.`xsst_roomacs_sum`(`id`, `rid`, `uid`, `role`, `date`, `datetype`, `totaltime`, `totalnum`, `totalmic`, `totalmicnum`, `pay`, `income`, `totalpay`, `join_uid_datetype_date`) VALUES (0, {rid}, {uid}, 2, {date}, 1, 58379, 1, 0, 0, 0, 0, 0, '{join_key}');"""
-        try:
-            conMysql.cur.execute(sql)
-        except Exception as error:
-            _safe_rollback()
-            raise DbQueryError('数据插入失败, SQL: {}, 原因: {}'.format(sql, error)) from error
-        finally:
-            conMysql.con.commit()
+        _exec_write(sql, '数据插入失败')
 
 if __name__ == '__main__':
     mysql = conMysql()
