@@ -14,6 +14,11 @@ from common.report import (AllTestRunner, fail_detail_text, not_pass_report,
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，企业微信的 markdown 展示效果不理想，
 # 需要恢复推送时用 PUSH_WX=1
 PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
+# 只跑指定用例（调试用）：不设则全量执行。
+#   CASE=test_check                                          只跑 caseSlp/test_check.py
+#   CASE=test_check.TestPayCreate.test_002,test_check.TestPayCreate.test_012
+# unittest 的 discover 只能按**文件名** glob，写用例名是匹配不到文件的，所以两种写法分开处理
+CASE = os.environ.get('CASE', '').strip()
 # 推送时是否额外逐条列出通过的用例：默认关闭，通过用例动辄上百条，会把真正要看的失败清单挤到后面
 LIST_PASS = os.environ.get('LIST_PASS', '0') == '1'
 
@@ -96,7 +101,25 @@ def all_case(appInfo):
 		return
 
 	testcase = unittest.TestSuite()
-	# 全量执行：pattern 可按需改成单个文件名调试
+	# 全量执行；要单跑某几条用例用环境变量 CASE（见文件头），不设就是原来的全量
+	if CASE:
+		app_dir = os.path.basename(case_dir)  # caseSlp / caseXsg，拼完整用例名时要带上前缀
+		loader = unittest.defaultTestLoader
+		for item in CASE.split(','):
+			item = item.strip()
+			if not item:
+				continue
+			if '.' in item:
+				# 完整用例名（可只写到类）：直接按名字加载，找不到时 unittest 会造一条报错用例，不会静默跳过
+				testcase.addTests(loader.loadTestsFromName('{}.{}'.format(app_dir, item)))
+				continue
+			# 文件名（带不带 test_ 前缀、.py 后缀都行）
+			name = item if item.endswith('.py') else '{}.py'.format(item)
+			testcase.addTests(loader.discover(case_dir,
+			                                  pattern=name if name.startswith('test_') else 'test_' + name,
+			                                  top_level_dir=config.BASE_PATH))
+		return testcase
+
 	discover = unittest.defaultTestLoader.discover(case_dir,  # 指定待执行用例的目录
 	                                               pattern="test_*.py",
 	                                               top_level_dir=config.BASE_PATH)
