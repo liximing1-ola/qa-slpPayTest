@@ -6,7 +6,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data, prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card, read_vip_pop
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -519,13 +519,20 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		time.sleep(0.5)
-		clear_acceleration_card(uid, payUid)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['皇帝']['update'] * room_defend['zhenai']['month']['price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + juewei_level['皇帝']['update'] * room_defend['zhenai']['month']['price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + room_defend['zhenai']['month']['price'] * uid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + room_defend['zhenai']['month']['price'] * uid_speed)
+		# 加速卡要覆盖整个结算窗口：收礼方的 vip/人气是异步落库的，实测会慢于这里的 0.5 秒。
+		# 原来先 clear_acceleration_card 再断言，结算慢于 0.5 秒时服务端已读不到加速卡，
+		# 收礼方读数会停在 0（偶发红）；故改为断言后再清卡，并用轮询断言等落库。预期值不变。
+		try:
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+			                        payUid_old_vip + juewei_level['皇帝']['update'] * room_defend['zhenai']['month']['price'] / 100 * payUid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+			                        payUid_old_pop + juewei_level['皇帝']['update'] * room_defend['zhenai']['month']['price'] / 100 * payUid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid),
+			                        uid_old_vip + room_defend['zhenai']['month']['price'] * uid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid),
+			                        uid_old_pop + room_defend['zhenai']['month']['price'] * uid_speed)
+		finally:
+			clear_acceleration_card(uid, payUid)
 
 
 	def test_014(self, des='使用vip/人气加速卡,房间送礼,收礼方为人气标签,1倍vip'):
@@ -566,14 +573,21 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		time.sleep(0.5)
-		clear_acceleration_card(uid, payUid)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
+		# 加速卡要覆盖整个结算窗口：收礼方的 vip/人气是异步落库的，实测会慢于这里的 0.5 秒。
+		# 原来先 clear_acceleration_card 再断言，结算慢于 0.5 秒时服务端已读不到加速卡，
+		# 收礼方读数会停在 0（偶发红）；故改为断言后再清卡，并用轮询断言等落库。预期值不变。
+		try:
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+			                        payUid_old_vip + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+			                        payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+			# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid),
+			                        uid_old_vip + giftId['69']['price'] * uid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid),
+			                        uid_old_pop + giftId['69']['price'] * uid_speed)
+		finally:
+			clear_acceleration_card(uid, payUid)
 
 	def test_015(self, des='使用vip/人气加速卡,私聊送礼,收礼方为人气标签,1倍vip'):
 		"""
@@ -608,14 +622,21 @@ class TestPayCreate(unittest.TestCase):
 		assert_pay_success(res, des)
 
 		time.sleep(0.5)
-		clear_acceleration_card(uid, payUid)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
+		# 加速卡要覆盖整个结算窗口：收礼方的 vip/人气是异步落库的，实测会慢于这里的 0.5 秒。
+		# 原来先 clear_acceleration_card 再断言，结算慢于 0.5 秒时服务端已读不到加速卡，
+		# 收礼方读数会停在 0（偶发红）；故改为断言后再清卡，并用轮询断言等落库。预期值不变。
+		try:
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+			                        payUid_old_vip + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+			                        payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+			# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid),
+			                        uid_old_vip + giftId['69']['price'] * uid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid),
+			                        uid_old_pop + giftId['69']['price'] * uid_speed)
+		finally:
+			clear_acceleration_card(uid, payUid)
 
 	def test_016(self, des='使用vip/人气加速卡,房间送礼,收礼方为vip标签,2倍vip'):
 		"""
@@ -655,14 +676,21 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		time.sleep(0.5)
-		clear_acceleration_card(uid, payUid)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
-		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
+		# 加速卡要覆盖整个结算窗口：收礼方的 vip/人气是异步落库的，实测会慢于这里的 0.5 秒。
+		# 原来先 clear_acceleration_card 再断言，结算慢于 0.5 秒时服务端已读不到加速卡，
+		# 收礼方读数会停在 0（偶发红）；故改为断言后再清卡，并用轮询断言等落库。预期值不变。
+		try:
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+			                        payUid_old_vip + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+			                        payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
+			# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid),
+			                        uid_old_vip + giftId['69']['price'] * uid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid),
+			                        uid_old_pop + giftId['69']['price'] * uid_speed)
+		finally:
+			clear_acceleration_card(uid, payUid)
 
 	def test_017(self, des='使用vip/人气加速卡,私聊送礼,收礼方为vip标签,2倍vip'):
 		"""
@@ -697,11 +725,18 @@ class TestPayCreate(unittest.TestCase):
 		assert_pay_success(res, des)
 
 		time.sleep(0.5)
-		clear_acceleration_card(uid, payUid)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
-		# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'] * uid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
+		# 加速卡要覆盖整个结算窗口：收礼方的 vip/人气是异步落库的，实测会慢于这里的 0.5 秒。
+		# 原来先 clear_acceleration_card 再断言，结算慢于 0.5 秒时服务端已读不到加速卡，
+		# 收礼方读数会停在 0（偶发红）；故改为断言后再清卡，并用轮询断言等落库。预期值不变。
+		try:
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+			                        payUid_old_vip + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+			                        payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100 * payUid_speed * 2)
+			# 收礼人-开通爵位的vip加速,不会收礼时对vip值加倍
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid),
+			                        uid_old_vip + giftId['69']['price'] * uid_speed)
+			assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid),
+			                        uid_old_pop + giftId['69']['price'] * uid_speed)
+		finally:
+			clear_acceleration_card(uid, payUid)
