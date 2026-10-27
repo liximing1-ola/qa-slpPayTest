@@ -7,3 +7,7 @@
 /common/*UserToken.txt
 __pycache__/
 common/__pycache__/
+
+# 提交信息临时文件与临时校验脚本，不能进仓库
+.commit_msg.txt
+_verify_*.py
