@@ -41,6 +41,10 @@ class TestPayCreate(unittest.TestCase):
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
+		# 上面刚把双方的 vip/人气 复位，基线必然是 0。不为 0 只可能有两种原因：上游用例的异步
+		# 结算迟到、或有别的用例把值改了回来。在这里直接报出来，比让下面的增量断言报
+		# 「实际 6100 / 预期 100」好定位得多（6100 = 残留 6000 + 本次 100）
+		assert_equal((payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop), (0, 0, 0, 0))
 
 		data = encodeData(
 			rid=rid,
