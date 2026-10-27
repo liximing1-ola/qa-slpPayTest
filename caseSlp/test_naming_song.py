@@ -42,6 +42,18 @@ def cache_wait(seconds):
 	time.sleep(seconds if NAMING_SLEEP is None else NAMING_SLEEP)
 
 
+# 房间里除 Room.Data 之外、可能参与「类型/可用性」判断的 key。
+# 2026-10-27 扫出 49 个含 rid 的 key，这两个最可疑：
+#   slp.tavern.room.enable 是才艺厅开关（点歌/冠歌都属才艺厅功能）
+#   room.gate.chseq 是网关序列号，它在相隔两分钟的两次查询里从「存在」变成「不存在」
+# 它们值是否稳定，决定了它们能不能解释那 10% 的房间类错误——只看一次看不出来，
+# 得把失败那一刻的值记下来和成功时对比
+ROOM_EXTRA_KEYS = {
+	'slp.tavern.room.enable.{}': 'tavern_enable',
+	'room.gate.chseq.{}': 'gate_chseq',
+}
+
+
 def room_scene(rid):
 	"""一行描述房间现场：Redis 缓存 + 库内行。只读取证，自身异常全部吞掉
 
@@ -57,6 +69,10 @@ def room_scene(rid):
 		parts.append('redis exists={} ttl={} len={} has_factory_type={}'.format(
 			1 if raw else 0, conRedis.getConn().ttl(key), len(raw) if raw else 0,
 			b'business-music' in raw if raw else False))
+		conn = conRedis.getConn()
+		for pattern, label in ROOM_EXTRA_KEYS.items():
+			parts.append('{}={!r} ttl={}'.format(
+				label, conn.get(pattern.format(rid)), conn.ttl(pattern.format(rid))))
 	except Exception as error:
 		# 现场只是辅助信息，读不到不能反过来把用例搞红
 		parts.append('redis 读取失败: {}'.format(error))
