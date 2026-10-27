@@ -5,12 +5,11 @@ import unittest
 
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conRedis import conRedis
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -35,8 +34,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal_uid']['room']['user_rate'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 
@@ -52,8 +50,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal_uid']['room']['user_rate'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 
@@ -70,7 +67,6 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal_uid']['xsg-vip-room']['user_rate'])
 

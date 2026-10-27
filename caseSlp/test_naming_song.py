@@ -6,8 +6,8 @@ import time
 import unittest
 
 from caseSlp.config import *
-from caseSlp.tools import prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body
+from caseSlp.tools import prepare_test_data, insert_package_gift
+from common.Assert import assert_code, assert_equal, assert_body, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conRedis import conRedis
@@ -76,8 +76,7 @@ class TestPayCreate(unittest.TestCase):
 		)
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
 
@@ -106,8 +105,7 @@ class TestPayCreate(unittest.TestCase):
 		)
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
 
@@ -142,8 +140,7 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(5)  # 和其它冠歌用例保持一致，留出造数完成到访问的间隔
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             naming_song_config[beilv]['money'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
@@ -220,8 +217,7 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(5)
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             naming_song_config[beilv]['money'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
@@ -259,8 +255,7 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(5)
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             naming_song_config[beilv]['money'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
@@ -277,9 +272,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-上架"
 		# 插入礼物
-		mysql.insertXsUserCommodity(payUid, naming_song_config[beilv]['cid'], 1)
-		# 查询礼物在背包的id
-		ucid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=naming_song_config[beilv]['cid']))
+		ucid = insert_package_gift(payUid, cid=naming_song_config[beilv]['cid'], num=1)
 		naming_song = {
 			'money': naming_song_config[beilv]['money'],
 			'song_id': order_songs_list[0],
@@ -301,8 +294,7 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(8)
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             naming_song_config[beilv]['money'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
@@ -321,9 +313,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-上架"
 		# 插入礼物
-		mysql.insertXsUserCommodity(payUid, naming_song_config[beilv]['cid'], 2)
-		# 查询礼物在背包的id
-		ucid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=naming_song_config[beilv]['cid']))
+		ucid = insert_package_gift(payUid, cid=naming_song_config[beilv]['cid'], num=2)
 		naming_song = {
 			'money': naming_song_config[beilv]['money'],
 			'song_id': order_songs_list[0],
@@ -345,8 +335,7 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(8)
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             naming_song_config[beilv]['money'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
@@ -364,9 +353,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-下架"
 		# 插入礼物
-		mysql.insertXsUserCommodity(payUid, naming_song_config[beilv]['cid'], 1)
-		# 查询礼物在背包的id
-		ucid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=naming_song_config[beilv]['cid']))
+		ucid = insert_package_gift(payUid, cid=naming_song_config[beilv]['cid'], num=1)
 		naming_song = {
 			'money': naming_song_config[beilv]['money'],
 			'song_id': order_songs_list[0],
@@ -407,9 +394,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-下架"
 		# 插入礼物
-		mysql.insertXsUserCommodity(payUid, naming_song_config[beilv]['cid'], 2)
-		# 查询礼物在背包的id
-		ucid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=naming_song_config[beilv]['cid']))
+		ucid = insert_package_gift(payUid, cid=naming_song_config[beilv]['cid'], num=2)
 		naming_song = {
 			'money': naming_song_config[beilv]['money'],
 			'song_id': order_songs_list[0],
@@ -431,8 +416,7 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(8)
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             naming_song_config[beilv]['money'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)

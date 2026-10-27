@@ -5,11 +5,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 @Retry(max_n=1)
@@ -43,8 +42,7 @@ class TestPayCreate(unittest.TestCase):
 			price=room_defend['zhenai']['month']['price'],
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - room_defend['zhenai']['month']['price'])
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             room_defend['zhenai']['month']['price'] * rates['gs']['default'])

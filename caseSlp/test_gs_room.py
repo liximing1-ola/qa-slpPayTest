@@ -6,11 +6,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop, prepare_test_data, insert_package_gift
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -39,8 +38,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -68,8 +66,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -100,8 +97,7 @@ class TestPayCreate(unittest.TestCase):
 			ctype='gift'
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -130,8 +126,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -159,8 +154,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -191,8 +185,7 @@ class TestPayCreate(unittest.TestCase):
 			ctype='gift'
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -224,8 +217,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['pop']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['pop']['viproom'])
@@ -256,8 +248,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['pop']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['pop']['viproom'])
@@ -291,8 +282,7 @@ class TestPayCreate(unittest.TestCase):
 			ctype='gift'
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['pop']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['pop']['viproom'])
@@ -324,8 +314,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -356,8 +345,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -388,8 +376,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
@@ -420,8 +407,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
@@ -452,8 +438,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -484,8 +469,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['69']['price'] * default_num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['default'])
@@ -516,8 +500,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
@@ -547,8 +530,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['gs']['as_normal'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['gs']['as_normal'])
@@ -589,8 +571,7 @@ class TestPayCreate(unittest.TestCase):
 		)
 		time.sleep(2)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             talent_show_config['真爱']["1"]['price'] * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), talent_show_config['真爱']["1"]['price'] * rates['gs']['default'])
@@ -624,8 +605,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['vip']['viproom'])
@@ -659,8 +639,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['vip']['viproom'])
@@ -698,8 +677,7 @@ class TestPayCreate(unittest.TestCase):
 			ctype='gift'
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['vip']['viproom'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['69']['price'] * default_num * rates['vip']['viproom'])

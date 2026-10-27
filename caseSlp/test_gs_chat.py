@@ -5,11 +5,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop, prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -39,8 +38,7 @@ class TestPayCreate(unittest.TestCase):
 		                  uid=uid,
 		                  giftId=giftId['69']['gid'])
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['pop']['chat'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
@@ -69,8 +67,7 @@ class TestPayCreate(unittest.TestCase):
 		                  uid=uid,
 		                  giftId=giftId['69']['gid'])
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['69']['price'] * default_num * rates['vip']['chat'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),

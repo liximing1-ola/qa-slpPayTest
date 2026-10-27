@@ -6,11 +6,10 @@ import unittest
 
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data, prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -45,8 +44,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		time.sleep(0.5)
 		clear_acceleration_card(uid, payUid)
 		# 贵族加速vip,加速卡加速vip和人气
@@ -81,8 +79,7 @@ class TestPayCreate(unittest.TestCase):
 		                  uid=uid,
 		                  giftId=giftId['69']['gid'])
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 
 		time.sleep(0.5)
 		clear_acceleration_card(uid, payUid)

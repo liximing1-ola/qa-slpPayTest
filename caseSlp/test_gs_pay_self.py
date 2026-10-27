@@ -5,11 +5,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body, assert_between
+from common.Assert import assert_equal, assert_between, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -45,8 +44,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 
 		# 按照扣款比例 分别增加,并向下取整
 		base_amount = giftId['69']['price'] * default_num
@@ -94,8 +92,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 
 		# 按照扣款比例 分别增加,并向下取整
 		base_amount = giftId['69']['price'] * default_num
@@ -143,8 +140,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 
 		# 按照扣款比例 分别增加,并向下取整
 		base_amount = giftId['69']['price'] * default_num
@@ -192,8 +188,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 
 		# 按照扣款比例 分别增加,并向下取整
 		base_amount = giftId['69']['price'] * default_num
@@ -225,8 +220,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['vip-room-self'])
 
 	def test_006(self, des='主播,靓号房,自刷,80%(扣mcb到账mcb,扣其他到账mc)'):
@@ -258,8 +252,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 
 		# 按照扣款比例 分别增加,并向下取整
 		base_amount = giftId['69']['price'] * default_num
@@ -291,6 +284,5 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['chat-self'])

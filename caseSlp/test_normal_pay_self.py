@@ -5,11 +5,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body, assert_between
+from common.Assert import assert_equal, assert_between, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -45,8 +44,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		
 		base_amount = giftId['69']['price'] * default_num
 		user_rate = rates['normal']['room-self']
@@ -69,8 +67,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-room-self'])
 
 	def test_003(self, des='用户,靓号房,自刷,90%(mcb)'):
@@ -87,8 +84,7 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-pretty-room-self'])
 
 	def test_004(self, des='用户,私聊,自刷,90%(mcb)'):
@@ -105,6 +101,5 @@ class TestPayCreate(unittest.TestCase):
 			display_page=1
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['chat-self'])

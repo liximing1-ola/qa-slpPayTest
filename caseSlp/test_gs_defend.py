@@ -4,12 +4,11 @@ __desc__ = "公会主播-个人守护"
 import unittest
 
 from caseSlp.config import *
-from caseSlp.tools import prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
-from common.Assert import assert_code, assert_equal, assert_body
+from caseSlp.tools import prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card, read_vip_pop
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -41,8 +40,7 @@ class TestPayCreate(unittest.TestCase):
 			money=defend['小宝贝']['price']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['price'])
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), defend['小宝贝']['price'] * rates['gs']['default'])
 
@@ -63,10 +61,7 @@ class TestPayCreate(unittest.TestCase):
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['侯爵']['level'])
 
-		payUid_old_vip = mysql.selectUserInfoSql('pay_room_money', payUid)
-		payUid_old_pop = mysql.selectUserInfoSql('popularity', payUid)
-		uid_old_vip = mysql.selectUserInfoSql('pay_room_money', uid)
-		uid_old_pop = mysql.selectUserInfoSql('popularity', uid)
+		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
 		# 添加使用vip/人气加速卡
 		acc = prepare_acceleration_card(uid, 1.4, payUid, 1.2)
@@ -85,8 +80,7 @@ class TestPayCreate(unittest.TestCase):
 			defend_id=defend_id
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		clear_acceleration_card(uid, payUid)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['upgrade_price'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), 0)
@@ -122,7 +116,6 @@ class TestPayCreate(unittest.TestCase):
 			defend_id=defend_id
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['break_price'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), 0)

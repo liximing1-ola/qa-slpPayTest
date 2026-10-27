@@ -5,11 +5,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop, prepare_test_data, insert_coupon
-from common.Assert import assert_code, assert_equal, assert_equal_eventually, assert_body
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -24,9 +23,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		mysql.updateUserGodSql(uid, 2)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 1
 
 		# 断言是否展示预期中的标签
@@ -43,8 +40,7 @@ class TestPayCreate(unittest.TestCase):
 			duction_money=giftId['937']['price'] * commodityId['89297']['discount']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['937']['price'] * num * rates['pop']['chat'] * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
@@ -60,9 +56,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		mysql.updateUserGodSql(uid, 2)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 10
 
 		# 断言是否展示预期中的标签
@@ -80,8 +74,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['937']['price'] * 1 * rates['pop']['chat'] * (1 - commodityId['89297']['discount']) +
 		             giftId['937']['price'] * (num - 1) * rates['pop']['chat'])
@@ -113,8 +106,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['937']['price'] * num * rates['gs']['default'] * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid),
@@ -146,8 +138,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['937']['price'] * 1 * rates['gs']['default'] * (1 - commodityId['89297']['discount'])
 		             + giftId['937']['price'] * (num - 1) * rates['gs']['default'])
@@ -184,8 +175,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'], 200)
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
 		             giftId['937']['price'] * rates['gs']['as_normal'] * num * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
@@ -220,8 +210,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'], 200)
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		# 分成是分批异步写入的：实测约 0.9 秒才全部到齐，用券那个收礼人还会拆成两笔
 		# （券抵的那 1 个礼物先到、剩余 9 个稍后到），固定睡一觉再读容易撞在中间态上
 		assert_equal_eventually(
@@ -248,9 +237,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		mysql.updateUserGodSql(uid, 2)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 1
 
 		# 断言是否展示预期中的标签
@@ -267,8 +254,7 @@ class TestPayCreate(unittest.TestCase):
 			duction_money=giftId['211026']['price'] * commodityId['89297']['discount']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['211026']['price'] * num * rates['pop']['chat'] * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
@@ -285,9 +271,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		mysql.updateUserGodSql(uid, 2)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 10
 
 		# 断言是否展示预期中的标签
@@ -305,8 +289,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 		             giftId['211026']['price'] * 1 * rates['pop']['chat'] * (1 - commodityId['89297']['discount']) +
 		             giftId['211026']['price'] * (num - 1) * rates['pop']['chat'])
@@ -326,9 +309,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateUserGodSql(uid, 2)
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 1
 		uids = tuple([str(i) for i in [uid]])
 		data = encodeData(
@@ -344,8 +325,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['211026']['price'] * num * rates['gs']['default'] * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid),
@@ -365,9 +345,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateUserGodSql(uid, 2)
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 10
 		uids = tuple([str(i) for i in [uid]])
 		data = encodeData(
@@ -383,8 +361,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['211026']['price'] * 1 * rates['gs']['default'] * (1 - commodityId['89297']['discount'])
 		             + giftId['211026']['price'] * (num - 1) * rates['gs']['default'])
@@ -410,9 +387,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateUserMoneyClearSql(gs_A_uid, gs_B_uid, normal_uid)
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		data = encodeData(
 			payType='room-coupon',
 			rid=rid,
@@ -426,8 +401,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'], 200)
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
 		             giftId['211026']['price'] * rates['gs']['as_normal'] * num * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
@@ -450,9 +424,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateUserMoneyClearSql(gs_A_uid, gs_B_uid, normal_uid)
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 		# 插入9折优惠券
-		mysql.insertXsUserCommodity(payUid, commodityId['89297']['cid'], 1)
-		mysql.insertXsUserCouponUse(payUid, commodityId['89297']['cid'])
-		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=commodityId['89297']['cid']))
+		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		data = encodeData(
 			payType='room-coupon',
 			rid=rid,
@@ -466,8 +438,7 @@ class TestPayCreate(unittest.TestCase):
 
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'], 200)
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		# 分成异步分批写入（同 test_006）：每人 10 个礼物要等约 1 秒才全部到齐，用券那个收礼人还拆成两笔
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),

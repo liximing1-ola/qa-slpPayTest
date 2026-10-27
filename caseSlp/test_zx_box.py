@@ -5,11 +5,10 @@ import time
 import unittest
 
 from caseSlp.config import *
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -52,8 +51,7 @@ class TestPayCreate(unittest.TestCase):
 			uids=('{}'.format(normal_uid), '{}'.format(gsUid))
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		time.sleep(5)
 		# 查询 打赏人/收礼人数据,用于计算
 		send_gift_data= mysql.selectZxPayData(payUid)

@@ -143,6 +143,24 @@ def assert_body(body, body_msg, expected_msg, reason):
         raise AssertionError(detail) from None
 
 
+def assert_pay_success(res, des):
+    """断言支付接口返回成功：状态码 200 且 body.success == 1
+
+    全量用例里这两句断言完全一致，收敛到这里；预期失败的用例（余额不足、礼物暂不支持等）
+    仍显式写 assert_body(res['body'], 'success', 0, ...)，不往这里塞预期值，
+    避免「成功/失败」两种意图混成一个参数。
+
+    :param res: post_request_session 的返回值
+    :param des: 用例描述，失败时写进报告
+    """
+    # 延迟 import：method 是向上一层的小工具集合，Assert 是底层断言，
+    # 放模块顶部会形成「断言依赖工具」的反向关系
+    from common.method import reason
+
+    assert_code(res['code'])
+    assert_body(res['body'], 'success', 1, reason(des, res))
+
+
 def assert_between(actual_result, lower_limit, upper_limit):
     """
     :param actual_result: 实际结果

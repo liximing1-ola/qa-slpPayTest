@@ -15,6 +15,7 @@ from common.tools import (  # noqa: F401
     check_vip_pop,
     prepare_test_data,
     prepare_vip_pop_data,
+    read_vip_pop,
     prepare_room_data,
     prepare_acceleration_card,
     clear_acceleration_card,

@@ -5,11 +5,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -38,8 +37,7 @@ class TestPayCreate(unittest.TestCase):
 			money=defend['小宝贝']['price']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['price'])
 		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
 		             defend['小宝贝']['price'] * rates['normal']['default'])
@@ -82,8 +80,7 @@ class TestPayCreate(unittest.TestCase):
 			defend_id=defend_id
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		clear_acceleration_card(normal_uid, payUid)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['upgrade_price'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
@@ -114,7 +111,6 @@ class TestPayCreate(unittest.TestCase):
 			defend_id=defend_id
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['break_price'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)

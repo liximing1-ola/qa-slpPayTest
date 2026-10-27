@@ -145,6 +145,24 @@ def prepare_vip_pop_data(uid, pay_uid=None):
         mysql.deleteUserAccountSql('pay_room_money', pay_uid)
 
 
+def read_vip_pop(pay_uid, uid):
+    """读取双方的 vip 经验值与人气值，作为打赏前的基线
+
+    分成/人气断言都是「打赏后的值 == 打赏前的值 + 增量」，用例开头都要先把这四个值记下来。
+    读取顺序固定：付款人 vip、付款人 人气、收款人 vip、收款人 人气，
+    调用方按同样顺序解包即可，与原先逐行赋值的变量一一对应。
+
+    :return: (pay_uid 的 pay_room_money, pay_uid 的 popularity,
+              uid 的 pay_room_money, uid 的 popularity)
+    """
+    from common.conSlpXsgMysql import conMysql as mysql
+
+    return (mysql.selectUserInfoSql('pay_room_money', pay_uid),
+            mysql.selectUserInfoSql('popularity', pay_uid),
+            mysql.selectUserInfoSql('pay_room_money', uid),
+            mysql.selectUserInfoSql('popularity', uid))
+
+
 def prepare_room_data(rid, uid=None, position=0):
     """
     准备房间相关数据

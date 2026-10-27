@@ -5,11 +5,10 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_equal, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.method import reason
 from common.runFailed import Retry
 
 
@@ -30,8 +29,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['other-broker-not-slporder']['last_week_room_1_config']['anchor_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['other-broker-not-slporder']['last_week_room_1_config']['owner_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['other-broker-not-slporder']['last_week_room_1_config']['broker_rate'])
@@ -52,8 +50,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['other-broker-not-slporder']['last_week_room_2_config']['anchor_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['other-broker-not-slporder']['last_week_room_2_config']['owner_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['other-broker-not-slporder']['last_week_room_2_config']['broker_rate'])
@@ -74,8 +71,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['anchor_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['owner_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['broker_rate'])
@@ -96,8 +92,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['anchor_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['owner_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['broker_rate'])
@@ -118,8 +113,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['other']['anchor_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['other']['owner_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['other']['broker_rate'])
@@ -139,8 +133,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId=giftId['69']['gid']
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
-		assert_code(res['code'])
-		assert_body(res['body'], 'success', 1, reason(des, res))
+		assert_pay_success(res, des)
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['anchor_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['owner_rate'])
 		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['broker_rate'])
