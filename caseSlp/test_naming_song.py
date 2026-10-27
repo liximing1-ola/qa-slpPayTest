@@ -10,9 +10,24 @@ from common.Assert import assert_code, assert_equal, assert_body
 from common.Consts import result, case_list_b
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
+from common.conRedis import conRedis
 from common.conSlpXsgMysql import conMysql as mysql
 from common.method import reason
 from common.runFailed import Retry
+
+
+def clear_room_cache(rid):
+	"""清掉服务端房间缓存：Room.Data.<rid> 的 TTL=0，只靠 binlog 同步任务覆盖刷新。
+
+	手工改过 xs_chatroom（比如把 deleted 从 1 改回 0）后，binlog 回写的快照可能还是旧版本，
+	接口就会一直读到“已删除的房间”并返回「房间类型错误」，跟库里的真实数据对不上。
+	删掉这个 key，服务端会回源实时库重建，口径就一致了。
+	"""
+	try:
+		conRedis.delete('Room.Data.{}'.format(rid))
+	except Exception as error:
+		# 清缓存失败不阻断用例：缓存本就正确时跑得通，异常只因 Redis 不可达
+		print('[warn] 清理房间缓存失败 rid={}: {}'.format(rid, error))
 
 
 @Retry(max_n=2)
@@ -28,6 +43,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		for song_id in order_songs_list:
 			mysql.updateXsRoomUserMusicList(song_id)  # 删除冠歌信息
 
@@ -58,6 +74,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		for song_id in order_songs_list:
 			mysql.updateXsRoomUserMusicList(song_id)  # 删除冠歌信息
 			
@@ -88,6 +105,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv="2"
 		naming_song = {
@@ -127,6 +145,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		# mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "2"
 		naming_song = {
@@ -164,6 +183,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		# mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		mysql.updateXsRoomUserMusicNaming(order_songs_list[0])  # 修改冠歌信息-过期
 		beilv = "2"
@@ -204,6 +224,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		# mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "3"
 		naming_song = {
@@ -241,6 +262,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-上架"
 		# 插入礼物
@@ -285,6 +307,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-上架"
 		# 插入礼物
@@ -328,6 +351,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-下架"
 		# 插入礼物
@@ -371,6 +395,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.updateXsChatroomConfig(rid, gs_A_ceo_uid, position=0)  # 接待位上人
+		clear_room_cache(rid)  # 改接待位会触发房间快照同步，先清缓存免得读到旧房间
 		mysql.updateXsRoomUserMusicList(order_songs_list[0])  # 删除冠歌信息
 		beilv = "5-下架"
 		# 插入礼物
