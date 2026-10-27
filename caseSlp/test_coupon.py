@@ -14,7 +14,7 @@ from common.runFailed import Retry
 
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
-	def test_001(self, des='私聊,9折券(有损),私聊不支持用券,按原价扣款,券不消耗'):
+	def test_001(self, des='私聊,9折券(有损),打赏单个礼物,按9折成交,券已消耗'):
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		mysql.updateMoneySql(payUid, money=default_money)
@@ -40,17 +40,16 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		# 私聊不支持优惠券：请求带着券也按原价成交，券不抵扣
+		# 实测私聊打赏会用券：收礼方按 9 折后的实付金额分成，扣款也按 9 折
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
-			giftId['937']['price'] * num * rates['pop']['chat'])
-		# 扣款是同步的：请求返回时已按原价扣满
+			giftId['937']['price'] * num * rates['pop']['chat'] * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['937']['price'] * num)
-		# 券必须原样留在背包里：服务端没有消耗它
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 1)
+		             default_money - giftId['937']['price'] * num * (1 - commodityId['89297']['discount']))
+		# 券被正常消耗
+		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-	def test_002(self, des='私聊,9折券(有损),多个礼物,私聊不支持用券,按原价扣款,券不消耗'):
+	def test_002(self, des='私聊,9折券(有损),打赏多个礼物,按9折成交,券已消耗'):
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		mysql.updateMoneySql(payUid, money=default_money)
@@ -77,14 +76,16 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		# 私聊不支持优惠券：10 个礼物全部按原价成交，券不抵扣
+		# 券只抵 1 个礼物、其余 9 个原价；分成异步分批（券抵那笔先到），用轮询
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
-			giftId['937']['price'] * num * rates['pop']['chat'])
+			giftId['937']['price'] * 1 * rates['pop']['chat'] * (1 - commodityId['89297']['discount']) +
+			giftId['937']['price'] * (num - 1) * rates['pop']['chat'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['937']['price'] * num)
-		# 券必须原样留在背包里：服务端没有消耗它
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 1)
+		             default_money - giftId['937']['price'] * 1 * (1 - commodityId['89297']['discount']) -
+		             giftId['937']['price'] * (num - 1))
+		# 券被正常消耗
+		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
 	def test_003(self, des='房间,9折券(有损),打赏1个人单个礼物'):
 		rid = gs_B_rid
@@ -230,7 +231,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89297']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-	def test_007(self, des='私聊,9折券(有损),单个大额礼物,私聊不支持用券,按原价全额扣款,券不消耗'):
+	def test_007(self, des='私聊,9折券(有损),打赏单个礼物,大额礼物,按9折成交,折扣无上限'):
 		uid = gsUid
 		default_money = 99999999
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
@@ -257,16 +258,15 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		# 私聊不支持优惠券：1314000 钻的大额礼物也按原价全额扣，既不打折也不封顶
+		# 1314000 钻的大额礼物同样打 9 折：折扣无上限，券正常消耗
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
-			giftId['211026']['price'] * num * rates['pop']['chat'])
+			giftId['211026']['price'] * num * rates['pop']['chat'] * (1 - commodityId['89297']['discount']))
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['211026']['price'] * num)
-		# 券必须原样留在背包里：服务端没有消耗它
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 1)
+		             default_money - giftId['211026']['price'] * num * (1 - commodityId['89297']['discount']))
+		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
-	def test_008(self, des='私聊,9折券(有损),多个大额礼物,私聊不支持用券,按原价全额扣款,券不消耗'):
+	def test_008(self, des='私聊,9折券(有损),打赏多个礼物,大额礼物,按9折成交,折扣无上限'):
 		uid = gsUid
 		default_money = 99999999
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
@@ -294,14 +294,16 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		# 私聊不支持优惠券：10 个 1314000 钻的大额礼物全部按原价全额扣，不打折也不封顶
+		# 券只抵 1 个 1314000 钻礼物、其余 9 个原价；分成异步分批，用轮询
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
-			giftId['211026']['price'] * num * rates['pop']['chat'])
+			giftId['211026']['price'] * 1 * rates['pop']['chat'] * (1 - commodityId['89297']['discount']) +
+			giftId['211026']['price'] * (num - 1) * rates['pop']['chat'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['211026']['price'] * num)
-		# 券必须原样留在背包里：服务端没有消耗它
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 1)
+		             default_money - giftId['211026']['price'] * 1 * (1 - commodityId['89297']['discount']) -
+		             giftId['211026']['price'] * (num - 1))
+		# 券被正常消耗
+		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
 	def test_009(self, des='房间,9折券(有损),打赏1个人单个礼物,大额礼物,折扣无上限'):
 		rid = gs_B_rid
