@@ -18,7 +18,9 @@ REQUEST_TIMEOUT = 30
 REQUEST_INTERVAL = float(os.environ.get('REQUEST_INTERVAL') or 2)
 # 命中频控后的最大重试次数：设为 0 表示不重试，直接把频控响应交给用例判断
 FREQUENT_RETRY = int(os.environ.get('FREQUENT_RETRY') or 2)
-FREQUENT_MSG = '请勿频繁操作'
+# 频控/防重的文案不止一种：早期只见过「请勿频繁操作」，实测还出现过「请求太慢了，请稍后重试」。
+# 只认一种文案会漏判，频控响应就被当成业务失败丢给 assert_pay_success，用例白红一次
+FREQUENT_MSG_KEYWORDS = ('请勿频繁操作', '请求太慢', '请求太快', '稍后重试')
 
 # 每个账号上一次请求的计划发起时间，用于补足最小间隔
 _last_request_at = {}
@@ -135,9 +137,18 @@ def _wait_for_interval(token_name):
         time.sleep(wait)
 
 
-def _is_frequent_response(body):
-    """判断是否命中服务端频控"""
-    return isinstance(body, dict) and FREQUENT_MSG in str(body.get('msg', ''))
+def _frequent_keyword(body):
+    """命中服务端频控/防重时返回命中的关键字，否则返回 None
+
+    文案可能是「请勿频繁操作」「请求太慢了，请稍后重试」等，按关键字列表逐条匹配。
+    """
+    if not isinstance(body, dict):
+        return None
+    msg = str(body.get('msg', ''))
+    for keyword in FREQUENT_MSG_KEYWORDS:
+        if keyword in msg:
+            return keyword
+    return None
 
 
 def _is_business_success(body):
@@ -201,10 +212,14 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
             # 网关返回 html 等非 json 响应时保留原始文本，便于定位问题
             body = response.text
 
-        # 频控属于环境噪声而不是被测逻辑，退避后重试；超过次数则把原响应交给用例断言
-        if attempt < FREQUENT_RETRY and _is_frequent_response(body):
+        # 频控属于环境噪声而不是被测逻辑，退避后重试；超过次数则把原响应交给用例断言。
+        # 退避按倍数递增（2 秒、4 秒…）：防重窗口多长不确定，固定间隔容易连着撞同一堵墙
+        keyword = _frequent_keyword(body)
+        if attempt < FREQUENT_RETRY and keyword is not None:
+            backoff = REQUEST_INTERVAL * (attempt + 1)
             print('[频控] 命中"{}", {} 秒后重试（第 {}/{} 次）'.format(
-                FREQUENT_MSG, REQUEST_INTERVAL, attempt + 1, FREQUENT_RETRY))
+                keyword, backoff, attempt + 1, FREQUENT_RETRY))
+            time.sleep(backoff)
             continue
         break
 

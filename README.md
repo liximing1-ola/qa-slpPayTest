@@ -121,7 +121,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | `WAIT_TIMEOUT` / `WAIT_INTERVAL` | `3` / `0.2` | `assert_equal_eventually` 的轮询上限与间隔 |
 | `RETRY_SLEEP` | `1` | 重试间隔基数，第 n 次重试等 `n × RETRY_SLEEP` 秒，设 `0` 改为立即重试 |
 | `REQUEST_INTERVAL` | `2` | 同一账号两次请求的最小间隔（服务端频控） |
-| `FREQUENT_RETRY` | `2` | 命中「请勿频繁操作」后的重试次数 |
+| `FREQUENT_RETRY` | `2` | 命中频控/防重文案（「请勿频繁操作」「请求太慢了，请稍后重试」等）后的重试次数，退避按 2s、4s 递增 |
 | `PUSH_WX` | `0` | 是否推送企业微信群；默认关闭，结果只落控制台与日志 |
 | `LIST_PASS` | `0` | 推送时额外列出通过用例（需 `PUSH_WX=1`） |
 | `WX_BOT_SLP` / `SLACK_BOT_SLP` | 内置测试群 | 通知 webhook，换群/轮换 key 不用改代码 |
