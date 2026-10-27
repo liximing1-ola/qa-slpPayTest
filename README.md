@@ -235,4 +235,5 @@ class TestPayCreate(unittest.TestCase):
 
 - 提交信息用中文写清「为什么改」，一次提交一件事
 - 用 `git add -u`（只暂存已跟踪文件）而不是 `git add -A`，别把临时脚本、日志、`.commit_msg.txt` 带进提交
+- 推送前跑一遍 `python pre_push_audit.py`：它会扫全仓库做解析与 import、核对重构函数的分支是否还覆盖调用方实际传入的每个值、查悬空调用/未用 import/零引用定义。退出码非 0 就不要推
 - 代码改动完成、自检通过后直接提交推送，不留半成品
