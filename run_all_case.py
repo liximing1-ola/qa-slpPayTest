@@ -1,5 +1,6 @@
 # coding=utf-8
 import os
+import sys
 from time import time
 
 from Robot import robot
@@ -8,7 +9,7 @@ from common import Logs, Consts
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
-						   not_pass_summary, result_counts, split_message)
+						   not_pass_summary, parse_app, result_counts, split_message)
 
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，企业微信的 markdown 展示效果不理想，
 # 需要恢复推送时用 PUSH_WX=1
@@ -91,22 +92,7 @@ def main(appInfo):
 
 
 if __name__ == "__main__":
-	import sys
-
-	# 不支持时显式报错退出：以前手滑传错参数（如 slpp）会静默落到全量 slp，
-	# 悄悄跑完一轮并覆盖日志；这里与 run_crontab_case 的处理保持一致
-	if len(sys.argv) >= 2:
-		arg = sys.argv[1].strip().lower()
-	else:
-		arg = None
-
-	if arg in (None, config.appName['不夜星球'], 'slp'):
-		counts = main(config.appName['不夜星球'])
-	elif arg in (config.appName['小拾光'], 'xsg'):
-		counts = main(config.appName['小拾光'])
-	else:
-		print('未知参数: {}，可用取值: slp / xsg'.format(arg), flush=True)
-		sys.exit(2)
+	counts = main(parse_app(sys.argv))
 
 	# 退出码：有失败/异常时返回 1，便于 cron、调度平台或 cmd && 后续命令感知本轮失败
 	sys.exit(1 if counts and (counts['fail'] or counts['error']) else 0)

@@ -8,6 +8,7 @@ run_all_case.py（全量执行、逐条播报）与 run_crontab_case.py（定时
 """
 import inspect
 import os
+import sys
 import unittest
 
 from common.Config import config
@@ -118,6 +119,22 @@ def build_suite(app_info, case_expr=''):
 
     testcase.addTests(loader.discover(case_dir, pattern='test_*.py', top_level_dir=config.BASE_PATH))
     return testcase
+
+
+def parse_app(argv):
+    """解析命令行传入的 App，支持中文名与 slp/xsg 简写，缺省为不夜星球
+
+    两个入口共用一份：口径分家会出现「同一个参数在两个脚本里行为不同」的问题。
+    传错参数（如 slpp）时显式报错退出，不能静默回落到某个 App，
+    否则会悄悄地跑一轮并覆盖日志。
+    """
+    arg = argv[1].strip().lower() if len(argv) >= 2 else 'slp'
+    if arg in (config.appName['不夜星球'], 'slp'):
+        return config.appName['不夜星球']
+    if arg in (config.appName['小拾光'], 'xsg'):
+        return config.appName['小拾光']
+    print('未知参数: {}，可用取值: slp / xsg'.format(arg), flush=True)
+    sys.exit(2)
 
 
 def case_name(case):

@@ -17,11 +17,26 @@ def _multi_uids(uids):
     """多人送礼的三件套：uid 逗号串、麦位串、人数
 
     麦位从 1 开始，与 uids 的顺序一一对应；调用方算金额和 num 都要用人数。
+    这里统一转成字符串：传 int 元组（如 (uid, gsUid)）或已转好的字符串元组都行。
+    否则 ','.join 只认字符串，传 int 直接 TypeError。
     """
-    return ','.join(uids), ','.join(str(i + 1) for i in range(len(uids))), len(uids)
+    items = [str(uid) for uid in uids]
+    return ','.join(items), ','.join(str(i + 1) for i in range(len(items))), len(items)
 
 
-# 国内Slp消费场景
+# 国内 Slp 消费场景
+#
+# 默认参数全部取自 caseSlp.config（本模块只 import 了 caseSlp 的配置），所以：
+#   - slp 用例省略参数安全，默认值就是自己的配置
+#   - xsg 用例必须显式传 rid / uid / uids / knight_level / duration_level。
+#     caseXsg.config 里没有 business_room_rid / rewardUid / room_defend（那边是
+#     gs_A_rid_1 这类按公会拆的房间号），省略就会静默用 slp 的房间号和用户：礼物打到 slp 的房间、
+#     断言却按 xsg 的量算，报错信息完全看不出哪里错了。
+#     两边一致的只有 giftId['69'] 与 default_num，所以 money / price / num 用默认值是安全的。
+#
+# 形参 uid 只在单人场景生效（package / chat-gift / chat-coupon / defend / naming_song /
+# talent_show / package-knightDefend）；多人场景（package-more / room-coupon / zx_box /
+# graffiti / starship-im）只认 uids，传 uid 进去是无效的。
 def encodeData(
         payType='package',
         money=giftId['69']['price'] * default_num,
@@ -37,7 +52,7 @@ def encodeData(
         duction_money=0,
         star=0,
         defend_id=244,
-        uids=('{}'.format(rewardUid), '{}'.format(gsUid)),
+        uids=(rewardUid, gsUid),
         knight_level=room_defend['zhenai']['month']['knight_level'],
         duration_level=room_defend['zhenai']['month']['duration_level'],
         price=giftId['69']['price'],
@@ -107,7 +122,7 @@ def encodeData(
         }
         return _encode(data)
     elif payType == 'package-more':
-        uid, position, num_more = _multi_uids(uids)
+        uid_str, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "package",
@@ -115,7 +130,7 @@ def encodeData(
             "params":
                 {
                     "rid": rid,
-                    "uids": '{}'.format(uid),
+                    "uids": '{}'.format(uid_str),
                     "positions": "{}".format(position),
                     "position": -1,
                     "giftId": giftId,
@@ -217,14 +232,14 @@ def encodeData(
         }
         return _encode(data)
     elif payType == 'room-coupon':
-        uid, position, num_more = _multi_uids(uids)
+        uid_str, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "package",
             "money": price * num_more * num,  # 单价*人数*单次送礼个数
             "params": {
                 "rid": rid,
-                "uids": '{}'.format(uid),
+                "uids": '{}'.format(uid_str),
                 "positions": "{}".format(position),
                 "position": -1,
                 "giftId": giftId,
@@ -246,14 +261,14 @@ def encodeData(
         }
         return _encode(data)
     elif payType == 'zx_box':  # 甄选礼盒
-        uid, position, num_more = _multi_uids(uids)
+        uid_str, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "package",
             "money": price * num_more * num,  # 单价*人数*单次送礼个数
             "params": {
                 "rid": rid,
-                "uids": '{}'.format(uid),
+                "uids": '{}'.format(uid_str),
                 "positions": "{}".format(position),
                 "position": -1,
                 "giftId": giftId,
@@ -275,7 +290,7 @@ def encodeData(
         }
         return _encode(data)
     elif payType == 'graffiti':
-        uid, position, num_more = _multi_uids(uids)
+        uid_str, position, num_more = _multi_uids(uids)
         graffiti_feature=[]
         for i in range(num):
             x = 40
@@ -289,7 +304,7 @@ def encodeData(
             "params":
                 {
                     "rid": rid,
-                    "uids": '{}'.format(uid),
+                    "uids": '{}'.format(uid_str),
                     "positions": "{}".format(position),
                     "position": -1,
                     "giftId": giftId,
@@ -337,7 +352,7 @@ def encodeData(
         }
         return _encode(data)
     elif payType == 'starship-im':
-        uid, position, num_more = _multi_uids(uids)
+        uid_str, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "group-chat-gift",
@@ -345,7 +360,7 @@ def encodeData(
             "params":
                 {
                     "notify_group_id": 0,
-                    "uids": '{}'.format(uid),
+                    "uids": '{}'.format(uid_str),
                     "group_id": group_id,
                     "giftId": giftId,
                     "giftNum": num,

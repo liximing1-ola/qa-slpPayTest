@@ -7,14 +7,16 @@ from urllib.parse import quote, urlencode
 
 class getToken:
 
+    # get_salt 的字符表，两个地方曾经各写一份，改成模块级常量
+    _CHARS = '01234567890abcdefghijklmnopqrstuvwxyz'
+
     def __init__(self, uid, _salt):
         self.uid = uid
         self._salt = _salt
         self._KEY = "^&(tre)%29^*"
         self._EXPIRY = 2592000
-        self._chars = '01234567890abcdefghijklmnopqrstuvwxyz'
         self._verify_salt = '5(d+V8cxpY%d'
-        self._key_c_length = 4
+        self._key_c_length = 4  # key_c 取 md5 的末 4 位
 
     def get_token(self):
         arg_dict = {
@@ -30,7 +32,7 @@ class getToken:
         key = getToken.md5(self._KEY)
         key_a = getToken.md5(key[0:16])
         key_b = getToken.md5(key[16:32])
-        key_c = getToken.md5(getToken.php_microtime())[-4:]
+        key_c = getToken.md5(getToken.php_microtime())[-self._key_c_length:]
         crypt_key = key_a + getToken.md5(key_a + key_c)
         key_length = len(crypt_key)
         data = str("%010d" % (int(time.time()) + self._EXPIRY)) + getToken.md5(data + key_b)[0:16] + data
@@ -64,11 +66,10 @@ class getToken:
 
     @staticmethod
     def get_salt():
-        _chars = '01234567890abcdefghijklmnopqrstuvwxyz'
-        max_length = len(_chars) - 1
+        max_length = len(getToken._CHARS) - 1
         hash_s = ''
         for i in range(0, 10):
-            hash_s += _chars[random.randint(0, max_length)]
+            hash_s += getToken._CHARS[random.randint(0, max_length)]
         return hash_s
 
     @staticmethod
@@ -87,4 +88,3 @@ class getToken:
 if __name__ == "__main__":
     get_token = getToken(100287189, getToken.get_salt())
     print(get_token.get_token())
-    #  处理礼物打赏并发场景

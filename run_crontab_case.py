@@ -15,7 +15,7 @@ from common import Logs
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
-                           not_pass_summary, result_counts, split_message)
+                           not_pass_summary, parse_app, result_counts, split_message)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，需要推送时用 PUSH_WX=1
@@ -93,18 +93,6 @@ def main(app_info):
 
     test_result = AllTestRunner(verbosity=2).run(build_suite(app_info))
     return notify(test_result, app_info)
-
-
-def parse_app(argv):
-    """解析命令行传入的 App，支持中文名与 slp/xsg 简写，默认 slp"""
-    arg = argv[1].strip().lower() if len(argv) >= 2 else 'slp'
-    if arg in (config.appName['不夜星球'], 'slp'):
-        return config.appName['不夜星球']
-    if arg in (config.appName['小拾光'], 'xsg'):
-        return config.appName['小拾光']
-    # 手滑传错参数（如 slpp）时不能静默回落到某个 App，否则会悄悄地跑一轮并覆盖日志
-    print('未知参数: {}，可用取值: slp / xsg'.format(arg), flush=True)
-    sys.exit(2)
 
 
 if __name__ == "__main__":
