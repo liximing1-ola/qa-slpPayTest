@@ -5,7 +5,7 @@ import time
 import unittest
 
 from caseSlp.config import *
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -73,11 +73,11 @@ class TestPayCreate(unittest.TestCase):
 				total_num = int(data['total_num'])
 				normal_rq_total += price * RQ * total_num
 				normal_fencheng_total += price * total_num
-		assert_equal(mysql.selectUserInfoSql("popularity", normal_uid), normal_rq_total)
-		assert_equal(mysql.selectUserInfoSql("popularity", gsUid), gs_rq_total)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql("popularity", normal_uid), normal_rq_total)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql("popularity", gsUid), gs_rq_total)
 		# 校验收礼人分成
-		assert_equal(mysql.selectUserInfoSql('single_money', gsUid, money_type='money_cash'), gs_fencheng_total * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), normal_fencheng_total * rates['normal']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gsUid, money_type='money_cash'), gs_fencheng_total * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), normal_fencheng_total * rates['normal']['default'])
 		# 校验送礼人VIP值
 		pay_vip_total = 0
 		for data in send_gift_data:
@@ -85,7 +85,7 @@ class TestPayCreate(unittest.TestCase):
 			VIP = zx_box['6'][data['gid']]['VIP']
 			total_num = int(data['total_num'])
 			pay_vip_total += price * VIP * total_num
-		assert_equal(mysql.selectUserInfoSql("pay_room_money", payUid), pay_vip_total * jw['update'] / 100)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql("pay_room_money", payUid), pay_vip_total * jw['update'] / 100)
 
 		# 校验送礼人贵族成长值
 		pay_czz_total = 0
@@ -95,7 +95,7 @@ class TestPayCreate(unittest.TestCase):
 			total_num = int(data['total_num'])
 			if price >= 10000:  # 大于10000钻+送礼人成长值
 				pay_czz_total += price * CZZ * total_num
-		assert_equal(mysql.selectUserInfoSql("growth", payUid), pay_czz_total + jw['base'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql("growth", payUid), pay_czz_total + jw['base'])
 
 		# 校验送礼人扣费
 		pay_total_money = 0
@@ -103,4 +103,4 @@ class TestPayCreate(unittest.TestCase):
 			price = zx_box['6'][data['gid']]['price']
 			total_num = int(data['total_num'])
 			pay_total_money += price * total_num
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), base_money - pay_total_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), base_money - pay_total_money)

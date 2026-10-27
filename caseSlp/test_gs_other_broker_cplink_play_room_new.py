@@ -5,7 +5,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -31,13 +31,13 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# 给 gs_B_uid,gs_A_room_owner_1_uid,gs_A_ceo_uid 分成
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_6_config']['anchor_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_6_config']['owner_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_6_config']['broker_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_6_config']['anchor_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_6_config']['owner_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_6_config']['broker_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
 
 	def test_002(self, des='主播,商业房-踢保(拍卖),跨档,按所在厅配置分成,已配置<=总计80%,按配置规则分成(mc)'):
 
@@ -56,13 +56,13 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# 给 gs_B_uid,gs_A_room_owner_1_uid,gs_A_ceo_uid 分成
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_7_config']['anchor_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_7_config']['owner_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_7_config']['broker_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_7_config']['anchor_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_7_config']['owner_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['A-工会']['room_7_config']['broker_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
 
 	def test_003(self, des='主播,商业房-连连看,跨档,按所在厅配置分成,已配置>总计80%,基础规则兜底(mc)'):
 
@@ -81,13 +81,13 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# 给 gs_B_uid,gs_A_room_owner_1_uid,gs_A_ceo_uid 分成
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['anchor_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['owner_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['broker_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['anchor_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['owner_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['broker_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
 
 	def test_004(self, des='主播,商业房-踢保(拍卖),跨档,按所在厅配置分成,已配置>总计80%,基础规则兜底(mc)'):
 
@@ -106,13 +106,13 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# 给 gs_B_uid,gs_A_room_owner_1_uid,gs_A_ceo_uid 分成
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['anchor_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['owner_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['broker_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['anchor_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['owner_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['base_config']['base']['broker_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
 
 	def test_005(self, des='主播,商业房-连连看,跨档,按所在厅配置分成,连连看,未配置,按结算频道-规则分成(mc)'):
 
@@ -131,13 +131,13 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# 给 gs_B_uid,gs_A_room_owner_1_uid,gs_A_ceo_uid 分成
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['cplink']['anchor_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['cplink']['owner_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['cplink']['broker_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['cplink']['anchor_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['cplink']['owner_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['cplink']['broker_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
 
 	def test_006(self, des='主播,商业房-踢保(拍卖),跨档,按所在厅配置分成,踢保(拍卖),未配置,按结算频道-规则分成(mc)'):
 
@@ -156,10 +156,10 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# 给 gs_B_uid,gs_A_room_owner_1_uid,gs_A_ceo_uid 分成
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['play']['anchor_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['play']['owner_rate'])
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['play']['broker_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['play']['anchor_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['play']['owner_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'),giftId['69']['price'] * default_num * rates['settlement_channel_config']['play']['broker_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 		# gs_B_room_owner_1_uid,gs_B_ceo_uid 不分成
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_room_owner_1_uid, money_type='money_cash'),0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_B_ceo_uid, money_type='money_cash'),0)

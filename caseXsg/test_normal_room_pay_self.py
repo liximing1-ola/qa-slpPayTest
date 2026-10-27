@@ -5,7 +5,7 @@ import unittest
 
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data
-from common.Assert import assert_equal, assert_between, assert_pay_success
+from common.Assert import assert_between, assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conRedis import conRedis
@@ -56,8 +56,8 @@ class TestPayCreate(unittest.TestCase):
 		base_amount = giftId['69']['price'] * default_num
 		user_rate = rates['normal_uid']['room']['user_self_rate']
 		
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), int(base_amount * user_rate * normal_rate_money_base) + int(base_amount * user_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), int(base_amount * user_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), int(base_amount * user_rate * normal_rate_money_base) + int(base_amount * user_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), int(base_amount * user_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', payUid), 0, int(base_amount * user_rate))
 
 	def test_002(self, des='不夜活跃-用户,商业房,打赏自己,94%(扣mc到账mc,扣其他到账mcb)'):
@@ -94,8 +94,8 @@ class TestPayCreate(unittest.TestCase):
 		base_amount = giftId['69']['price'] * default_num
 		user_rate = rates['normal_uid']['room']['user_self_rate']
 		
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), int(base_amount * user_rate * normal_rate_money_base) + int(base_amount * user_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), int(base_amount * user_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), int(base_amount * user_rate * normal_rate_money_base) + int(base_amount * user_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), int(base_amount * user_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', payUid), 0, int(base_amount * user_rate))
 
 	def test_003(self, des='个人房,普通用户打赏普通用户自己,94%(mcb)'):
@@ -113,4 +113,4 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=uid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal_uid']['xsg-vip-room']['user_self_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal_uid']['xsg-vip-room']['user_self_rate'])

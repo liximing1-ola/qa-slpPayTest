@@ -65,11 +65,11 @@ class TestPayCreate(unittest.TestCase):
 		# 不校 msg：现在回的是「余额不足，无法支付~~」，但余额 100 万、礼物才 600，
 		# 真实原因是券类型不支持私聊，这个文案是误导，等开发修正后再补文案断言
 		# 被拒后打赏者分文未扣（“拒单却扣了钱”会在这里亮红）
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), payUid_old_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), payUid_old_money)
 		# 收礼方没有分成（如果链路走到了结算，无损券按原价应该是 540）
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'), uid_old_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'), uid_old_money)
 		# 券没被吃掉：拒单却核销券同样是缺陷
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), coupon_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), coupon_num)
 
 	def test_003(self, des='房间,9折券(无损),打赏1个人单个礼物'):
 		rid = gs_B_rid
@@ -95,11 +95,11 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             giftId['937']['price'] * num * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['937']['price'] * num * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * num * (1 - commodityId['89370']['discount']))
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        giftId['937']['price'] * num * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', uid), giftId['937']['price'] * num * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * num * (1 - commodityId['89370']['discount']))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 
 	def test_004(self, des='房间,9折券(无损),打赏1个人多个礼物'):
 		rid = gs_B_rid
@@ -125,12 +125,12 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             giftId['937']['price'] * num * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['937']['price'] * num * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * 1 * (1 - commodityId['89370']['discount'])
-		             - giftId['937']['price'] * (num - 1))
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        giftId['937']['price'] * num * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', uid), giftId['937']['price'] * num * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * 1 * (1 - commodityId['89370']['discount'])
+		                        - giftId['937']['price'] * (num - 1))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 
 	def test_005(self, des='房间,9折券(无损),打赏多个人单个礼物'):
 		rid = gs_B_ceo_rid
@@ -169,8 +169,8 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
 			giftId['937']['price'] * rates['normal']['default'] * num)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 
 	def test_006(self, des='房间,9折券(无损),打赏多个人多个礼物'):
 		rid = gs_B_ceo_rid
@@ -209,5 +209,5 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
 			giftId['937']['price'] * rates['normal']['default'] * num)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)

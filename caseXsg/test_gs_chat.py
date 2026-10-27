@@ -5,7 +5,7 @@ import unittest
 
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conRedis import conRedis
@@ -34,9 +34,9 @@ class TestPayCreate(unittest.TestCase):
 		                  giftId=giftId['69']['gid'])
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
-		             giftId['69']['price'] * default_num * rates['gs']['xsg-chat']['gs_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
+		                        giftId['69']['price'] * default_num * rates['gs']['xsg-chat']['gs_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 
 	def test_002(self, des='不夜活跃-用户,私聊,打赏主播,60%(mc)'):
 		uid = gsUid
@@ -49,9 +49,9 @@ class TestPayCreate(unittest.TestCase):
 		                  giftId=giftId['69']['gid'])
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             giftId['69']['price'] * default_num * rates['gs']['slp-chat']['anchor_rate'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        giftId['69']['price'] * default_num * rates['gs']['slp-chat']['anchor_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['69']['price'] * default_num)
 
 	def test_003(self, des='主播,私聊,自刷,90%(mcb)'):
 		uid = gsUid
@@ -68,4 +68,4 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=uid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['xsg-chat']['gs_self_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['xsg-chat']['gs_self_rate'])

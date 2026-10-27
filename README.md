@@ -179,10 +179,10 @@ tail -n 200 log/failCase.log      # 需要堆栈与现场时再看
 ## 框架自检
 
 ```bash
-python -m common.selfcheck      # 不连服务端、不连库，9 项检查，全部通过才退出 0
+python -m common.selfcheck      # 不连服务端、不连库，12 项检查，全部通过才退出 0
 ```
 
-频控退避、失败现场这类守护逻辑，真实全量里可能一整轮都触发不到（例如 2026-10-27 那轮 137 条全绿，一次频控都没撞上、一次失败都没有），于是「写了」和「真的按预期工作」之间始终差一步，等到真需要它的时候才发现坏了。自检用假 `requests`/假时钟把这几条分支固定走一遍：频控命中后退避重试、重试耗尽把响应交回用例、四种实测文案都能识别、退避间隔递增、非 json 响应不误判、现场能拼出入参/响应/账号快照且自身异常不影响用例结论。
+频控退避、失败现场、异步读值轮询这三类守护逻辑，真实全量里可能一整轮都触发不到（例如 2026-10-27 那轮 137 条全绿，一次频控都没撞上、一次失败都没有），于是「写了」和「真的按预期工作」之间始终差一步，等到真需要它的时候才发现坏了。自检用假 `requests`/假时钟把这几条分支固定走一遍：频控命中后退避重试、重试耗尽把响应交回用例、四种实测文案都能识别、退避间隔递增、非 json 响应不误判、现场能拼出入参/响应/账号快照且自身异常不影响用例结论，以及轮询版真的会重读、超时会写明等了多久、首轮命中只读一次。
 
 只验证框架行为，不碰任何业务预期值——改框架代码后跑一次，别等到线上红一轮才发现。
 
@@ -209,7 +209,7 @@ class TestPayCreate(unittest.TestCase):
         res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
         assert_code(res['code'])
         assert_body(res['body'], 'success', 1, reason(des, res))
-        assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
+        assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
 ```
 
 断言怎么选：
@@ -220,9 +220,13 @@ class TestPayCreate(unittest.TestCase):
 | `assert_body(body, 'success' 或 'msg', 预期, reason(des, res))` | 响应字段，多值可传元组当白名单 |
 | `assert_equal(actual, expect)` | 等值；数值自动容忍 `1e-4` 误差（覆盖 `Decimal` 与 float 混比） |
 | `assert_between(actual, low, high)` | 浮动区间，如分成比例 |
-| `assert_equal_eventually(mysql.xxx, expect)` | **异步结算场景用它，别用 `sleep`**：轮询读值，直到等于预期或超时 |
+| `assert_equal_eventually(lambda: mysql.xxx, expect)` | **读账户表一律用它**：轮询读值，直到等于预期或超时 |
 
-`assert_equal_eventually` 内部处理了两件容易踩的事：中间轮次的失败原因不会污染报告；超时后拿最后一轮的失败信息报错。
+`assert_equal_eventually` 内部处理了三件容易踩的事：中间轮次的失败原因不会污染报告；超时后拿最后一轮的失败信息报错；失败原因里会注明「已轮询 N 次、等待 X 秒仍未达标」——「结算变慢」和「分账算错」看这一句就能分开。
+
+**为什么读账户表必须走轮询版**：服务端扣款是同步的，收礼方分成却是异步落库。发完请求立刻同步读一次，收礼方那边必然还是 0。2026-10-27 那轮全量的实测：`137` 条用例里 **50 条（36%）是重试一轮才过的**，`log/retryCase.log` 里的失败明细几乎全是同一句 `实际结果: 0, 预期结果: 60/80/420/4620/...`。也就是说报告写着「通过 125」，其中几十条第一轮其实什么都没验到，全靠 `@Retry` 重跑一遍撞对了。现在全仓 567 处余额/统计断言统一改成轮询版：首轮就命中时只读一次（不打赏方扣款那种同步读值拖慢），要等时按 `WAIT_INTERVAL` 最多等 `WAIT_TIMEOUT`。
+
+这条规则由 `pre_push_audit.py` 的第 6 项守着：`assert_equal(mysql.selectUserInfoSql(...))` 会直接审查不通过；把读值提前求好再传给轮询版（`assert_equal_eventually(mysql.xxx(...), expect)`）同样拦——那等于每次白等一轮超时。
 
 重试是怎么跑的（`Retry` + `common/Request.py` 的回放）：
 

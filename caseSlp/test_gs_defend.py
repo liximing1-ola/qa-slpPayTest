@@ -5,7 +5,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card, read_vip_pop
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -41,8 +41,8 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['price'])
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), defend['小宝贝']['price'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['price'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), defend['小宝贝']['price'] * rates['gs']['default'])
 
 	def test_002(self, des='给GS开通个人守护进阶场景,不分成'):
 		"""
@@ -82,15 +82,15 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		clear_acceleration_card(uid, payUid)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['upgrade_price'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['upgrade_price'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', uid), 0)
 
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['侯爵']['update'] * defend['小宝贝']['upgrade_price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + juewei_level['侯爵']['update'] * defend['小宝贝']['upgrade_price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + defend['小宝贝']['upgrade_price'] * uid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + defend['小宝贝']['upgrade_price'] * uid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+		                        payUid_old_vip + juewei_level['侯爵']['update'] * defend['小宝贝']['upgrade_price'] / 100 * payUid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+		                        payUid_old_pop + juewei_level['侯爵']['update'] * defend['小宝贝']['upgrade_price'] / 100 * payUid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + defend['小宝贝']['upgrade_price'] * uid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid), uid_old_pop + defend['小宝贝']['upgrade_price'] * uid_speed)
 
 	def test_003(self, des='GS个人守护解除场景,不分成'):
 		"""
@@ -117,5 +117,5 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['break_price'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - defend['小宝贝']['break_price'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', uid), 0)

@@ -7,7 +7,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data, insert_package_gift
-from common.Assert import assert_code, assert_equal, assert_body, assert_pay_success
+from common.Assert import assert_body, assert_code, assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conRedis import conRedis
@@ -77,8 +77,8 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 
@@ -106,8 +106,8 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 
@@ -141,9 +141,9 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             naming_song_config[beilv]['money'] * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 		TestPayCreate._naming_ready = True  # 冠歌记录已就绪，后续依赖用例可以执行
@@ -218,9 +218,9 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             naming_song_config[beilv]['money'] * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 
@@ -256,9 +256,9 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             naming_song_config[beilv]['money'] * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 
@@ -295,11 +295,11 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             naming_song_config[beilv]['money'] * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - naming_song_config[beilv]['money_pay'])
 
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 
@@ -336,10 +336,10 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             naming_song_config[beilv]['money'] * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 
@@ -378,9 +378,9 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'msg', '该礼物暂不支持购买', reason(des, res))
 
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
-		assert_equal(mysql.selectUserInfoSql('sum_money', uid), 0)
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 1)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 1)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人
 
@@ -417,9 +417,9 @@ class TestPayCreate(unittest.TestCase):
 		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             naming_song_config[beilv]['money'] * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=naming_song_config[beilv]['cid']), 0)
 
 		mysql.updateXsChatroomConfig(rid, 0, position=0)  # 接待位下人

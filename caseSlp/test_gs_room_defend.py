@@ -5,7 +5,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -43,7 +43,7 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - room_defend['zhenai']['month']['price'])
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
-		             room_defend['zhenai']['month']['price'] * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', gs_A_ceo_uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - room_defend['zhenai']['month']['price'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
+		                        room_defend['zhenai']['month']['price'] * rates['gs']['default'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', gs_A_ceo_uid), 0)

@@ -9,6 +9,8 @@
    —— 这类「分支被合并掉一个但没人发现」的问题，光看 diff 和跑局部用例都查不出来
 3. 调用点的方法是否还存在（防止删方法后留下悬空调用）
 4. 未使用的 import、共享层零引用定义
+5. 读账户表的断言是否写了轮询版，且轮询版的第一个参数确实是 lambda
+   （写成同步读值，实测会让 36% 的用例靠重试才有结果）
 
 用法：python pre_push_audit.py
 退出码：0 全部通过；1 有问题，逐条列在最后
@@ -226,6 +228,36 @@ for path, tree in trees.items():
             zero += 1
             fail('{}:{} 零引用: {}'.format(target(path), lineno, name))
 print('    共 {} 处（白名单: {}）'.format(zero, ', '.join(sorted(ZERO_REF_ALLOWED))))
+
+# ---------- 6. 读账户表的断言写法 ----------
+# 服务端分账是异步的：请求返回时收礼方分成还没落库，同步读一次必然读到 0。
+# 2026-10-27 那轮实测：50/137 条用例是重试一轮才过的，失败明细全是「实际结果: 0」。
+# 所以「读账户表 + 断言」必须用 assert_equal_eventually + lambda；反过来说，
+# 把读值提前求好再传进去等于白等一轮超时，也必须拦住。
+print('\n[6] 账户读值的断言写法')
+bad_plain = []
+bad_eager = []
+for path, tree in trees.items():
+    if not (target(path).startswith('caseSlp/') or target(path).startswith('caseXsg/')):
+        continue
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or not node.args:
+            continue
+        if node.func.id not in ('assert_equal', 'assert_equal_eventually'):
+            continue
+        first = node.args[0]
+        is_read = (isinstance(first, ast.Call) and isinstance(first.func, ast.Attribute)
+                   and first.func.attr == 'selectUserInfoSql')
+        if node.func.id == 'assert_equal' and is_read:
+            bad_plain.append('{}:{}'.format(target(path), node.lineno))
+        elif node.func.id == 'assert_equal_eventually' and is_read:
+            bad_eager.append('{}:{}'.format(target(path), node.lineno))
+print('    直接读值用 assert_equal: {} 处  轮询版传了已读好的值: {} 处'.format(
+    len(bad_plain), len(bad_eager)))
+if bad_plain:
+    fail('读账户表必须用 assert_equal_eventually + lambda（异步落库）: {}'.format(bad_plain))
+if bad_eager:
+    fail('轮询版的第一个参数必须是 lambda，不能是提前读好的值: {}'.format(bad_eager))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)

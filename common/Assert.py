@@ -138,12 +138,23 @@ def assert_equal_eventually(actual_func, expect_result, timeout=None, interval=N
     timeout = WAIT_TIMEOUT if timeout is None else timeout
     interval = WAIT_INTERVAL if interval is None else interval
     mark = len(Consts.fail_case_reason)
-    deadline = time.time() + timeout
+    started = time.time()
+    deadline = started + timeout
+    polls = 0
     while True:
+        polls += 1
         actual_result = actual_func()
         if time.time() >= deadline:
             # 最后一轮走正常断言：失败时把实际值/预期值写进报告，免得只剩一个空断言
-            return assert_equal(actual_result, expect_result, tolerance)
+            try:
+                return assert_equal(actual_result, expect_result, tolerance)
+            except AssertionError:
+                # 补一句“等了多久”：同样是失败，“轮询 16 次、等 3 秒仍是 0”和“读一次就不对”
+                # 是两种完全不同的问题（结算变慢 vs 分账算错），报告里必须能区分开
+                if len(Consts.fail_case_reason) > mark:
+                    Consts.fail_case_reason[-1] += '（已轮询 {} 次、等待 {:.1f} 秒仍未达标）'.format(
+                        polls, time.time() - started)
+                raise
         try:
             return assert_equal(actual_result, expect_result, tolerance)
         except AssertionError:

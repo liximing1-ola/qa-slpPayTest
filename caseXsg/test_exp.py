@@ -6,7 +6,7 @@ import unittest
 
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data, prepare_vip_pop_data, prepare_acceleration_card, clear_acceleration_card
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -51,13 +51,13 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(0.5)
 		clear_acceleration_card(uid, payUid)
 		# 贵族加速vip,加速卡加速vip和人气
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['normal_uid']['殿']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + giftId['69']['price'] * payUid_speed * 3)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+		                        payUid_old_vip + juewei_level['normal_uid']['殿']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+		                        payUid_old_pop + giftId['69']['price'] * payUid_speed * 3)
 
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
 
 	def test_002(self, des='vip人气计算,使用爵位+加速卡,私聊送礼'):
 		uid = gsUid
@@ -88,10 +88,10 @@ class TestPayCreate(unittest.TestCase):
 		time.sleep(0.5)
 		clear_acceleration_card(uid, payUid)
 		# 贵族加速vip,加速卡加速vip和人气
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', payUid),
-		             payUid_old_vip + juewei_level['normal_uid']['帝']['update'] * giftId['69']['price'] / 100 * payUid_speed)
-		assert_equal(mysql.selectUserInfoSql('popularity', payUid),
-		             payUid_old_pop + giftId['69']['price'] * payUid_speed * 3)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
+		                        payUid_old_vip + juewei_level['normal_uid']['帝']['update'] * giftId['69']['price'] / 100 * payUid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
+		                        payUid_old_pop + giftId['69']['price'] * payUid_speed * 3)
 
-		assert_equal(mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip)
-		assert_equal(mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', uid), uid_old_pop + giftId['69']['price'] * uid_speed)

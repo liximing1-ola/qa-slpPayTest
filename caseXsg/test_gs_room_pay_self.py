@@ -6,7 +6,7 @@ import unittest
 
 from caseXsg.config import *
 from caseXsg.tools import prepare_test_data
-from common.Assert import assert_equal, assert_between, assert_pay_success
+from common.Assert import assert_between, assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -60,15 +60,15 @@ class TestPayCreate(unittest.TestCase):
 		owner_rate = rates['A-工会']['room_1_config']['owner_rate']
 		broker_rate = rates['A-工会']['room_1_config']['broker_rate']
 
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', gs_A_uid_1), 0, base_amount * anchor_rate)
 
 		# todo 房主和公会长 分成待定
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
 
 	def test_002(self, des='主播,商业房,自刷,非跨档,已配置>总计96%,兜底94%(扣mcb到账mcb,扣其他到账mcb'):
 		rate_money, rate_money_b, rate_money_cash_b, rate_money_cash = generate_random_rates()
@@ -104,15 +104,15 @@ class TestPayCreate(unittest.TestCase):
 		owner_rate = rates['A-工会']['room_2_over_config']['owner_rate']
 		broker_rate = rates['A-工会']['room_2_over_config']['broker_rate']
 
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', gs_A_uid_1), 0, base_amount * anchor_rate)
 
 		# todo 房主和公会长 分成待定
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
 
 	def test_003(self, des='主播,商业房,自刷,非跨档,未配置,兜底94%(扣mcb到账mcb,扣其他到账mc)'):
 		rate_money, rate_money_b, rate_money_cash_b, rate_money_cash = generate_random_rates()
@@ -148,15 +148,15 @@ class TestPayCreate(unittest.TestCase):
 		owner_rate = rates['B-工会']['room_1_not_config']['owner_rate']
 		broker_rate = rates['B-工会']['room_1_not_config']['broker_rate']
 
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_B_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_B_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', gs_B_uid_1), 0, base_amount * anchor_rate)
 
 		# todo 房主和公会长 分成待定
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_B_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_B_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
 
 	def test_004(self, des='主播,商业房,自刷,跨档,80%(扣mcb到账mcb,扣其他到账mc)'):
 		rate_money, rate_money_b, rate_money_cash_b, rate_money_cash = generate_random_rates()
@@ -192,15 +192,15 @@ class TestPayCreate(unittest.TestCase):
 		owner_rate = rates['A-工会']['room_other']['owner_rate']
 		broker_rate = rates['A-工会']['room_other']['broker_rate']
 
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', gs_A_uid_1), 0, base_amount * anchor_rate)
 
 		# todo 房主和公会长 分成待定
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'), int(base_amount * owner_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), int(base_amount * owner_rate * gs_rate_money_base) + int(base_amount * owner_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), int(base_amount * broker_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), int(base_amount * broker_rate * gs_rate_money_base) + int(base_amount * broker_rate * rate_money_cash))
 
 	def test_005(self, des='主播,商业房,打赏多人(含自己),非跨档,按照各自身份到账'):
 
@@ -244,8 +244,8 @@ class TestPayCreate(unittest.TestCase):
 		user_rate = rates['normal_uid']['room']['user_rate']
 		room_other_rate = rates['B-工会']['room_other']['anchor_rate']
 		# gs_A_uid_1 主播,非跨档
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash_b'), int(base_amount * anchor_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_uid_1, money_type='money_cash'), int(base_amount * anchor_rate * gs_rate_money_base) + int(base_amount * anchor_rate * rate_money_cash))
 
 		# gs_A_room_owner_1_uid 房主,非跨档
 		# gs_A_room_owner_1_uid 作为 gs 收礼的分成 mc
@@ -255,8 +255,8 @@ class TestPayCreate(unittest.TestCase):
 		# gs_A_room_owner_1_uid 作为 房主 收礼的分成合计 mc 和 来自:自刷*1+非自刷*2
 		room_owner_as_owner_mc = (int(base_amount * owner_rate * gs_rate_money_base)+int(base_amount * owner_rate * rate_money_cash)) + int(base_amount * owner_rate)*2
 
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'),  room_owner_as_owner_mcb)
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), room_owner_as_gs_mc + room_owner_as_owner_mc)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash_b'),  room_owner_as_owner_mcb)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_room_owner_1_uid, money_type='money_cash'), room_owner_as_gs_mc + room_owner_as_owner_mc)
 
 		# gs_A_ceo_uid 工会长,非跨档
 		# gs_A_ceo_uid 作为 gs 收礼的分成合计 mc
@@ -265,14 +265,14 @@ class TestPayCreate(unittest.TestCase):
 		ceo_as_ceo_mcb = int(base_amount * broker_rate * rate_money_cash_b)
 		# gs_A_ceo_uid 作为 公会长 收礼的分成合计 mc 和 来自:自刷*1+非自刷*2
 		ceo_as_ceo_mc = (int(base_amount * broker_rate * gs_rate_money_base)+int(base_amount * broker_rate * rate_money_cash)) + int(base_amount * broker_rate)*2
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), ceo_as_ceo_mcb)
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), ceo_as_gs_mc + ceo_as_ceo_mc)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash_b'), ceo_as_ceo_mcb)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_A_ceo_uid, money_type='money_cash'), ceo_as_gs_mc + ceo_as_ceo_mc)
 
 		# gs_B_uid_1 主播,跨档
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid_1, money_type='money_cash_b'),int(base_amount * room_other_rate))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', gs_B_uid_1, money_type='money_cash_b'),int(base_amount * room_other_rate))
 
 		# normal_uid 用户
-		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), int(base_amount * user_rate))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), int(base_amount * user_rate))
 
 	def test_006(self, des='个人房,主播打赏主播自己,90%(mcb)'):
 		rid = mysql.selectUserInfoSql('vip',app_id=70)
@@ -289,4 +289,4 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='xsg', pay_uid=uid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['xsg-vip-room']['gs_self_rate'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['gs']['xsg-vip-room']['gs_self_rate'])

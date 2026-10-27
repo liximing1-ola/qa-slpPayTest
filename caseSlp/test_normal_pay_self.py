@@ -5,7 +5,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_equal, assert_between, assert_pay_success
+from common.Assert import assert_between, assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -49,8 +49,8 @@ class TestPayCreate(unittest.TestCase):
 		base_amount = giftId['69']['price'] * default_num
 		user_rate = rates['normal']['room-self']
 		
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), int(base_amount * user_rate * normal_rate_money_base) + int(base_amount * user_rate * rate_money_cash_b))
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), int(base_amount * user_rate * rate_money_cash))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), int(base_amount * user_rate * normal_rate_money_base) + int(base_amount * user_rate * rate_money_cash_b))
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), int(base_amount * user_rate * rate_money_cash))
 		assert_between(mysql.selectUserInfoSql('sum_money', payUid), 0, int(base_amount * user_rate))
 
 	def test_002(self, des='用户,个人房,自刷,90%(mcb)'):
@@ -68,7 +68,7 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-room-self'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-room-self'])
 
 	def test_003(self, des='用户,靓号房,自刷,90%(mcb)'):
 		rid = gs_A_ceo_pretty_rid
@@ -85,7 +85,7 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-pretty-room-self'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['vip-pretty-room-self'])
 
 	def test_004(self, des='用户,私聊,自刷,90%(mcb)'):
 		uid = payUid
@@ -102,4 +102,4 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['chat-self'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),giftId['69']['price'] * default_num * rates['normal']['chat-self'])

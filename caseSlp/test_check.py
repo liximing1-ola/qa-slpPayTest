@@ -5,7 +5,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data
-from common.Assert import assert_code, assert_equal, assert_body, assert_pay_success
+from common.Assert import assert_body, assert_code, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -35,7 +35,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
 		assert_body(res['body'], 'msg', '余额不足，无法支付~~', reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 
 	def test_002(self, des='余额=0,房间打赏的场景'):
 		"""
@@ -60,7 +60,7 @@ class TestPayCreate(unittest.TestCase):
 		# 「余额不足，无法支付~~」），所以把空串一并接受：有文案时必须正确，缺文案不判红。
 		# 等 RPC 补回 message 后把空串从白名单里去掉，这条断言就自动收紧
 		assert_body(res['body'], 'msg', ('余额不足，无法支付~~', ''), reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 
 	def test_003(self, des='余额<礼物价值-私聊打赏的场景'):
 		"""
@@ -81,7 +81,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
 		assert_body(res['body'], 'msg', '余额不足，无法支付~~', reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 
 	def test_004(self, des='余额<礼物价值-房间打赏的场景'):
 		"""
@@ -103,7 +103,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_body(res['body'], 'success', 0, reason(des, res))
 		# 同 test_002：房间打赏链路余额不足时 msg 为空串，有文案时必须正确、缺文案不判红
 		assert_body(res['body'], 'msg', ('余额不足，无法支付~~', ''), reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('sum_money', normal_uid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', normal_uid), 0)
 
 	def test_005(self, des='余额=礼物价值-私聊打赏的场景'):
 		"""
@@ -122,7 +122,7 @@ class TestPayCreate(unittest.TestCase):
 		                  giftId=giftId['69']['gid'])
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), 0)
 
 	def test_006(self, des='余额=礼物价值-房间打赏的场景'):
 		"""
@@ -141,7 +141,7 @@ class TestPayCreate(unittest.TestCase):
 		                  giftId=giftId['69']['gid'])
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), 0)
 
 	def test_007(self, des='验证扣费顺序,money>mcb>mc'):
 		"""
@@ -165,9 +165,9 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# money>mcb>mc
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money'), 0)
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), giftId['69']['price'])
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), giftId['69']['price'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money'), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), giftId['69']['price'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), giftId['69']['price'])
 
 	def test_008(self, des='验证扣费顺序,mcb>mc'):
 		"""
@@ -191,9 +191,9 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
 		# mcb > mc
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money'), 0)
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), 0)
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), giftId['69']['price'])
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money'), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), giftId['69']['price'])
 
 	def test_009(self, des='验证组合支付,m,mc,mcb同时扣费的场景'):
 		"""
@@ -220,9 +220,9 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money'), 0)
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), 0)
-		assert_equal(mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money'), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash_b'), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', payUid, money_type='money_cash'), 0)
 
 	def test_010(self, des='api,自己打赏自己'):
 		"""
@@ -244,7 +244,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
 		assert_body(res['body'], 'msg', '实在抱歉，系统不允许给属于您的小号或同身份证账号消费', reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money)
 
 	def test_011(self, des='api,自己打赏自己的小号(同安全手机号)'):
 		"""
@@ -266,8 +266,8 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
 		assert_body(res['body'], 'msg', '实在抱歉，系统不允许给属于您的小号或同身份证账号消费', reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid_subsidiary), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid_subsidiary), 0)
 
 	def test_012(self, des='api,自己打赏自己的小号(同实名认证)'):
 		"""
@@ -289,5 +289,5 @@ class TestPayCreate(unittest.TestCase):
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
 		assert_body(res['body'], 'msg', '实在抱歉，系统不允许给属于您的小号或同身份证账号消费', reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money)
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid_subsidiary2), 0)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money)
+		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid_subsidiary2), 0)

@@ -7,7 +7,10 @@
 
 自检只验证框架行为，不碰业务预期值：
   1. 频控命中后退避重试、次数耗尽后把响应交回用例、非频控响应不误判；
-  2. 失败现场能拼出入参/响应/账户快照，且自己出任何错都不影响用例结论。
+  2. 失败现场能拼出入参/响应/账户快照，且自己出任何错都不影响用例结论；
+  3. 读账户表用的轮询版真的会重读，超时也会把「等了多少秒」写进失败原因。
+     全仓 567 处余额/统计断言都靠它，它一旦退化成「只读一次」，全量会重新回到
+     37% 的用例靠重试才有结果的状态。
 
 运行：python -m common.selfcheck
 """
@@ -195,6 +198,74 @@ def check_non_json_body_not_frequent():
     assert isinstance(res['body'], str), '非 json 响应应保留原始文本，实际 {}'.format(type(res['body']))
 
 
+def _with_fake_assert_time():
+    """把 common.Assert 的 time 换成假时钟，让轮询自检既快又能数出读了几次"""
+    from common import Assert
+    fake = _FakeTime()
+    old = Assert.time
+    Assert.time = fake
+    return Assert, fake, old
+
+
+def check_eventually_polls_until_match():
+    """分成是异步落库的：第一次读到 0 不能就此定论，必须继续读到预期值"""
+    from common import Consts
+    Assert, _, old = _with_fake_assert_time()
+    values = [0, 0, 60]
+    reads = []
+
+    def read():
+        reads.append(1)
+        return values.pop(0) if values else 60
+
+    mark = len(Consts.fail_case_reason)
+    try:
+        Assert.assert_equal_eventually(read, 60, timeout=10, interval=1)
+    finally:
+        Assert.time = old
+    assert len(reads) == 3, '应读到第 3 次才达标，实际读了 {} 次'.format(len(reads))
+    assert len(Consts.fail_case_reason) == mark, '中间态不能留下失败原因，否则报告里会堆一串 0'
+
+
+def check_eventually_timeout_reports_waited():
+    """一直读不到时，失败原因里必须能看出「等过多久」——结算变慢和分账算错是两种问题"""
+    from common import Consts
+    Assert, _, old = _with_fake_assert_time()
+    mark = len(Consts.fail_case_reason)
+    try:
+        try:
+            Assert.assert_equal_eventually(lambda: 0, 60, timeout=0.3, interval=0.1)
+        except AssertionError as error:
+            text = str(error)
+            assert '预期结果: 60' in text, '失败信息应带预期值: {}'.format(text)
+            assert len(Consts.fail_case_reason) == mark + 1, '只应留一条失败原因，实际多出 {} 条'.format(
+                len(Consts.fail_case_reason) - mark)
+            assert '已轮询' in Consts.fail_case_reason[-1], '应说明轮询次数与等待时长: {}'.format(
+                Consts.fail_case_reason[-1])
+        else:
+            raise AssertionError('一直读不到就该失败，不能静默通过')
+    finally:
+        Assert.time = old
+        del Consts.fail_case_reason[mark:]
+
+
+def check_eventually_first_hit_single_read():
+    """首轮就命中时只读一次：打赏方扣款本来就是同步的，不该被多读一遍拖慢"""
+    Assert, fake, old = _with_fake_assert_time()
+    reads = []
+
+    def read():
+        reads.append(1)
+        return 60
+
+    try:
+        Assert.assert_equal_eventually(read, 60)
+    finally:
+        Assert.time = old
+    assert len(reads) == 1, '首轮命中就该收手，实际读了 {} 次'.format(len(reads))
+    assert fake.sleeps == [], '首轮命中不该有等待，实际 {}'.format(fake.sleeps)
+
+
 def check_scene_render():
     """失败现场要能看到本次入参、响应，以及从入参里提出来要查的账号"""
     Scene.begin_case('demo.test_001')
@@ -252,6 +323,11 @@ def main():
     _check('现场包含入参/响应/账号', check_scene_render)
     _check('现场缓冲有上限', check_scene_buffer_limit)
     _check('空现场与快照异常都不影响结论', check_scene_empty_and_archive)
+
+    print('框架自检：异步读值轮询（common.Assert）')
+    _check('读不到时继续读到达标', check_eventually_polls_until_match)
+    _check('超时失败要说明等了多久', check_eventually_timeout_reports_waited)
+    _check('首轮命中只读一次', check_eventually_first_hit_single_read)
 
     if _FAILED:
         print('\n自检未通过 {} 项：{}'.format(len(_FAILED), '、'.join(_FAILED)))
