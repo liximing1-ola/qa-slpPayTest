@@ -7,7 +7,7 @@
 - **覆盖**：私聊打赏、房间打赏、跨公会与跨档分成、点唱房（点歌/冠歌）、礼物优惠券、房间守护、人气加速卡、甄选礼盒、账户与房间数据校验
 - **部署到云服务器**：见 [DEPLOY.md](DEPLOY.md)
 
-当前基线（SLP 全量 136 条）：**执行 124 / 跳过 12**。跳过的是「依赖前序造数」和「功能已下线」的用例，不是缺陷；通过/失败数请以每轮报告为准（`log/notPassCase.log`、`log/failCase.log`）。
+当前基线（SLP 全量 137 条）：**执行 125 / 跳过 12**。跳过的是「依赖前序造数」和「功能已下线」的用例，不是缺陷；通过/失败数请以每轮报告为准（`log/notPassCase.log`、`log/failCase.log`）。
 
 礼物优惠券另有一个容易踩的坑：**有损 / 无损不是独立开关，而是券商品的 `coupon_type` 决定的**——`gift_discount`（89297）折扣额平台减免、收礼方按实付分成（有损）；`pro_gift_discount`（89370）平台补贴、收礼方按原价分成（无损）。`pro_gift_discount` 目前只接入房间链路，私聊会被拒单，详见 `caseSlp/test_coupon_2.py` 文件头。
 
@@ -151,7 +151,8 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | 日志 | 内容 |
 |------|------|
 | `notPassCase.log` | 未通过清单，**排查先看这个** |
-| `failCase.log` | 失败与异常的完整堆栈（不刷控制台，避免淹没清单） |
+| `progress.log` | 逐条实时进度：`[ 37/137] FAIL  12.30s  test_xxx.test_004` |
+| `failCase.log` | 失败与异常的完整堆栈 + **失败现场**（入参/响应/账户快照） |
 | `caseResult.log` | 每轮执行的条数汇总 |
 | `getSession.log` | token 获取情况 |
 | `updateGitCode.log` / `gitBranchError.log` | 分支检查与上次执行时间 |
@@ -159,8 +160,14 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 
 ```bash
 tail -n 100 log/notPassCase.log   # 先看未通过清单
-tail -n 200 log/failCase.log      # 需要堆栈时再看
+tail -f log/progress.log          # 跑到第几条、每条多久（另开一个窗口）
+tail -n 200 log/failCase.log      # 需要堆栈与现场时再看
 ```
+
+两个跟排查直接相关的设计：
+
+- **进度写文件而不是只打控制台**：`python run_all_case.py slp | tail -60` 时 tail 要等 EOF 才输出，整个运行期间看不到任何东西，看着就像卡死；`log/progress.log` 可以边跑边看。每条附带本用例耗时（含重试），顺手能找出慢用例。
+- **失败掉落现场**（`common/Scene.py`）：每条用例执行期间缓存最近 5 次请求/响应（入参 + HTTP 状态码 + 响应体），失败时连同打赏者/收礼人的 `xs_user_money`、`xs_user_profile` 快照一起写进 `failCase.log`。原来这些只在控制台滚一次，看不到了就只能重跑一轮。快照只观测不参与断言，自身异常全部吞掉，且只在失败时才读库。
 
 ---
 

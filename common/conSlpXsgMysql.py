@@ -378,6 +378,16 @@ class conMysql:
         else:
             raise ValueError('未知的查询类型: {}, 可选值见 selectUserInfoSql 的 if 分支'.format(accountType))
 
+    # 执行任意只读 SQL（表名/字段调用方事先不确定时用）
+    @staticmethod
+    def selectRawDict(sql):
+        """返回 [{列名: 值}]
+
+        给「失败现场快照」这类通用场景用：要查什么表取决于用例当轮实际请求了哪些账号，
+        没法在 selectUserInfoSql 里逐个枚举。只读，不参与业务断言。
+        """
+        return _query_all_dict(sql)
+
     # 删除用户账户数据
     @staticmethod
     def deleteUserAccountSql(tableName, uid):

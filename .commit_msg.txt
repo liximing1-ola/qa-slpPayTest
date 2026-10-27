@@ -1,0 +1,33 @@
+排查能力补强：实时进度日志 + 失败现场快照
+
+目标是把「跑完所有 case、一次红跑暴露尽可能多问题」落到框架上，两项都是纯观测，
+不参与任何断言，不改任何预期值。
+
+一、实时进度（common/report.py + common/Logs.py）
+原来进度只打控制台，一旦 `python run_all_case.py slp | tail -60`，tail 要等 EOF
+才输出，整个运行期间看不到任何东西，看着就像卡死（今天就遇到一次）。
+现在每条用例结束写一行到 log/progress.log：
+  2026-10-27 17:32:57,297  [  2/137] FAIL     12.30s  test_gs_pay_self.test_004
+总数由 AllTestRunner 从 suite 上取后注入 AllTestResult；耗时含该用例的重试轮，
+顺手能找出慢用例（naming_song 单条 8s 那类）。运行中途另开窗口 tail -f 即可。
+Logs.get_log 增加可选 fmt 参数：进度这类逐条刷屏的内容用只带时间戳的格式，
+不再每行带一大串文件路径和行号（handler 已创建时该参数不生效，因此不影响已有日志）。
+
+二、失败现场快照（新增 common/Scene.py）
+原来失败只有一条 AssertionError 堆栈，请求体只在控制台滚过去一次。这几天定位
+test_exp.test_001 的 6100、test_gs_pay_self.test_004 的频控响应，全靠人肉从截图里翻，
+翻不到就得再跑一轮（全量 7 分钟）。现在：
+- Request.post_request_session 每次请求后记一条（入参 / HTTP 状态码 / 响应体），每用例留最近 5 条；
+- 用例失败或异常时归档，随堆栈一起写进 log/failCase.log；
+- 同时按请求里出现的账号（打赏者 + to/uids）读 xs_user_money、xs_user_profile 快照，
+  用来区分「没扣」「扣多了」两种完全不同的故障；
+- 三条自我约束：只观测不改行为；快照自身异常全部吞掉（绝不把 FAIL 变成 ERROR）；
+  只在失败时读库，先用 select 1 探活，DB 不可用就只报一句，不让 12 笔查询各撞一次连接超时。
+为此 conMysql 增加 selectRawDict(sql)：要查什么表取决于当轮请求了哪些账号，
+没法在 selectUserInfoSql 里预先枚举。
+
+验证：构造 1 通过 / 1 失败 / 1 跳过的小 suite，确认进度三条（含总数与耗时）、
+现场标题、入参、响应体、账户快照齐全，跳过用例不产生现场；断言 8 项全 OK。
+全仓 compileall exit=0，pre_push_audit 通过（无未使用 import、无零引用定义、
+conMysql 29 个方法均有调用点）。顺带校准 README 基线：test_coupon_2 增删后
+实际是 137 条 / 执行 125 / 跳过 12（此前写的 136 / 124 已过时）。

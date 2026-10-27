@@ -9,6 +9,7 @@ import time
 import requests
 import urllib3
 
+from common import Scene
 from common.Session import Session
 
 # 单次请求超时时间（秒），避免网络异常时用例无限挂起
@@ -234,6 +235,8 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
         'time_consuming': response.elapsed.total_seconds() * 1000,
         'time_total': response.elapsed.total_seconds(),
     }
+    # 只记不判：让失败时的 log/failCase.log 能直接看到入参/响应，不用再复现一轮
+    Scene.record_exchange(data, pay_uid, response.status_code, body)
     if cache_key is not None:
         # 发过下单请求就算"已下单"：数据准备（改金额、插背包礼物）不能在重试轮重做，
         # 否则会把首轮已经生效的造数覆盖掉，断言口径全乱

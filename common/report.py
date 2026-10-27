@@ -9,8 +9,10 @@ run_all_case.py（全量执行、逐条播报）与 run_crontab_case.py（定时
 import inspect
 import os
 import sys
+import time
 import unittest
 
+from common import Logs, Scene
 from common.Config import config
 
 
@@ -43,6 +45,9 @@ class AllTestResult(unittest.TextTestResult):
         super().__init__(stream, descriptions, verbosity)
         self.successes = []
         self.test_des_map = {}  # 记录每个测试的 des 值
+        self.index = 0          # 已结束的用例数，用于进度日志的 [37/136]
+        self.total_cases = 0    # 总用例数，由 AllTestRunner 从 suite 上取后注入
+        self._case_started = 0.0
 
     def startTest(self, test):
         super().startTest(test)
@@ -50,6 +55,9 @@ class AllTestResult(unittest.TextTestResult):
         # 这里收住"没加 @Retry 的用例"这种将来可能出现的入口，避免继承上一条用例的回放态
         from common import Request
         Request.begin_case()
+        # 失败现场也按用例隔离：清掉上一条的请求缓存，开始录本条的
+        Scene.begin_case(test.id())
+        self._case_started = time.time()
         # 优先从方法签名的 des 默认参数获取，其次从 docstring 提取
         try:
             method = getattr(test, test._testMethodName)
@@ -67,6 +75,39 @@ class AllTestResult(unittest.TextTestResult):
     def addSuccess(self, test):
         super().addSuccess(test)
         self.successes.append(test)
+        self._progress(test, 'PASS')
+
+    def addFailure(self, test, err):
+        super().addFailure(test, err)
+        # 先把现场归档再记进度：归档要在缓冲被下一条用例清掉之前完成
+        Scene.archive(test.id())
+        self._progress(test, 'FAIL')
+
+    def addError(self, test, err):
+        super().addError(test, err)
+        Scene.archive(test.id())
+        self._progress(test, 'ERROR')
+
+    def addSkip(self, test, reason):
+        super().addSkip(test, reason)
+        self._progress(test, 'SKIP')
+
+    def _progress(self, test, status):
+        """实时进度落盘：另开窗口 tail -f log/progress.log 就能看到跑到第几条、每条多久
+
+        控制台本来就逐条打，但一旦 `python run_all_case.py slp | tail -60`，tail 要等 EOF
+        才输出，整个运行期间看不到任何东西，看着就像卡死。写文件绕开了这一层。
+        """
+        self.index += 1
+        elapsed = time.time() - self._case_started
+        line = '[{:>3}/{}] {:<5} {:>7.2f}s  {}'.format(
+            self.index, self.total_cases or '?', status, elapsed, case_name(test))
+        try:
+            Logs.get_log('progress.log', console=False, back_count=30,
+                         fmt='%(asctime)s  %(message)s').info(line)
+        except Exception:
+            # 进度只是观测手段，写日志失败不能影响用例执行
+            pass
 
     def printErrors(self):
         """
@@ -80,6 +121,16 @@ class AllTestResult(unittest.TextTestResult):
 class AllTestRunner(unittest.TextTestRunner):
     """自定义测试运行器，返回 AllTestResult"""
     resultclass = AllTestResult
+
+    def run(self, test):
+        # 进度日志要显示「第几条/共几条」，总数只能从 suite 上取
+        self._total_cases = test.countTestCases()
+        return super().run(test)
+
+    def _makeResult(self):
+        result = super()._makeResult()
+        result.total_cases = getattr(self, '_total_cases', 0)
+        return result
 
 
 def build_suite(app_info, case_expr=''):
@@ -287,8 +338,14 @@ def fail_detail_text(result):
     sections = []
     for status, items in (('FAIL', result.failures), ('ERROR', result.errors)):
         for case, reason in items:
-            sections.append('[{}] {} | {}\n{}'.format(
-                status, case_name(case), case_des(result, case) or _des_fallback(case), str(reason).strip()))
+            text = '[{}] {} | {}\n{}'.format(
+                status, case_name(case), case_des(result, case) or _des_fallback(case), str(reason).strip())
+            # 失败现场：入参 / 响应体 / 账户快照。原来这些只在控制台滚一次，
+            # 看不到了就只能重新跑一轮，全量 7 分钟的成本全花在复现上
+            scene = Scene.archived(case.id())
+            if scene:
+                text += '\n' + scene
+            sections.append(text)
     return '\n{}\n'.format(LINE_SEP).join(sections) if sections else ''
 
 

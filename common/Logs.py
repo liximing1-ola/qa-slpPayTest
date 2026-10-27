@@ -23,13 +23,15 @@ def _drop_console(logs):
         logs.removeHandler(handler)
 
 
-def get_log(log_name, level=logging.DEBUG, when='midnight', back_count=0, console=True):
+def get_log(log_name, level=logging.DEBUG, when='midnight', back_count=0, console=True, fmt=None):
     """
     :param log_name:
     :param level:
     :param when:
     :param back_count:
     :param console: 是否同时打到控制台；False 时只写文件（比如已经自己 print 过的完整清单，避免重复输出）
+    :param fmt: 自定义格式；不传用带文件名/行号的默认格式。进度日志这类逐条刷屏的
+        内容传一个只有时间戳的格式，一行一眼能看完（handler 已建时该参数不生效）
     :return:
     """
     logs = logging.getLogger(log_name)
@@ -48,7 +50,7 @@ def get_log(log_name, level=logging.DEBUG, when='midnight', back_count=0, consol
     if not os.path.exists(LOG_PATH):
         os.makedirs(LOG_PATH)
     log_file_path = os.path.join(LOG_PATH, log_name)
-    formatter = logging.Formatter('%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s')
+    formatter = logging.Formatter(fmt or '%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s')
     # when: S=秒/M=分/H=小时/D=天/W=每星期/midnight=每天凌晨
     # backupCount: 备份文件保留个数，超过就自动删除
     fh = TimedRotatingFileHandler(
