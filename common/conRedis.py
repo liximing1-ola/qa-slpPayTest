@@ -11,6 +11,7 @@ class conRedis:
     }
 
     _pools = {}
+    _raw_pools = {}
 
     @classmethod
     def getConn(cls, host: str = None) -> redis.Redis:
@@ -27,6 +28,26 @@ class conRedis:
             cls._pools[host] = redis.Redis(connection_pool=pool)
 
         return cls._pools[host]
+
+    @classmethod
+    def getRawConn(cls, host: str = None) -> redis.Redis:
+        """获取二进制连接（decode_responses=False）
+
+        房间快照 Room.Data.<rid> 存的是 protobuf，用默认连接读会抛
+        UnicodeDecodeError: 'utf-8' codec can't decode byte 0x8d。
+        """
+        if host is None:
+            host = cls.redis_config['host_slp']
+
+        if host not in cls._raw_pools:
+            pool = redis.ConnectionPool(
+                host=host,
+                port=cls.redis_config['port'],
+                decode_responses=False
+            )
+            cls._raw_pools[host] = redis.Redis(connection_pool=pool)
+
+        return cls._raw_pools[host]
 
     # ========== 字符串操作（增删改查）==========
 
