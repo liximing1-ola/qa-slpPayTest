@@ -340,7 +340,9 @@ juewei_level = {
 	'子爵': {
 		'level': 30,
 		'update': 100,
-		'base': 800000,
+		# 与 conMysql.updateUserInfoSql 里 jw_config['30'] 对齐：原来多写了一个 0（800000），
+		# 一旦有用例拿它当成长值断言就会与库里写入的 80000 差 10 倍
+		'base': 80000,
 	},
 	'伯爵': {
 		'level': 40,

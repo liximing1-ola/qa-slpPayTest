@@ -19,11 +19,14 @@ class TestPayCreate(unittest.TestCase):
 	def test_001(self, des='vip人气计算,使用爵位+加速卡,房间送礼'):
 		rid = gs_A_rid_1
 		uid = gsUid
-		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid不是工会成员
+		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
+		# xsg 的爵位成长值（殿=2500 万）与 slp 那套完全不同，必须显式传入 growth，
+		# 否则 updateUserInfoSql 会按 slp 表写成 650 万，库里 level 与 growth 不自洽
+		jw = juewei_level['normal_uid']['殿']
 		prepare_vip_pop_data(uid)
-		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['normal_uid']['殿']['level'])
+		mysql.updateUserInfoSql('user_title_new', uid, level=jw['level'], growth=jw['base'])
 		prepare_vip_pop_data(payUid)
-		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['normal_uid']['殿']['level'])
+		mysql.updateUserInfoSql('user_title_new', payUid, level=jw['level'], growth=jw['base'])
 		mysql.updateMoneySql(payUid, default_money)
 		mysql.deleteUserAccountSql('user_commodity', payUid)
 
@@ -59,10 +62,11 @@ class TestPayCreate(unittest.TestCase):
 	def test_002(self, des='vip人气计算,使用爵位+加速卡,私聊送礼'):
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
+		jw = juewei_level['normal_uid']['帝']
 		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		prepare_vip_pop_data(uid, payUid)
-		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['normal_uid']['帝']['level'])
-		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['normal_uid']['帝']['level'])
+		mysql.updateUserInfoSql('user_title_new', uid, level=jw['level'], growth=jw['base'])
+		mysql.updateUserInfoSql('user_title_new', payUid, level=jw['level'], growth=jw['base'])
 
 		payUid_old_vip = mysql.selectUserInfoSql('pay_room_money', payUid)
 		payUid_old_pop = mysql.selectUserInfoSql('popularity', payUid)

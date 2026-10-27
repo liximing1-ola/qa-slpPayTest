@@ -2,8 +2,8 @@
 /log/
 /time.txt
 /.idea/workspace.xml
-/common/starifyUserToken.txt
+# Session.checkUserToken 写出的登录 token：slp / xsg 各一份，含真实凭据，绝不能进仓库
+# （原来只忽略了已下线项目的 starifyUserToken.txt，slp/xsg 的建议漏掉了）
+/common/*UserToken.txt
 __pycache__/
-caseStarify/__pycache__/
 common/__pycache__/
-/caseStarify/del/

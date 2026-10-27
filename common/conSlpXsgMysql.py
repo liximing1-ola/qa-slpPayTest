@@ -75,14 +75,21 @@ def _query_all_dict(sql):
 
 
 def _query_dict_row(sql):
-    """查询并把第一行转成 {列名: 值}；SQL 故障与空结果统一抛 DbQueryError"""
+    """查询并把第一行转成 {列名: 值}
+
+    SQL 故障与「查不到数据」都抛 DbQueryError，但文案分开写：以前空结果也报
+    "SQL 执行异常"，排查时会误以为是连接或语法问题，实际只是配置行不存在。
+    """
     try:
         conMysql.cur.execute(sql)
         rows = conMysql.cur.fetchall()
         column = [index[0] for index in conMysql.cur.description]
-        return [dict(zip(column, row)) for row in rows][0]
+        result = [dict(zip(column, row)) for row in rows]
     except Exception as error:
         raise DbQueryError('SQL 执行异常, SQL: {}, 原因: {}'.format(sql, error)) from error
+    if not result:
+        raise DbQueryError('查询结果为空, SQL: {}'.format(sql))
+    return result[0]
 
 
 def _exec_write(sql, action):
@@ -101,15 +108,23 @@ def _exec_write(sql, action):
 
 
 def _exec_writes(sqls, action):
-    """按顺序执行多条写 SQL，任一条失败即回滚并抛 DbQueryError（报出失败的那条）"""
+    """按顺序执行多条写 SQL，任一条失败即整体回滚并抛 DbQueryError（报出失败的那条）
+
+    连接是 autocommit=True，若逐条直接 execute 就等于每条各自提交：第二条失败时
+    第一条已经落地。典型受害场景是「先删旧券、再插新券」（insertXsUserCouponUse），
+    插入失败会留下「券被删掉了」的中间态，后续用例全部拿不到券、连锁报错。
+    这里显式开事务，让多条语句要么全成功、要么全不发生。
+    """
+    current = '<begin>'
     try:
-        for sql in sqls:
-            conMysql.cur.execute(sql)
+        # autocommit 连接上调 begin() 才会真正开启事务，之后的 execute 不再逐条提交
+        conMysql.con.begin()
+        for current in sqls:
+            conMysql.cur.execute(current)
     except Exception as error:
         _safe_rollback()
-        raise DbQueryError('{}, SQL: {}, 原因: {}'.format(action, sql, error)) from error
-    finally:
-        conMysql.con.commit()
+        raise DbQueryError('{}, SQL: {}, 原因: {}'.format(action, current, error)) from error
+    conMysql.con.commit()
 
 
 class _ClassProperty:
@@ -380,7 +395,14 @@ class conMysql:
 
     # 更新用户数据
     @staticmethod
-    def updateUserInfoSql(tableName, uid, level=10):
+    def updateUserInfoSql(tableName, uid, level=10, growth=None):
+        """修改用户爵位等级
+
+        :param growth: 贵族成长值。None 表示按 slp 的爵位成长值表换算；
+            小拾光（xsg）的爵位体系与 slp 完全不同（殿=2500 万，slp 同 level 的亲王只有 650 万），
+            跨 App 用例必须显式传入本 App 的成长值，否则库里 level 与 growth 不自洽，
+            服务端按 growth 换算爵位时会算出与用例预期不同的倍率。
+        """
         if tableName == 'user_title_new':  # 修改用户爵位等级
             jw_config = {
                 "0": 0,
@@ -394,8 +416,10 @@ class conMysql:
                 "80": 15000000,
                 "90": 50000000,
             }
+            if growth is None:
+                growth = jw_config[str(level)]
             subscribe_time = int(time.time()) + 1 * 24 * 60 * 60
-            sql = f"""update xs_user_title_new set level={level},growth={jw_config[str(level)]},effective_value={jw_config[str(level)]},subscribe_time={subscribe_time},effective_time={subscribe_time} where uid ={uid};"""
+            sql = f"""update xs_user_title_new set level={level},growth={growth},effective_value={growth},subscribe_time={subscribe_time},effective_time={subscribe_time} where uid ={uid};"""
             _exec_write(sql, '数据更新失败')
         else:
             print('{} Error'.format(tableName))
@@ -426,10 +450,9 @@ class conMysql:
 
     @staticmethod
     def checkXsCommodity(cid, name='青铜体验券'):
-        sql = "select name from xs_commodity where cid={}".format(cid)
-        conMysql.cur.execute(sql)
-        res = conMysql.cur.fetchone()
-        if res is None:
+        # 走 _query_one 而不是裸 execute：连库失败时要抛 DbQueryError，
+        # 而不是把 pymysql 的原始异常糊到调用栈里
+        if _query_one("select name from xs_commodity where cid={}".format(cid)) is None:
             raise Exception('xs_commodity {}不存在'.format(name))
 
     # 查询工会是否存在
@@ -468,7 +491,8 @@ class conMysql:
         SELECT JSON_EXTRACT(reason, '$.to') AS to_uid,JSON_EXTRACT(reason, '$.gid') AS gid,SUM(JSON_EXTRACT(reason, '$.num')) AS total_num FROM xs_pay_change WHERE uid = {uid} AND JSON_UNQUOTE(JSON_EXTRACT(reason, '$.obr')) IS NOT NULL GROUP BY gid, to_uid ORDER BY to_uid;
         """
         res = _query_all_dict(sql)
-        return 0 if res is None else res
+        # 没有打赏记录时是空列表，不能退回 0：调用方直接 for 遍历，0 会抛 TypeError
+        return res
 
     @staticmethod
     def checkUserBroker(uid):
@@ -536,7 +560,8 @@ class conMysql:
     # 修改冠歌信息-过期
     @staticmethod
     def updateXsRoomUserMusicNaming(song_id):
-        sql = f"""update xs_room_user_music_naming set expire_time=expire_time-24*3600*365 where song_id={song_id} order by id desc limit 1;;"""
+        # 结尾原来多打了一个分号（limit 1;;），多余的分号在 COM_QUERY 下会变成语法错误
+        sql = f"""update xs_room_user_music_naming set expire_time=expire_time-24*3600*365 where song_id={song_id} order by id desc limit 1;"""
         _exec_write(sql, '数据更新失败')
 
     # 删除才艺厅购买观众位记录
