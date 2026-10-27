@@ -88,13 +88,18 @@ def assert_body(body, body_msg, expected_msg, reason):
     验证response状态码
     :param body: 返回值
     :param body_msg: 参数
-    :param expected_msg: 预期结果
+    :param expected_msg: 预期结果；传 list/tuple/set 表示多套文案任一命中即通过
     :param reason: 原因
     """
     try:
         # msg = body[body_msg]
         msg = body.get(body_msg, None)
-        assert msg == expected_msg
+        # 同一个语义在不同链路上可能文案不同（甚至暂时不回文案），预期写成集合就能逐条兼容，
+        # 但仍在“返回值不在集合里”时报错，不会退化成完全不校验
+        if isinstance(expected_msg, (list, tuple, set)):
+            assert msg in expected_msg
+        else:
+            assert msg == expected_msg
         return True
     except Exception:
         detail = '{}：实际返回值 {}, 预期 {}'.format(reason, body.get(body_msg, None) if isinstance(body, dict) else body, expected_msg)
