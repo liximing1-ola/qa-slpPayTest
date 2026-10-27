@@ -12,7 +12,7 @@ caseSlp/tools.py 与 caseXsg/tools.py 保留为转发模块，兼容原有引用
 import hashlib
 import math
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import requests
 
@@ -270,9 +270,11 @@ def get_last_weekday_timestamp(weekday_num=1):
     if weekday_num < 1 or weekday_num > 7:
         raise ValueError("weekday_num 必须是 1-7 之间的整数")
 
-    # 业务按北京时间切分"上周"，而云服务器时区通常是 UTC：
-    # 直接用 datetime.now() 会差 8 小时，把上周一 00:00 算成北京时间 08:00
-    today = datetime.now(timezone(timedelta(hours=8)))
+    # 这里必须用服务器本地时间：返回的时间戳会写进 xsst_roomacs_sum.date，
+    # 它是与服务端"周桶"对齐的 key，服务端按同一时区口径算周一 00:00。
+    # 改成固定 UTC+8 会让桶整体偏移 8 小时，服务端查不到"上周厅"，
+    # 分成类用例会全部掉进"上周厅不存在"的兜底规则（实测 6 条用例集体变红）
+    today = datetime.now()
     target_weekday = weekday_num - 1  # 转换为 0-6 (0=周一)
     days_ago = (today.weekday() - target_weekday + 7) % 7 + 7
     last_weekday = today - timedelta(days=days_ago)
