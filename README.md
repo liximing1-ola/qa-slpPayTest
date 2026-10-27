@@ -196,6 +196,13 @@ class TestPayCreate(unittest.TestCase):
 
 `assert_equal_eventually` 内部处理了两件容易踩的事：中间轮次的失败原因不会污染报告；超时后拿最后一轮的失败信息报错。
 
+重试是怎么跑的（`Retry` + `common/Request.py` 的回放）：
+
+- 只重试 `AssertionError`；`SkipTest`、`TypeError`、`KeyError`、`DbQueryError` 不重试，重跑也不会变好
+- 重试轮**不会重复下单**：首轮下单成功后，同参数的 `pay/create` 请求直接复用首轮响应，只重新做读库断言
+- 首轮下单**业务失败**时不复用（`success != 1` 的响应不进缓存），重试会真的重发请求 —— 否则偶发失败会被回放固定成“连撞四轮同一个错”
+- 数据准备类操作（改金额、插背包礼物）在重试轮跳过，避免把首轮已生效的造数覆盖掉
+
 ---
 
 ## 排查手册
@@ -203,7 +210,7 @@ class TestPayCreate(unittest.TestCase):
 1. **先单跑，再全量**。全量里随机 1~2 条红、单跑却必绿，基本是环境/缓存/顺序依赖，不是用例逻辑问题。
 2. **注意时区差**。测试机是 CST（东八区），**MySQL 是 UTC**：`from_unixtime` 出来的时间会比机器时间差 8 小时。往时间窗口里造数据时不要卡边界（比如插「上周一 00:00」），要放在窗口中间，否则任何时区偏差都会让它掉出区间。
 3. **Redis 连接配置的 key 是 `host_slp`**，不是 `host`；`conRedis.get(key)` 走的是 `decode_responses=True` 的连接，读 protobuf 之类的二进制值会抛 `UnicodeDecodeError`，这种场景用 `conRedis.getRawConn()`。
-4. **不要主动删 `Room.Data.<rid>`**。删掉会让服务端 go2cache 必然 miss 并走回源重建，回源与 binlog 同步链路的口径不一致时接口就报「房间类型错误」；而 `Retry` 重试时又删一次，形成“越删越错”的自循环。库里数据正确时，缓存刷新交给 binlog 同步任务即可。
+4. **看到「房间类型错误」先查有没有 `[Retry]` 行**。这类偶发失败的真因可能在重试回放：首轮请求业务失败后，重试轮复用了那份失败响应，四轮都不重发请求，看起来就像服务端持续故障（已修复，见 `common/Request.py` 的 `_is_business_success`）。另外没必要主动删 `Room.Data.<rid>`：库数据正确时，缓存刷新交给 binlog 同步任务即可。
 5. **环境数据先行断言**。用例开头用 `checkRidFactoryType(rid)` / `checkUserBroker(uid)` 这类断言确认房间类型、公会关系，环境被改坏时能一眼看出是“数据不对”而不是“代码坏了”。
 6. **改完先编译**：`python3 -m compileall -q caseSlp caseXsg common`，比跑一遍全量快得多。
 
