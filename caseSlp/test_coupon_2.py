@@ -5,7 +5,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data, insert_coupon
-from common.Assert import assert_equal, assert_pay_success
+from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
@@ -42,7 +42,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['937']['price'] * num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['937']['price'] * num * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * num * 0.9)
+		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * num * (1 - commodityId['89370']['discount']))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 
 	def test_004(self, des='房间,9折券(无损),打赏1个人多个礼物'):
@@ -72,7 +72,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		             giftId['937']['price'] * num * rates['gs']['default'])
 		assert_equal(mysql.selectUserInfoSql('sum_money', uid), giftId['937']['price'] * num * rates['gs']['default'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * 1 * 0.9
+		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), default_money - giftId['937']['price'] * 1 * (1 - commodityId['89370']['discount'])
 		             - giftId['937']['price'] * (num - 1))
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 
@@ -103,10 +103,16 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'), giftId['937']['price'] * rates['gs']['as_normal'] * num)
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
-		             giftId['937']['price'] * rates['gs']['default'] * num)
-		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId['937']['price'] * rates['normal']['default'] * num)
+		# 无损：分成按礼物原价算，券只影响扣款。多人分批异步落库，用轮询
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
+			giftId['937']['price'] * rates['gs']['as_normal'] * num)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
+			giftId['937']['price'] * rates['gs']['default'] * num)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
+			giftId['937']['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
 
@@ -137,9 +143,15 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'), giftId['937']['price'] * rates['gs']['as_normal'] * num)
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
-		             giftId['937']['price'] * rates['gs']['default'] * num)
-		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId['937']['price'] * rates['normal']['default'] * num)
+		# 无损：分成按礼物原价算（用券那个收礼人也不打折），用券的分成会单独拆一批写入，用轮询
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
+			giftId['937']['price'] * rates['gs']['as_normal'] * num)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
+			giftId['937']['price'] * rates['gs']['default'] * num)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
+			giftId['937']['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
