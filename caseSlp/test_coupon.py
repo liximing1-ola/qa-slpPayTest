@@ -44,10 +44,13 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 			giftId['937']['price'] * num * rates['pop']['chat'] * (1 - commodityId['89297']['discount']))
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['937']['price'] * num * (1 - commodityId['89297']['discount']))
+		# 扣款与券核销同在服务端 consumeChatGift 消费阶段完成，和分成一样用轮询等落库
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('sum_money', payUid),
+			default_money - giftId['937']['price'] * num * (1 - commodityId['89297']['discount']))
 		# 券被正常消耗
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
 	def test_002(self, des='私聊,9折券(有损),打赏多个礼物,按9折成交,券已消耗'):
 		uid = gsUid
@@ -81,11 +84,14 @@ class TestPayCreate(unittest.TestCase):
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 			giftId['937']['price'] * 1 * rates['pop']['chat'] * (1 - commodityId['89297']['discount']) +
 			giftId['937']['price'] * (num - 1) * rates['pop']['chat'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['937']['price'] * 1 * (1 - commodityId['89297']['discount']) -
-		             giftId['937']['price'] * (num - 1))
+		# 扣款与券核销同在服务端 consumeChatGift 消费阶段完成，同样用轮询
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('sum_money', payUid),
+			default_money - giftId['937']['price'] * 1 * (1 - commodityId['89297']['discount']) -
+			giftId['937']['price'] * (num - 1))
 		# 券被正常消耗
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
 	def test_003(self, des='房间,9折券(有损),打赏1个人单个礼物'):
 		rid = gs_B_rid
@@ -262,9 +268,13 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal_eventually(
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 			giftId['211026']['price'] * num * rates['pop']['chat'] * (1 - commodityId['89297']['discount']))
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['211026']['price'] * num * (1 - commodityId['89297']['discount']))
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
+		# 扣款与券核销同在服务端 consumeChatGift 消费阶段完成，同样用轮询
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('sum_money', payUid),
+			default_money - giftId['211026']['price'] * num * (1 - commodityId['89297']['discount']))
+		# 券被正常消耗
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
 	def test_008(self, des='私聊,9折券(有损),打赏多个礼物,大额礼物,按9折成交,折扣无上限'):
 		uid = gsUid
@@ -299,11 +309,14 @@ class TestPayCreate(unittest.TestCase):
 			lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash_b'),
 			giftId['211026']['price'] * 1 * rates['pop']['chat'] * (1 - commodityId['89297']['discount']) +
 			giftId['211026']['price'] * (num - 1) * rates['pop']['chat'])
-		assert_equal(mysql.selectUserInfoSql('sum_money', payUid),
-		             default_money - giftId['211026']['price'] * 1 * (1 - commodityId['89297']['discount']) -
-		             giftId['211026']['price'] * (num - 1))
+		# 扣款与券核销同在服务端 consumeChatGift 消费阶段完成，同样用轮询
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('sum_money', payUid),
+			default_money - giftId['211026']['price'] * 1 * (1 - commodityId['89297']['discount']) -
+			giftId['211026']['price'] * (num - 1))
 		# 券被正常消耗
-		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
 	def test_009(self, des='房间,9折券(有损),打赏1个人单个礼物,大额礼物,折扣无上限'):
 		rid = gs_B_rid
