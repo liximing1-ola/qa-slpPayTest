@@ -1028,7 +1028,12 @@ class conMysql:
     @staticmethod
     def insertXsstRoomacsSum(uid, rid):
         date = get_last_weekday_timestamp()
-        sql = f"""INSERT INTO `xsst`.`xsst_roomacs_sum`(`id`, `rid`, `uid`, `role`, `date`, `datetype`, `totaltime`, `totalnum`, `totalmic`, `totalmicnum`, `pay`, `income`, `totalpay`, `join_uid_datetype_date`) VALUES (0, {rid}, {uid}, 2, {date}, 1, 58379, 1, 0, 0, 0, 0, 0, '200255342-1-1772380800');"""
+        # join_uid_datetype_date 是 uid-1-date 的拼接值，原来写死成 '200255342-1-1772380800'
+        # （uid 是别人、1772380800 是 2026-03-02 造数据时的那一周），和本次插入的 uid/date
+        # 完全对不上。服务端若按这个字段（或它上的唯一索引）定位上周厅，就永远查不到，
+        # 所有跳档分成用例都会掉进“上周厅不存在”的兜底比例（实测 0.6 / 0.2）
+        join_key = '{}-1-{}'.format(uid, date)
+        sql = f"""INSERT INTO `xsst`.`xsst_roomacs_sum`(`id`, `rid`, `uid`, `role`, `date`, `datetype`, `totaltime`, `totalnum`, `totalmic`, `totalmicnum`, `pay`, `income`, `totalpay`, `join_uid_datetype_date`) VALUES (0, {rid}, {uid}, 2, {date}, 1, 58379, 1, 0, 0, 0, 0, 0, '{join_key}');"""
         try:
             conMysql.cur.execute(sql)
         except Exception as error:
