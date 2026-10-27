@@ -123,6 +123,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 |------|--------|------|
 | `CASE` | 空（全量） | 只跑指定文件/类/用例，逗号分隔 |
 | `ROOM_DEBUG` | `0` | 点唱房用例请求前打印房间现场（Redis 的 `exists/ttl/len/has_factory_type` + 库内行数/类型/`deleted`/房主），排查「房间类型错误」时开 |
+| `NAMING_SLEEP` | 空（用各处原值 5s / 8s） | 点唱房用例「改库 → 下单」之间的等待覆盖值，设 `0` 用于验证这几秒到底有没有用 |
 | `ASSERT_SLEEP` | `0.3` | 每次状态码断言前的等待秒数（rpc 延迟补偿），设 `0` 关闭。主机名在 `config.linux_node` 里登记的测试机上自动免等待 |
 | `ASSERT_SETTLE` | 空 | 设 `1` 强制恢复断言延迟补偿；去掉等待后出现抖动时的回滚开关，不必改代码 |
 | `WAIT_TIMEOUT` / `WAIT_INTERVAL` | `3` / `0.2` | `assert_equal_eventually` 的轮询上限与间隔 |

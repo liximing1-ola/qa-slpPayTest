@@ -23,6 +23,21 @@ ROOM_DEBUG = os.environ.get('ROOM_DEBUG') == '1'
 # 服务端在「房间取不到」「RPC/回源失败」时复用的同一句文案，从不作为预期结果
 ROOM_TYPE_ERROR = '房间类型错误'
 
+# 改库到下单之间的固定等待可以被 NAMING_SLEEP 整体覆盖（对照实验用），不设就保持各处原值
+NAMING_SLEEP = os.environ.get('NAMING_SLEEP')
+NAMING_SLEEP = None if NAMING_SLEEP is None else float(NAMING_SLEEP)
+
+
+def cache_wait(seconds):
+	"""改库之后、下单之前的等待。
+
+	这段等待名义上是「留出造数完成到访问的间隔」，但实测服务端读房间走 go2cache，
+	miss 就回源 DB，而缓存常态就不存在（ttl=-2）——也就是说改完库下一次请求就能读到。
+	那这几秒到底有用没用，用 NAMING_SLEEP 对照实验定：设 0 仍全绿就是纯浪费，
+	设 0 会红则说明它护着的是「上一条用例的服务端异步处理」，得按最小可用值定。
+	"""
+	time.sleep(seconds if NAMING_SLEEP is None else NAMING_SLEEP)
+
 
 def room_scene(rid):
 	"""一行描述房间现场：Redis 缓存 + 库内行。只读取证，自身异常全部吞掉
@@ -167,7 +182,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(5)  # 和其它冠歌用例保持一致，留出造数完成到访问的间隔
+		cache_wait(5)
 		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
@@ -205,7 +220,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(5)
+		cache_wait(5)
 		res = post_pay(rid, data, des)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
@@ -242,7 +257,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(5)
+		cache_wait(5)
 		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
@@ -279,7 +294,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(5)
+		cache_wait(5)
 		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
@@ -317,7 +332,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(8)
+		cache_wait(8)
 		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
@@ -357,7 +372,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(8)
+		cache_wait(8)
 		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
@@ -396,7 +411,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(8)
+		cache_wait(8)
 		res = post_pay(rid, data, des)
 		assert_code(res['code'])
 		assert_body(res['body'], 'msg', '该礼物暂不支持购买', reason(des, res))
@@ -436,7 +451,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
-		time.sleep(8)
+		cache_wait(8)
 		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
