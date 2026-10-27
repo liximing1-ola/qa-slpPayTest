@@ -122,7 +122,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `CASE` | 空（全量） | 只跑指定文件/类/用例，逗号分隔 |
-| `ROOM_DEBUG` | `0` | 点唱房用例请求前打印房间缓存快照（`exists/ttl/len/has_factory_type`），排查「房间类型错误」时开 |
+| `ROOM_DEBUG` | `0` | 点唱房用例请求前打印房间现场（Redis 的 `exists/ttl/len/has_factory_type` + 库内行数/类型/`deleted`/房主），排查「房间类型错误」时开 |
 | `ASSERT_SLEEP` | `0.3` | 每次状态码断言前的等待秒数（rpc 延迟补偿），设 `0` 关闭。主机名在 `config.linux_node` 里登记的测试机上自动免等待 |
 | `ASSERT_SETTLE` | 空 | 设 `1` 强制恢复断言延迟补偿；去掉等待后出现抖动时的回滚开关，不必改代码 |
 | `WAIT_TIMEOUT` / `WAIT_INTERVAL` | `3` / `0.2` | `assert_equal_eventually` 的轮询上限与间隔 |
@@ -244,7 +244,7 @@ class TestPayCreate(unittest.TestCase):
 1. **先单跑，再全量**。全量里随机 1~2 条红、单跑却必绿，基本是环境/缓存/顺序依赖，不是用例逻辑问题。
 2. **注意时区差**。测试机是 CST（东八区），**MySQL 是 UTC**：`from_unixtime` 出来的时间会比机器时间差 8 小时。往时间窗口里造数据时不要卡边界（比如插「上周一 00:00」），要放在窗口中间，否则任何时区偏差都会让它掉出区间。
 3. **Redis 连接配置的 key 是 `host_slp`**，不是 `host`；`conRedis.get(key)` 走的是 `decode_responses=True` 的连接，读 protobuf 之类的二进制值会抛 `UnicodeDecodeError`，这种场景用 `conRedis.getRawConn()`。
-4. **看到「房间类型错误」先查有没有 `[Retry]` 行**。这类偶发失败的真因可能在重试回放：首轮请求业务失败后，重试轮复用了那份失败响应，四轮都不重发请求，看起来就像服务端持续故障（已修复，见 `common/Request.py` 的 `_is_business_success`）。另外没必要主动删 `Room.Data.<rid>`：库数据正确时，缓存刷新交给 binlog 同步任务即可。
+4. **看到「房间类型错误」先查有没有 `[Retry]` 行**。这类偶发失败的真因可能在重试回放：首轮请求业务失败后，重试轮复用了那份失败响应，四轮都不重发请求，看起来就像服务端持续故障（已修复，见 `common/Request.py` 的 `_is_business_success`）。现在这句文案也不再是孤证：`caseSlp/test_naming_song.py` 的下单一律走 `post_pay()`，命中房间类错误时会把房间现场一并写进失败原因（Redis 的 `exists/ttl/len/has_factory_type` + 库内行数/类型/`deleted`/房主），据此一眼分开两种情形：**行数≠1 或 `deleted`≠0 → 环境数据坏了**；**库内完全正确 → 服务端侧偶发（RPC/回源失败复用同一句文案）**，交给 `@Retry` 兜底即可，不用再复现一遍。另外没必要主动删 `Room.Data.<rid>`：库数据正确时，缓存刷新交给 binlog 同步任务即可——实测缓存绝大多数时间不存在（`ttl=-2`），但用例照样通过，「缓存不在」本身不是判据。
 5. **环境数据先行断言**。用例开头用 `checkRidFactoryType(rid)` / `checkUserBroker(uid)` 这类断言确认房间类型、公会关系，环境被改坏时能一眼看出是“数据不对”而不是“代码坏了”。
 6. **改完先编译**：`python3 -m compileall -q caseSlp caseXsg common`，比跑一遍全量快得多。
 

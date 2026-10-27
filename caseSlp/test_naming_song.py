@@ -7,6 +7,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data, insert_package_gift
+from common import Consts
 from common.Assert import assert_body, assert_code, assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
@@ -19,29 +20,60 @@ from common.runFailed import Retry
 # 正常跑的人用不上，反而淹掉真正要看的输出
 ROOM_DEBUG = os.environ.get('ROOM_DEBUG') == '1'
 
+# 服务端在「房间取不到」「RPC/回源失败」时复用的同一句文案，从不作为预期结果
+ROOM_TYPE_ERROR = '房间类型错误'
+
+
+def room_scene(rid):
+	"""一行描述房间现场：Redis 缓存 + 库内行。只读取证，自身异常全部吞掉
+
+	「房间类型错误」既可能是房间数据真的坏了（被删/类型被改/多出一行），也可能是服务端
+	RPC 或回源失败复用了同一句话。只剩一句文案时分不开这两种，所以失败时把现场一起带上。
+	只读不删：删 Room.Data.<rid> 会让服务端 go2cache 必然 miss 并回源重建，
+	并不比让它自己跟 binlog 同步更可靠。
+	"""
+	parts = []
+	try:
+		key = 'Room.Data.{}'.format(rid)
+		raw = conRedis.getRawConn().get(key)
+		parts.append('redis exists={} ttl={} len={} has_factory_type={}'.format(
+			1 if raw else 0, conRedis.getConn().ttl(key), len(raw) if raw else 0,
+			b'business-music' in raw if raw else False))
+	except Exception as error:
+		# 现场只是辅助信息，读不到不能反过来把用例搞红
+		parts.append('redis 读取失败: {}'.format(error))
+	try:
+		scene = mysql.checkRoomScene(rid)
+		parts.append('db 行数={} 类型={} deleted={} 房主={}'.format(
+			scene['rows'], scene['factory_type'], scene['deleted'], scene['owner']))
+	except Exception as error:
+		parts.append('db 读取失败: {}'.format(error))
+	return '; '.join(parts)
+
 
 def snapshot_room(rid):
-	"""请求前打一行房间缓存快照，只读不删（需 ROOM_DEBUG=1）。
+	"""请求前打一行房间快照（需 ROOM_DEBUG=1）"""
+	if ROOM_DEBUG:
+		print('[room] {} {}'.format(rid, room_scene(rid)))
 
-	排查「房间类型错误」时用：对照 exists / ttl / len / has_factory_type 就能判断
-	是缓存内容不对，还是服务端回源、RPC 那条链的问题。
 
-	只读不删：删掉 Room.Data.<rid> 会让服务端 go2cache 必然 miss 并回源重建，
-	并不比让它自己跟 binlog 同步更可靠。库里数据（deleted=0、
-	room_factory_type='business-music'）正确时，缓存刷新交给 binlog 同步任务即可。
+def post_pay(rid, data, des):
+	"""下单。命中「房间类型错误」时把房间现场写进失败原因再抛出。
+
+	这句文案在本文件里从来不是预期结果（预期失败的用例等的是「冠名等级需高于当前等级」
+	「该礼物暂不支持购买」这类业务文案），所以遇到就立即失败，不继续往下走断言——
+	否则 test_009 那种用例会报成「预期『该礼物暂不支持购买』实际『房间类型错误』」，
+	看着像业务分支不符，实际是请求在房间校验阶段就被挡回去了。
 	"""
-	if not ROOM_DEBUG:
-		return
-	key = 'Room.Data.{}'.format(rid)
-	try:
-		raw = conRedis.getRawConn().get(key)
-	except Exception as error:
-		# 读缓存失败不阻断用例：只是少了现场信息
-		print('[room] 读取房间缓存失败 {}: {}'.format(key, error))
-		return
-	print('[room] {} exists={} ttl={} len={} has_factory_type={}'.format(
-		key, 1 if raw else 0, conRedis.getConn().ttl(key), len(raw) if raw else 0,
-		b'business-music' in raw if raw else False))
+	snapshot_room(rid)
+	res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+	body = res.get('body') if isinstance(res, dict) else None
+	if isinstance(body, dict) and body.get('msg') == ROOM_TYPE_ERROR:
+		detail = '{}：实际返回值 {}, 预期 任何非房间类错误（房间现场: {}）'.format(
+			reason(des, res), ROOM_TYPE_ERROR, room_scene(rid))
+		Consts.fail_case_reason.append(detail)
+		raise AssertionError(detail)
+	return res
 
 
 # 偶发「房间类型错误」的开关已收掉（见 snapshot_room：请求前不再删缓存），重试只当兜底：
@@ -74,8 +106,7 @@ class TestPayCreate(unittest.TestCase):
 			money=money,
 			order_songs=order_songs
 		)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
@@ -103,8 +134,7 @@ class TestPayCreate(unittest.TestCase):
 			money=money,
 			order_songs=order_songs
 		)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'), money * rates['gs']['default'])
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), default_money - money)
@@ -138,8 +168,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)  # 和其它冠歌用例保持一致，留出造数完成到访问的间隔
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
@@ -177,8 +206,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
 		assert_body(res['body'], 'msg', '冠名等级需高于当前等级', reason(des, res))
@@ -215,8 +243,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
@@ -253,8 +280,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
@@ -292,8 +318,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
@@ -333,8 +358,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		                        naming_song_config[beilv]['money'] * rates['gs']['default'])
@@ -373,8 +397,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_code(res['code'])
 		assert_body(res['body'], 'msg', '该礼物暂不支持购买', reason(des, res))
 
@@ -414,8 +437,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
-		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
+		res = post_pay(rid, data, des)
 		assert_pay_success(res, des)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('single_money', uid, money_type='money_cash'),
 		                        naming_song_config[beilv]['money'] * rates['gs']['default'])

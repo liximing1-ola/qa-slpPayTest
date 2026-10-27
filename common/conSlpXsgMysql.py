@@ -489,6 +489,23 @@ class conMysql:
         row = _query_one('select room_factory_type from xs_chatroom where rid={}'.format(rid))
         return None if row is None else row[0]
 
+    # 房间现场：行数/类型/删除标记/房主。排查「房间类型错误」时用
+    @staticmethod
+    def checkRoomScene(rid):
+        """房间在库里的全部行（同一个 rid 可能有多行，所以返回列表）
+
+        「房间类型错误」这句文案既可能是房间数据真的坏了，也可能是服务端 RPC/回源失败
+        复用了同一句话。只看一句文案分不开，必须同时看：行数是否唯一、deleted 是否被置 1、
+        room_factory_type 是否还是期望值。
+        """
+        rows = _query_all('select uid, room_factory_type, deleted from xs_chatroom where rid={}'.format(rid))
+        return {
+            'rows': len(rows),
+            'factory_type': [row[1] for row in rows],
+            'deleted': [row[2] for row in rows],
+            'owner': [row[0] for row in rows],
+        }
+
     # 修改大神认证 1=同意,0=不同意
     @staticmethod
     def updateUserGodSql(uid, agreement_version):
