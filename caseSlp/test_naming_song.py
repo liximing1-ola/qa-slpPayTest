@@ -4,6 +4,7 @@ __desc__ = "点唱房-点歌/冠歌"
 import os
 import time
 import unittest
+from datetime import datetime
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data, insert_package_gift
@@ -55,14 +56,17 @@ ROOM_EXTRA_KEYS = {
 
 
 def room_scene(rid):
-	"""一行描述房间现场：Redis 缓存 + 库内行。只读取证，自身异常全部吞掉
+	"""一行描述房间现场：发生时刻 + Redis + 库内行。只读取证，自身异常全部吞掉
 
 	「房间类型错误」既可能是房间数据真的坏了（被删/类型被改/多出一行），也可能是服务端
 	RPC 或回源失败复用了同一句话。只剩一句文案时分不开这两种，所以失败时把现场一起带上。
 	只读不删：删 Room.Data.<rid> 会让服务端 go2cache 必然 miss 并回源重建，
 	并不比让它自己跟 binlog 同步更可靠。
+
+	时刻带毫秒是给服务端捞日志用的：响应体只有 success/msg，没有任何可对齐的标识，
+	失败时刻是唯一能和服务端日志对上的东西。
 	"""
-	parts = []
+	parts = [datetime.now().strftime('时刻=%Y-%m-%d %H:%M:%S.%f')[:-3]]
 	try:
 		key = 'Room.Data.{}'.format(rid)
 		raw = conRedis.getRawConn().get(key)
@@ -103,8 +107,10 @@ def post_pay(rid, data, des):
 	res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 	body = res.get('body') if isinstance(res, dict) else None
 	if isinstance(body, dict) and body.get('msg') == ROOM_TYPE_ERROR:
-		detail = '{}：实际返回值 {}, 预期 任何非房间类错误（房间现场: {}）'.format(
-			reason(des, res), ROOM_TYPE_ERROR, room_scene(rid))
+		# 带上整包：目前只有 success/msg，但万一服务端以后补上 trace/request id，
+		# 那才是能和服务端日志对上的东西，不用再改代码
+		detail = '{}：实际返回值 {}, 服务端整包 {}, 预期 任何非房间类错误（房间现场: {}）'.format(
+			reason(des, res), ROOM_TYPE_ERROR, body, room_scene(rid))
 		Consts.fail_case_reason.append(detail)
 		raise AssertionError(detail)
 	return res

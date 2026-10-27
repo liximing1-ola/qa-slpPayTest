@@ -122,7 +122,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `CASE` | 空（全量） | 只跑指定文件/类/用例，逗号分隔 |
-| `ROOM_DEBUG` | `0` | 点唱房用例请求前打印房间现场（`Room.Data` 的 `exists/ttl/len/has_factory_type` + `tavern_enable`/`gate_chseq` 两个开关 + 库内行数/类型/`deleted`/房主），排查「房间类型错误」时开 |
+| `ROOM_DEBUG` | `0` | 点唱房用例请求前打印房间现场（毫秒时刻 + `Room.Data` 的 `exists/ttl/len/has_factory_type` + `tavern_enable`/`gate_chseq` 两个开关 + 库内行数/类型/`deleted`/房主），排查「房间类型错误」时开。失败时不论此开关都会带上现场 |
 | `NAMING_SLEEP` | 空（用各处原值 5s / 8s） | 点唱房用例「改库 → 下单」之间的等待覆盖值。实测设 `0` 只省约 9 秒（52 秒里的其余部分是异步落库必需），所以默认保留原值，此开关仅作评测用 |
 | `ASSERT_SLEEP` | `0.3` | 每次状态码断言前的等待秒数（rpc 延迟补偿），设 `0` 关闭。主机名在 `config.linux_node` 里登记的测试机上自动免等待 |
 | `ASSERT_SETTLE` | 空 | 设 `1` 强制恢复断言延迟补偿；去掉等待后出现抖动时的回滚开关，不必改代码 |
