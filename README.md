@@ -18,7 +18,7 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/liximing1-ola/qa-slpPayTest.git
+git clone <仓库地址>            # 换成自己可访问的地址
 cd qa-slpPayTest
 pip3 install -r requirements.txt
 mkdir -p log                     # 运行日志目录，首次要手动建
@@ -94,7 +94,7 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 ```bash
 crontab -e
 # 每天凌晨 2 点跑 SLP，结果追加到 log/cron.log
-0 2 * * * cd /home/ecs-user/qa-slpPayTest && python3 run_crontab_case.py slp >> log/cron.log 2>&1
+0 2 * * * cd /home/<user>/qa-slpPayTest && python3 run_crontab_case.py slp >> log/cron.log 2>&1
 ```
 
 `run_crontab_case.py` 与 `run_all_case.py` 的区别：不拉取代码分支、不逐条播报通过用例，只出汇总和失败清单，适合无人值守。
@@ -105,11 +105,13 @@ crontab -e
 
 | 用途 | 地址 |
 |------|------|
-| API | `https://192.168.1.23/`（`common/Config.py` 的 `appInfo`） |
-| MySQL | `192.168.1.24:3306`，默认 `root` / `root`，可用 `DB_HOST` 等环境变量覆盖 |
-| Redis | `192.168.1.24:6379`，无密码，可用 `REDIS_HOST` / `REDIS_PORT` 覆盖 |
+| API | `https://<api-host>/`（`common/Config.py` 的 `appInfo`） |
+| MySQL | `<db-host>:3306`，账号密码见 `common/Config.py`，可用 `DB_HOST` 等环境变量覆盖 |
+| Redis | `<db-host>:6379`，无密码，可用 `REDIS_HOST` / `REDIS_PORT` 覆盖 |
 
-slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（`com.yhl.sleepless.android` / `com.im.shiguang.android`）。
+具体地址不写进文档，统一配在 `common/Config.py` 或上面那几个环境变量里（本文出现的 `<api-host>` / `<db-host>` 均为占位符）。
+
+slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（两个 App 各自的包名，见 `caseSlp/config.py` / `caseXsg/config.py`）。
 
 ---
 
@@ -121,7 +123,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 |------|--------|------|
 | `CASE` | 空（全量） | 只跑指定文件/类/用例，逗号分隔 |
 | `ROOM_DEBUG` | `0` | 点唱房用例请求前打印房间缓存快照（`exists/ttl/len/has_factory_type`），排查「房间类型错误」时开 |
-| `ASSERT_SLEEP` | `0.3` | 每次状态码断言前的等待秒数（rpc 延迟补偿），设 `0` 关闭。主机名在 `config.linux_node` 里登记的测试机（含 `slp-dev`）上自动免等待 |
+| `ASSERT_SLEEP` | `0.3` | 每次状态码断言前的等待秒数（rpc 延迟补偿），设 `0` 关闭。主机名在 `config.linux_node` 里登记的测试机上自动免等待 |
 | `ASSERT_SETTLE` | 空 | 设 `1` 强制恢复断言延迟补偿；去掉等待后出现抖动时的回滚开关，不必改代码 |
 | `WAIT_TIMEOUT` / `WAIT_INTERVAL` | `3` / `0.2` | `assert_equal_eventually` 的轮询上限与间隔 |
 | `RETRY_SLEEP` | `1` | 重试间隔基数，第 n 次重试等 `n × RETRY_SLEEP` 秒，设 `0` 改为立即重试 |
@@ -129,9 +131,9 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | `FREQUENT_RETRY` | `2` | 命中频控/防重文案（「请勿频繁操作」「请求太慢了，请稍后重试」等）后的重试次数，退避按 2s、4s 递增 |
 | `PUSH_WX` | `0` | 是否推送企业微信群；默认关闭，结果只落控制台与日志 |
 | `LIST_PASS` | `0` | 推送时额外列出通过用例（需 `PUSH_WX=1`） |
-| `WX_BOT_SLP` / `SLACK_BOT_SLP` | 内置测试群 | 通知 webhook，换群/轮换 key 不用改代码 |
-| `DB_HOST` / `DB_USER` / `DB_PASS` | `192.168.1.24` / `root` / `root` | 测试库连接信息 |
-| `REDIS_HOST` / `REDIS_PORT` | `192.168.1.24` / `6379` | Redis 连接信息 |
+| `WX_BOT_SLP` / `SLACK_BOT_SLP` | 见 `common/Config.py` | 通知 webhook，换群/轮换 key 不用改代码 |
+| `DB_HOST` / `DB_USER` / `DB_PASS` | 见 `common/Config.py` | 测试库连接信息 |
+| `REDIS_HOST` / `REDIS_PORT` | 见 `common/Config.py` | Redis 连接信息 |
 
 ---
 
@@ -254,8 +256,8 @@ class TestPayCreate(unittest.TestCase):
 |------|------|
 | 一条用例都没跑 / 大量跳过 | 看 `log/getSession.log` 是否取到 token，再看 `log/caseResult.log` 的条数汇总；跳过信息里会写依赖了哪条前序用例 |
 | `pip install` 失败 | 确认 `python3 --version` ≥ 3.9；`requirements.txt` 只保留 4 个真实依赖 |
-| 数据库连接失败 | 检查与 `192.168.1.24:3306` 的连通性 |
-| Token 获取失败 | 检查 `192.168.1.23/test/userToken` 是否可访问 |
+| 数据库连接失败 | 检查与 `DB_HOST`（默认值见 `common/Config.py`）的连通性 |
+| Token 获取失败 | 检查 `<api-host>/test/userToken` 是否可访问 |
 | `ModuleNotFoundError` | 重新 `pip3 install -r requirements.txt` |
 | 网络/端口要求 | 见 [DEPLOY.md](DEPLOY.md) 的「网络要求」 |
 

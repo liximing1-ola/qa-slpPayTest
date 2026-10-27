@@ -4,10 +4,13 @@
 
 | 项目 | 值 |
 |------|-----|
-| 代码仓库地址 | `https://github.com/liximing1-ola/qa-slpPayTest.git` |
-| 服务器部署路径 | `/home/ecs-user/qa-slpPayTest` |
+| 代码仓库地址 | `<仓库地址>` |
+| 服务器部署路径 | `/home/<user>/qa-slpPayTest` |
 | Python 版本要求 | 3.9+（当前服务器 3.11） |
-| 测试应用 | SLP（不夜星球）/ XSG（小拾光） |
+| 测试应用 | SLP / XSG |
+
+> 本文所有地址、路径、账号均为占位符（`<api-host>` / `<db-host>` / `<user>` 等），
+> 真实环境信息只配在 `common/Config.py` 与环境变量里，不写进文档。
 
 ---
 
@@ -16,8 +19,8 @@
 ### 第 1 步：登录服务器，拉取代码
 
 ```bash
-cd /home/ecs-user
-git clone https://github.com/liximing1-ola/qa-slpPayTest.git
+cd /home/<user>
+git clone <仓库地址>
 cd qa-slpPayTest
 ```
 
@@ -62,7 +65,7 @@ git --version
 ## 后续更新代码
 
 ```bash
-cd /home/ecs-user/qa-slpPayTest
+cd /home/<user>/qa-slpPayTest
 git pull origin master
 pip3 install -r requirements.txt    # 依赖有变更时执行
 ```
@@ -75,12 +78,12 @@ pip3 install -r requirements.txt    # 依赖有变更时执行
 
 | 地址 | 端口 | 用途 |
 |------|------|------|
-| 192.168.1.23 | 443 | API 服务器 |
-| 192.168.1.24 | 3306 | MySQL 数据库 |
-| 192.168.1.24 | 6379 | Redis |
-| 192.168.11.46 | 3306 | MySQL（旧版） |
-| hooks.slack.com | 443 | 结果通知（需外网） |
-| qyapi.weixin.qq.com | 443 | 企业微信通知（需外网） |
+| `<api-host>` | 443 | API 服务器 |
+| `<db-host>` | 3306 | MySQL 数据库 |
+| `<db-host>` | 6379 | Redis |
+| `<legacy-db-host>` | 3306 | MySQL（旧版） |
+| `hooks.slack.com` | 443 | 结果通知（需外网） |
+| `qyapi.weixin.qq.com` | 443 | 企业微信通知（需外网） |
 
 ---
 
@@ -90,22 +93,22 @@ pip3 install -r requirements.txt    # 依赖有变更时执行
 
 | 环境变量 | 默认值 | 用途 |
 |---------|--------|------|
-| `DB_HOST` / `DB_USER` / `DB_PASS` | `192.168.1.24` / `root` / `root` | MySQL 连接 |
-| `WX_BOT_SLP` | 内置测试群 webhook | 企微通知（换群/轮换 key） |
+| `DB_HOST` / `DB_USER` / `DB_PASS` | 见 `common/Config.py` | MySQL 连接 |
+| `WX_BOT_SLP` | 见 `common/Config.py` | 企微通知（换群/轮换 key） |
 | `ASSERT_SLEEP` | `0.3` | 断言前等待秒数，设 `0` 可提速 |
 | `REQUEST_INTERVAL` | `2` | 同账号请求最小间隔（频控） |
 | `PUSH_WX` | `0` | 是否推送到企业微信群，默认为关闭 |
 | `LIST_PASS` | `0` | 推送时列出通过用例（需 `PUSH_WX=1`） |
 
 ```bash
-export DB_HOST=192.168.1.24
-export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
+export DB_HOST=<db-host>
+export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
 ```
 
-| 配置文件 | 配置项 | 当前值 |
+| 配置文件 | 配置项 | 填什么 |
 |---------|--------|--------|
-| `common/Config.py` | API 地址 | `https://192.168.1.23/` |
-| `common/conRedis.py` | Redis | `192.168.1.24:6379`，无密码 |
+| `common/Config.py` | API 地址 | `https://<api-host>/` |
+| `common/conRedis.py` | Redis | `<db-host>:6379`，无密码 |
 
 ---
 
@@ -124,7 +127,7 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
    ```bash
    crontab -e
    # 每天凌晨 2 点执行
-   0 2 * * * cd /home/ecs-user/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
+   0 2 * * * cd /home/<user>/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
    ```
 4. **退出码**：`run_all_case.py` / `run_crontab_case.py` 执行结束后会按结果返回退出码，
    可直接被 cron 告警、调度平台或 `cmd && 下一步` 识别：
@@ -137,7 +140,7 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
 
    ```bash
    # 失败时让 cron 发邮件 / 触发告警（MAILTO 生效的前提就是非 0 退出码）
-   0 2 * * * cd /home/ecs-user/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
+   0 2 * * * cd /home/<user>/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
    ```
 
 ---
@@ -147,6 +150,6 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
 | 问题 | 解决方案 |
 |------|---------|
 | pip install 报错 | 先确认 `python3 --version` ≥ 3.9；`requirements.txt` 已精简为 requests / urllib3 / PyMySQL / redis 四个实际依赖 |
-| 数据库连接失败 | 检查服务器与 `192.168.1.24` 的网络连通性 |
-| Token 获取失败 | 检查 `192.168.1.23` 的 `/test/userToken` 接口是否可访问 |
+| 数据库连接失败 | 检查服务器与 `<db-host>` 的网络连通性 |
+| Token 获取失败 | 检查 `<api-host>` 的 `/test/userToken` 接口是否可访问 |
 | ModuleNotFoundError | 重新执行 `pip3 install -r requirements.txt` |
