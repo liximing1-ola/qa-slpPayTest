@@ -443,16 +443,6 @@ naming_song_config = {
 	"5-下架": {"money": 668800, "multiple_id": 1005, "gift_id": 316, "money_pay": 334400, "cid": 2000},  # 下架状态
 
 }
-# # # 角色配置 todo
-# live_role = {
-# 	'pack_ceo': 105002314,  # 直播公会公会长
-# 	'pack_master_NoPack': 105002319,  # 非公会一代宗师主播
-# 	'pack_cal_uid': 105002313,  # 公会签约主播（打包结算），宗师等级可设置为一代和非一代
-# 	'live_rid': 193185577,  # 直播间(types=live)，房主:105002313
-# 	'auto_rid': 193185484,  # business | types: auto | room_factory_type: business-content | settlement_channel: cp-women
-# }
-# # 被打赏者（一代宗师） todo
-# masterUid = 100500338
 
 # 才艺厅观众位配置
 talent_show_config = {

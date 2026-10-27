@@ -1,13 +1,12 @@
 # -*- encoding=utf8 -*-
 __desc__ = "礼物优惠券-无损-收礼方不打折"  # 无损券 无私聊场景
 
-import time
 import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import prepare_test_data, insert_coupon
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b, result, case_list
+from common.Consts import case_list_b, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql

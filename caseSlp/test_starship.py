@@ -6,7 +6,7 @@ import unittest
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop
 from common.Assert import assert_code, assert_equal, assert_body
-from common.Consts import case_list_b2, result, case_list
+from common.Consts import result, case_list
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql

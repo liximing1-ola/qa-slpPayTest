@@ -24,9 +24,6 @@ class updateCode:
             Logs.get_log('gitBranchError.log').error("{} error".format(appInfo))
             return
 
-        # g = git.cmd.Git(gtr_path)
-        # g.pull() if not appInfo.startswith("slp") else print(f"{appInfo}不拉代码!")
-        # repo = Repo(gtr_path)
         Consts.startTime = time()
         if "dev" == git_branch:  # 当前线上分支
             # slp_php 与 slp_common_rpc 共用同一个"上次执行时间"，判断结果完全一致，
@@ -61,7 +58,6 @@ def updateTime(operate, now=''):
         with open(txtPath, 'w') as f:
             f.write(default_time)
             f.flush()
-
 
 
 if __name__ == '__main__':

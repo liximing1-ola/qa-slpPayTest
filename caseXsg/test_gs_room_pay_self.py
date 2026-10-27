@@ -2,16 +2,14 @@
 __desc__ = "公会主播-房间打赏,自刷"
 
 import random
-import time
 import unittest
 
 from caseXsg.config import *
-from caseXsg.tools import check_vip_pop, prepare_test_data, insert_package_gift
+from caseXsg.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body, assert_between
 from common.Consts import case_list_b2, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
-from common.conRedis import conRedis
 from common.conSlpXsgMysql import conMysql as mysql
 from common.method import reason
 from common.runFailed import Retry
@@ -27,12 +25,6 @@ def generate_random_rates():
 
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
-	# def setUp(self):
-	# 	if self._testMethodName in ("test_005","test_006","test_007","test_008"):
-	# 		conRedis.set(f"Xs.Traveler.XSG.{payUid}", 1)
-	#
-	# def tearDown(self):
-	# 	conRedis.delete(f"Xs.Traveler.XSG.{payUid}")
 	def test_001(self, des='主播,商业房,自刷,非跨档,已配置<=总计96%,按配置分成(扣mcb到账mcb,扣其他到账mc)'):
 		rate_money = 0.1
 		rate_money_b = 0.2

@@ -6,7 +6,7 @@ import time
 import unittest
 
 from caseSlp.config import *
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_code, assert_body
 from common.Consts import case_list_b, result
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData

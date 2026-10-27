@@ -1,11 +1,10 @@
 # -*- encoding=utf8 -*-
 __desc__ = "公会主播-房间打赏"
 
-import time
 import unittest
 
 from caseXsg.config import *
-from caseXsg.tools import check_vip_pop, prepare_test_data, insert_package_gift
+from caseXsg.tools import prepare_test_data
 from common.Assert import assert_code, assert_equal, assert_body
 from common.Consts import case_list_b2, result
 from common.Request import post_request_session

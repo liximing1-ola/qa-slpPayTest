@@ -33,11 +33,6 @@ class TestPayCreate(unittest.TestCase):
 		rid = gs_soundchat_rid
 		assert_equal(mysql.checkRidFactoryType(rid), "business-soundchat")  # 确认rid是直播房
 
-		# test_uid = self.live_role['pack_cal_uid']
-		# ceo_uid = self.live_role['pack_ceo']
-		# mysql.updateUserInfoSql('chatroom', test_uid)  # 商业房房主
-		# mysql.updateUserInfoSql('broker_user', test_uid, ceo_uid)  # 打包结算
-		# mysql.checkUserXsBroker(ceo_uid)  # 公会长
 		prepare_test_data(payUid, uid, gs_A_ceo_uid, money=default_money, god_status={uid: 2, gs_A_ceo_uid: 1})
 		data = encodeData(
 			payType='package-knightDefend',

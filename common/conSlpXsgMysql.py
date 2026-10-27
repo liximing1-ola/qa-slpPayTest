@@ -374,19 +374,6 @@ class conMysql:
             if res is None:
                 raise EnvironmentError('库表无个人房')
             return res[0]
-        # elif accountType == 'fleet':
-        #     sql = " select rid from xs_chatroom where property='{}' limit 1".format(accountType)
-        #     try:
-        #         conMysql.cur.execute(sql)
-        #         res = conMysql.cur.fetchone()
-        #         if res is None:
-        #             raise EnvironmentError('库表无家族房')
-        #         else:
-        #             if res[0] != config.bb_user['fleetRid']:
-        #                 return res[0]
-        #             return res[1]
-        #     except Exception as error:
-        #         print(error)
         elif accountType == 'pay_change':  # 查询用户消费记录数据
             sql = 'select reason from xs_pay_change where uid={} order by id desc LIMIT 1'.format(uid)
             try:
@@ -427,15 +414,6 @@ class conMysql:
                 raise DbQueryError('数据删除失败, SQL: {}, 原因: {}'.format(sql, error)) from error
             finally:
                 conMysql.con.commit()
-        # elif tableName == 'user_profile':  # 修改用户profile爵位数据
-        #     sql = "update xs_user_profile set title=0 where uid={} limit 1".format(uid)
-        #     try:
-        #         conMysql.cur.execute(sql)
-        #     except Exception as error:
-        #         conMysql.con.rollback()
-        #         print('update fail', error)
-        #     finally:
-        #         conMysql.con.commit()
         elif tableName == 'pay_room_money':  # VIP 修改用户pay_room_money爵位数据
             sql = "update xs_user_profile set pay_room_money=0 where uid={} limit 1".format(uid)
             try:
@@ -505,66 +483,6 @@ class conMysql:
     # 更新用户数据
     @staticmethod
     def updateUserInfoSql(tableName, uid, level=10):
-        # if tableName == 'broker_user':  # 修改用户为打包结算主播
-        #     sql = "update xs_broker_user set bid={}, uid={}, state=1, pack_cal=1 where id = 50 limit 1".format(bid, uid)
-        #     try:
-        #         conMysql.cur.execute(sql)
-        #     except Exception as error:
-        #         conMysql.con.rollback()
-        #         print('update fail', error)
-        #     finally:
-        #         conMysql.con.commit()
-        #
-        # elif tableName == 'user_index':  # 修改用户xs_user_index:salt
-        #     dateline = int(time.time())
-        #     sql = "update xs_user_index set salt='{}', dateline={} where uid={} limit 1".format(bid, dateline, uid)
-        #     try:
-        #         conMysql.cur.execute(sql)
-        #     except Exception as error:
-        #         conMysql.con.rollback()
-        #         print('update fail', error)
-        #     finally:
-        #         conMysql.con.commit()
-        #
-        # # elif tableName == 'chatroom':  # 修改用户为房间房主
-        # #     sql = "update xs_chatroom set app_id=1, uid={}, settlement_channel='live', " \
-        # #           "room_factory_type='business-soundchat' where rid={} limit 1".format(uid, bid)
-        # #     try:
-        # #         conMysql.cur.execute(sql)
-        # #     except Exception as error:
-        # #         conMysql.con.rollback()
-        # #         print('update fail', error)
-        # #     finally:
-        # #         conMysql.con.commit()
-        #
-        # # elif tableName == 'super_chatroom':
-        # #     sql = "update xs_chatroom set type='super-voice-fresh',property='business',version=737,room_factory_type='super-voice-fresh'," \
-        # #           "room_module_id=73,settlement_channel='super-voice' where rid={}".format(uid)
-        # #     try:
-        # #         conMysql.cur.execute(sql)
-        # #     except Exception as error:
-        # #         conMysql.con.rollback()
-        # #         print('update fail', error)
-        # #     finally:
-        # #         conMysql.con.commit()
-        # # elif tableName == 'user_title_new':  #dev开通1个月贵族
-        # #     sql = "update xs_user_title_new set subscribe_time={},growth=10,level=10 where uid={} limit 1".format(time.time()+30*60*60,uid)
-        # #     try:
-        # #         conMysql.cur.execute(sql)
-        # #     except Exception as error:
-        # #         conMysql.con.rollback()
-        # #         print('update fail', error)
-        # #     finally:
-        # #         conMysql.con.commit()
-        # # elif tableName == 'level':  # 查询用户爵位等级
-        # #     sql = "update xs_user_title_new set level={} where uid={}".format(level,uid)
-        # #     try:
-        # #         conMysql.cur.execute(sql)
-        # #     except Exception as error:
-        # #         conMysql.con.rollback()
-        # #         print('update fail', error)
-        # #     finally:
-        # #         conMysql.con.commit()
         if tableName == 'user_title_new':  # 修改用户爵位等级
             jw_config = {
                 "0": 0,
@@ -590,17 +508,6 @@ class conMysql:
         else:
             print('{} Error'.format(tableName))
 
-    # # 检查xs_gift配置
-    # @staticmethod
-    # def checkXsGiftConfig():
-    #     sql = "update xs_gift set deleted=0 where id in {}".format(tuple(i for i in config.giftId.values()))
-    #     try:
-    #         conMysql.cur.execute(sql)
-    #     except Exception as error:
-    #         conMysql.con.rollback()
-    #         print('update fail', error)
-    #     finally:
-    #         conMysql.con.commit()
 
     # 清空用户账户
     @staticmethod
@@ -629,45 +536,7 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # # 删除用户金豆账户数据
-    # @staticmethod
-    # def deleteUserBeanSql(*uids):
-    #     try:
-    #         for uid in uids:
-    #             sql = "delete from xs_user_money_extend where uid = {} limit 1".format(uid)
-    #             time.sleep(0.01)
-    #             conMysql.cur.execute(sql)
-    #             conMysql.con.commit()
-    #     except Exception as error:
-    #         conMysql.con.rollback()
-    #         print('delete fail', error)
 
-    # # 插入用户金豆余额
-    # @staticmethod
-    # def insertBeanSql(uid, money_coupon, cash=0, cash_lock=0):
-    #     sql = "insert into xs_user_money_extend(uid, money_coupon, cash, cash_lock) values({},{},{},{})" \
-    #         .format(uid, money_coupon, cash, cash_lock)
-    #     try:
-    #         conMysql.cur.execute(sql)
-    #     except Exception as error:
-    #         conMysql.con.rollback()
-    #         print('insert fail', error)
-    #     finally:
-    #         time.sleep(0.01)
-    #         conMysql.con.commit()
-    #
-    # # 更新箱子刷新物品
-    # @staticmethod
-    # def insertXsUserBox(uid, gift_cid=9, box_type='copper'):
-    #     sql = "insert into xs_user_box (last_refresh_cid, last_refresh_sub_cid, uid, type) values ({},{},{},'{}')" \
-    #         .format(gift_cid, gift_cid, uid, box_type)
-    #     try:
-    #         conMysql.cur.execute(sql)
-    #     except Exception as error:
-    #         conMysql.con.rollback()
-    #         print('update fail', error)
-    #     finally:
-    #         conMysql.con.commit()
 
     # 用户背包增加测试数据
     @staticmethod
@@ -744,59 +613,6 @@ class conMysql:
         finally:
             conMysql.con.commit()
 
-    # # 查询工会用户
-    # @staticmethod
-    # def checkUserBroker(uid, bid=136594717):
-    #     sql = 'select id from xs_broker_user where uid={}'.format(uid)
-    #     try:
-    #         conMysql.cur.execute(sql)
-    #         res = conMysql.cur.fetchone()
-    #         if res is None:
-    #             sql = "insert into xs_broker_user(bid, uid, state) values ({}, {}, 1)".format(bid, uid)
-    #             try:
-    #                 conMysql.cur.execute(sql)
-    #             except Exception as error:
-    #                 conMysql.con.rollback()
-    #                 print('insert fail', error)
-    #         else:
-    #             sql = 'update xs_broker_user set uid={}, bid={} where id={}'.format(uid, bid, res[0])
-    #             try:
-    #                 conMysql.cur.execute(sql)
-    #             except Exception as error:
-    #                 conMysql.con.rollback()
-    #                 print('update fail:\n{}'.format(traceback.format_exc()))
-    #     except Exception as error:
-    #         print(error)
-    #     finally:
-    #         conMysql.con.commit()
-
-    # # 查询用户分成比
-    # @staticmethod
-    # def checkBrokerUserRate(uid, creater, rate=100):
-    #     sql = 'select * from config.bbc_broker_user_rate where uid={}'.format(uid)
-    #     try:
-    #         conMysql.cur.execute(sql)
-    #         res = conMysql.cur.fetchone()
-    #         if res is None:
-    #             sql = 'insert into config.bbc_broker_user_rate (uid, broker_creater, rate) values({}, {}, {})' \
-    #                 .format(uid, creater, rate)
-    #             try:
-    #                 conMysql.cur.execute(sql)
-    #             except Exception as error:
-    #                 conMysql.con.rollback()
-    #                 print('insert fail', error)
-    #         else:
-    #             sql = "update config.bbc_broker_user_rate set rate={}, broker_creater={} where uid={} limit 1" \
-    #                 .format(rate, creater, uid)
-    #             try:
-    #                 conMysql.cur.execute(sql)
-    #             except Exception as error:
-    #                 conMysql.con.rollback()
-    #                 print('update fail:\n{}'.format(traceback.format_exc()))
-    #     except Exception as error:
-    #         print(error)
-    #     finally:
-    #         conMysql.con.commit()
 
     # 查询rid的房间类型
     @staticmethod
