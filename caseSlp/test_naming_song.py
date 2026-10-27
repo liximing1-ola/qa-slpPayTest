@@ -1,6 +1,7 @@
 # -*- encoding=utf8 -*-
 __desc__ = "点唱房-点歌/冠歌"
 
+import os
 import time
 import unittest
 
@@ -15,20 +16,23 @@ from common.conSlpXsgMysql import conMysql as mysql
 from common.method import reason
 from common.runFailed import Retry
 
+# 房间快照只在排查时输出：ROOM_DEBUG=1 打开。默认关闭——每条冠歌用例都打一行，
+# 正常跑的人用不上，反而淹掉真正要看的输出
+ROOM_DEBUG = os.environ.get('ROOM_DEBUG') == '1'
+
 
 def snapshot_room(rid):
-	"""请求前打一行房间快照，只读不删。
+	"""请求前打一行房间缓存快照，只读不删（需 ROOM_DEBUG=1）。
 
-	曾经用“请求前删掉 Room.Data.<rid>”来规避旧快照（房间从 deleted=1 改回 0 后缓存还是旧的），
-	但这本身就是偶发失败的开关：删掉 key 会让服务端 go2cache 必然 miss，走回源重建；
-	回源取回的 room_factory_type 与 binlog 同步链路的口径不一致时，接口就报「房间类型错误」，
-	而 Retry 重试时又删一次，形成“越删越错”的自循环 —— 这也解释了为什么 3 轮重试、
-	每次间隔 5 秒，拿到的还是同一个错。
+	排查「房间类型错误」时用：对照 exists / ttl / len / has_factory_type 就能判断
+	是缓存内容不对，还是服务端回源、RPC 那条链的问题。
 
-	库里数据（deleted=0、room_factory_type='business-music'）已经正确，缓存刷新交给 binlog
-	同步任务即可。这里只把现场打出来：失败时对照 ttl/len/has_factory_type 就能判断是缓存
-	内容不对，还是服务端回源链路的问题。
+	只读不删：删掉 Room.Data.<rid> 会让服务端 go2cache 必然 miss 并回源重建，
+	并不比让它自己跟 binlog 同步更可靠。库里数据（deleted=0、
+	room_factory_type='business-music'）正确时，缓存刷新交给 binlog 同步任务即可。
 	"""
+	if not ROOM_DEBUG:
+		return
 	key = 'Room.Data.{}'.format(rid)
 	try:
 		raw = conRedis.getRawConn().get(key)
@@ -71,7 +75,7 @@ class TestPayCreate(unittest.TestCase):
 			money=money,
 			order_songs=order_songs
 		)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
@@ -102,7 +106,7 @@ class TestPayCreate(unittest.TestCase):
 			money=money,
 			order_songs=order_songs
 		)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
@@ -139,7 +143,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)  # 和其它冠歌用例保持一致，留出造数完成到访问的间隔
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
@@ -180,7 +184,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 0, reason(des, res))
@@ -219,7 +223,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
@@ -259,7 +263,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(5)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
@@ -302,7 +306,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
@@ -347,7 +351,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))
@@ -391,7 +395,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'msg', '该礼物暂不支持购买', reason(des, res))
@@ -435,7 +439,7 @@ class TestPayCreate(unittest.TestCase):
 			naming_song=naming_song
 		)
 		time.sleep(8)
-		snapshot_room(rid)  # 只记录不删：删 key 会逼服务端走回源重建，反而是偶发失败的开关
+		snapshot_room(rid)  # 房间缓存现场，需 ROOM_DEBUG=1 才输出
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
 		assert_body(res['body'], 'success', 1, reason(des, res))

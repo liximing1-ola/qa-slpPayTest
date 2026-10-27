@@ -116,6 +116,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `CASE` | 空（全量） | 只跑指定文件/类/用例，逗号分隔 |
+| `ROOM_DEBUG` | `0` | 点唱房用例请求前打印房间缓存快照（`exists/ttl/len/has_factory_type`），排查「房间类型错误」时开 |
 | `ASSERT_SLEEP` | `0.3` | 每次状态码断言前的等待秒数（rpc 延迟补偿），设 `0` 关闭 |
 | `WAIT_TIMEOUT` / `WAIT_INTERVAL` | `3` / `0.2` | `assert_equal_eventually` 的轮询上限与间隔 |
 | `RETRY_SLEEP` | `1` | 重试间隔基数，第 n 次重试等 `n × RETRY_SLEEP` 秒，设 `0` 改为立即重试 |
