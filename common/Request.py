@@ -29,6 +29,10 @@ _interval_lock = threading.Lock()
 # 测试账号多出重复订单、金额断言口径被污染，形成"失败→重跑→再下一单"的放大链。
 # 这里对写请求（pay/create）做"同一用例内同参数复用"：首次执行把响应记下来，
 # 重试时直接返回上一轮的响应，只重新做读库断言——结算延迟这类抖动依然能救回来。
+#
+# 只缓存**下单成功**的响应：业务失败的响应（success != 1）一旦进缓存，重试就再也发不出
+# 新请求，“重试”退化成“把同一份失败响应重读三遍”，必然红。点唱房偶发的「房间类型错误」
+# 就是这么连撞四轮同一个错的——服务端只抖了一下，是回放把它固化成了定局。
 _RETRY_CACHE_MARK = 'pay/create'
 _replay_state = threading.local()
 
@@ -132,6 +136,17 @@ def _is_frequent_response(body):
     return isinstance(body, dict) and FREQUENT_MSG in str(body.get('msg', ''))
 
 
+def _is_business_success(body):
+    """下单是否真的成功（响应里的 success 字段为 1/True）
+
+    网关返回 html 等非 json 响应时 body 是字符串，一律按失败处理：这种响应没有结算，
+    缓存它只会让重试永远拿到同一份垃圾。
+    """
+    if not isinstance(body, dict):
+        return False
+    return body.get('success') in (1, True, '1')
+
+
 def post_request_session(url, data, tokenName='dev', pay_uid=None):
     """
     post请求
@@ -201,8 +216,14 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
         'time_total': response.elapsed.total_seconds(),
     }
     if cache_key is not None:
+        # 发过下单请求就算"已下单"：数据准备（改金额、插背包礼物）不能在重试轮重做，
+        # 否则会把首轮已经生效的造数覆盖掉，断言口径全乱
         _replay_state.wrote = True
-        cache_put(cache_key, result)
+        if _is_business_success(body):
+            cache_put(cache_key, result)
+        else:
+            # 业务失败不入缓存：重试轮要重新发一次请求，而不是回放这份失败响应
+            print('[重试] 下单未成功，本轮不缓存、重试时重新请求: {}'.format(body))
     return result
 
 
