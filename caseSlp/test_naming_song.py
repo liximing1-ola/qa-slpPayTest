@@ -33,7 +33,10 @@ def clear_room_cache(rid):
 		print('[warn] 清理房间缓存失败 rid={}: {}'.format(rid, error))
 
 
-@Retry(max_n=2)
+# 断言的失败可能是房间缓存未就绪：服务端 go2cache 除了读 Redis（Room.Data.<rid>）
+# 还带进程内 L1 缓存，手工改 xs_chatroom 后旧快照只能等它自己过期。重试间隔给 5 秒、
+# 最多 3 轮，让重试有机会跨过缓存过期点；间隔太短等于拿同一份旧数据反复撞墙
+@Retry(max_n=3, sleep=5)
 class TestPayCreate(unittest.TestCase):
 	# test_004~test_006 都对 test_003 造出的冠歌记录做二次操作，记录不存在时接口会直接成功/不生效，
 	# 用例会以「预期失败却成功」的形式误报，用它标记前置状态是否就绪
@@ -127,6 +130,7 @@ class TestPayCreate(unittest.TestCase):
 			payType='naming_song',
 			naming_song=naming_song
 		)
+		time.sleep(5)  # 和其它冠歌用例保持一致，留出造数完成到访问的间隔
 		clear_room_cache(rid)  # 请求前清房间缓存，免得读到 binlog 回写的旧快照
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'])
