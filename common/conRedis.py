@@ -192,40 +192,14 @@ class conRedis:
     # ========== 兼容旧方法 ==========
 
     @staticmethod
-    def checkSetKey(key, value):
-        """兼容旧方法：集合键不存在时才添加"""
-        r = conRedis.getConn()
-        if r.scard(key) == 0:
-            r.sadd(key, value)
-
-    @staticmethod
-    def delKey(key, *values):
-        """兼容旧方法：删除 Hash 字段"""
-        r = conRedis.getConn()
-        for value in values:
-            for k in value:
-                r.hdel(key, k)
-
-    @staticmethod
     def delKey_slp(pattern):
-        """兼容旧方法：按模式删除（请优先使用 delete_pattern）"""
-        r = conRedis.getConn()
-        matching_keys = r.keys(pattern)
-        if matching_keys:
-            deleted_count = r.delete(*matching_keys)
-            print(f"Deleted {deleted_count} keys matching '{pattern}'")
-            return deleted_count
+        """兼容旧方法：按模式删除并打一行日志（新代码直接用 delete_pattern）"""
+        deleted = conRedis.delete_pattern(pattern)
+        if deleted:
+            print("Deleted {} keys matching '{}'".format(deleted, pattern))
         else:
             print("No keys found matching the pattern")
-            return 0
-
-    @staticmethod
-    def key_test():
-        """测试示例"""
-        r = conRedis.getConn()
-        r.set('counter', 100)
-        r.incr('counter')
-        print(r.get('counter'))
+        return deleted
 
 
 if __name__ == '__main__':

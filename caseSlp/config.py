@@ -411,23 +411,6 @@ zx_box = {
 	}
 }
 
-# ==================== 语义化常量 ====================
-# 默认测试礼物（椰子水*100钻）
-DEFAULT_GIFT = giftId['69']
-DEFAULT_GIFT_ID = DEFAULT_GIFT['gid']
-DEFAULT_GIFT_PRICE = DEFAULT_GIFT['price']
-DEFAULT_GIFT_CID = DEFAULT_GIFT['cid']
-
-# 分成比例快捷访问
-RATE_GS_DEFAULT = rates['gs']['default']  # 公会主播默认分成 60%
-RATE_NORMAL_DEFAULT = rates['normal']['default']  # 普通用户默认分成 60%
-RATE_VIP_CHAT = rates['vip']['chat']  # VIP私聊分成 80%
-RATE_VIP_ROOM = rates['vip']['viproom']  # VIP个人房分成 80%
-RATE_POP_CHAT = rates['pop']['chat']  # 人气私聊分成 80%
-RATE_POP_ROOM = rates['pop']['viproom']  # 人气个人房分成 80%
-RATE_POP_STARSHIP_ROOM = rates['pop']['starship-room']  # 人气星舰房分成 80%
-RATE_POP_STARSHIP_IM = rates['pop']['starship-im']  # 人气星舰群聊分成 80%
-
 # 点歌单价
 unit_price = 3000
 # 歌单
