@@ -6,7 +6,7 @@ import unittest
 
 from caseSlp.config import *
 from caseSlp.tools import check_vip_pop, prepare_test_data, insert_coupon
-from common.Assert import assert_code, assert_equal, assert_body
+from common.Assert import assert_code, assert_equal, assert_equal_eventually, assert_body
 from common.Consts import case_list_b, result, case_list
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
@@ -233,12 +233,19 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'], 200)
 		assert_body(res['body'], 'success', 1, reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
-		             giftId['937']['price'] * rates['gs']['as_normal'] * 1 * (1 - commodityId['89297']['discount'])
-		             + giftId['937']['price'] * rates['gs']['as_normal'] * (num - 1))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
-		             giftId['937']['price'] * rates['gs']['default'] * num)
-		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId['937']['price'] * rates['normal']['default'] * num)
+		# 分成是分批异步写入的：实测约 0.9 秒才全部到齐，用券那个收礼人还会拆成两笔
+		# （券抵的那 1 个礼物先到、剩余 9 个稍后到），固定睡一觉再读容易撞在中间态上
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
+			giftId['937']['price'] * rates['gs']['as_normal'] * 1 * (1 - commodityId['89297']['discount'])
+			+ giftId['937']['price'] * rates['gs']['as_normal'] * (num - 1))
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
+			giftId['937']['price'] * rates['gs']['default'] * num)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
+			giftId['937']['price'] * rates['normal']['default'] * num)
+		# 扣款是同步的：请求返回时打赏者余额就已扣好，不需要轮询
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89297']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 
@@ -484,12 +491,17 @@ class TestPayCreate(unittest.TestCase):
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_code(res['code'], 200)
 		assert_body(res['body'], 'success', 1, reason(des, res))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
-		             giftId['211026']['price'] * rates['gs']['as_normal'] * 1 * (1 - commodityId['89297']['discount'])
-		             + giftId['211026']['price'] * rates['gs']['as_normal'] * (num - 1))
-		assert_equal(mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
-		             giftId['211026']['price'] * rates['gs']['default'] * num)
-		assert_equal(mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'), giftId['211026']['price'] * rates['normal']['default'] * num)
+		# 分成异步分批写入（同 test_006）：每人 10 个礼物要等约 1 秒才全部到齐，用券那个收礼人还拆成两笔
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_A_uid, money_type='money_cash_b'),
+			giftId['211026']['price'] * rates['gs']['as_normal'] * 1 * (1 - commodityId['89297']['discount'])
+			+ giftId['211026']['price'] * rates['gs']['as_normal'] * (num - 1))
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', gs_B_uid, money_type='money_cash'),
+			giftId['211026']['price'] * rates['gs']['default'] * num)
+		assert_equal_eventually(
+			lambda: mysql.selectUserInfoSql('single_money', normal_uid, money_type='money_cash_b'),
+			giftId['211026']['price'] * rates['normal']['default'] * num)
 		assert_equal(mysql.selectUserInfoSql('sum_money', payUid), giftId['211026']['price'] * commodityId['89297']['discount'])
 		assert_equal(mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89297']['cid']), 0)
 

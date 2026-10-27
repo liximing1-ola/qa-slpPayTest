@@ -13,6 +13,9 @@ from common.Config import config
 # 全量跑一遍每个用例都等一次，累计 40 秒左右，用环境变量 ASSERT_SLEEP 调整，设为 0 直接关闭。
 # 用 or 兜底：变量存在但为空（如 export ASSERT_SLEEP=）时不能被 float('') 抛错，那会让所有用例在 import 阶段就失败
 ASSERT_SLEEP = float(os.environ.get('ASSERT_SLEEP') or '0.3')
+# 轮询等待参数（见 assert_equal_eventually）：最多等多久、每次间隔多久
+WAIT_TIMEOUT = float(os.environ.get('WAIT_TIMEOUT') or '3')
+WAIT_INTERVAL = float(os.environ.get('WAIT_INTERVAL') or '0.2')
 _ON_ALI_NODE = platform.node() == config.linux_node['ali']
 
 
@@ -81,6 +84,37 @@ def assert_in_text(body, expected_msg):
         detail = '预期返回内容包含: {}, 实际返回: {}'.format(expected_msg, str(body)[:300])
         Consts.fail_case_reason.append(detail)
         raise AssertionError(detail) from None
+
+
+def assert_equal_eventually(actual_func, expect_result, timeout=None, interval=None, tolerance=0.0001):
+    """
+    轮询等待读值达到预期，用于分成/人气这类异步结算
+
+    assert_equal 只读一次。而服务端分账是分批写的：实测带券多人打赏时，0.5s 到账
+    另外两个收礼人、0.7s 到账用券那 1 笔、0.9s 才补齐剩余 9 笔，全量约 0.9 秒。
+    固定睡一觉再读，很容易撞在“432 已到、4320 未到”这种中间态上。
+
+    :param actual_func: 无参函数，每次调用返回一次当前读值（不能是提前读好的值）
+    :param expect_result: 预期结果
+    :param timeout: 最长等待秒数，默认 WAIT_TIMEOUT（环境变量可调）
+    :param interval: 轮询间隔，默认 WAIT_INTERVAL
+    :return: 达到预期返回 True；超时仍不达标则按最后一次实际值报错
+    """
+    timeout = WAIT_TIMEOUT if timeout is None else timeout
+    interval = WAIT_INTERVAL if interval is None else interval
+    mark = len(Consts.fail_case_reason)
+    deadline = time.time() + timeout
+    while True:
+        actual_result = actual_func()
+        if time.time() >= deadline:
+            # 最后一轮走正常断言：失败时把实际值/预期值写进报告，免得只剩一个空断言
+            return assert_equal(actual_result, expect_result, tolerance)
+        try:
+            return assert_equal(actual_result, expect_result, tolerance)
+        except AssertionError:
+            # 中间态不算失败：清掉本轮刚写入的原因，否则报告里会堆一串 432、4320
+            del Consts.fail_case_reason[mark:]
+            time.sleep(interval)
 
 
 def assert_body(body, body_msg, expected_msg, reason):
