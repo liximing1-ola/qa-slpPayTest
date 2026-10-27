@@ -17,15 +17,15 @@ from datetime import datetime, timedelta
 import requests
 
 from common import Request
+from common.Config import config
 
 
 def merge_dicts(*args):
     """
-	合并dict
-	:param dict_old:老的字典
-	:param dict_new:新的字典
-	:return:
-	"""
+    合并 dict，后面的覆盖前面的
+    :param args: 任意多个 dict，非 dict 入参当作空 dict 忽略
+    :return: 合并后的新 dict
+    """
     _all_dict = {}
     for _dict in args:
         if not isinstance(_dict, dict):
@@ -67,8 +67,10 @@ def get_test_token(*uids):
         raise ValueError("至少传入一个uid")
 
     token_map = {}
+    # 域名跟 common.Config 走，换测试环境不用改代码（这里原本写死了 192.168.1.23）
+    url_template = config.appInfo['slp'] + 'test/userToken?uid={}'
     for uid in uids:
-        url = f"https://192.168.1.23/test/userToken?uid={uid}"
+        url = url_template.format(uid)
         payload = {}
         headers = {}
         try:

@@ -103,7 +103,7 @@ crontab -e
 |------|------|
 | API | `https://192.168.1.23/`（`common/Config.py` 的 `appInfo`） |
 | MySQL | `192.168.1.24:3306`，默认 `root` / `root`，可用 `DB_HOST` 等环境变量覆盖 |
-| Redis | `192.168.1.24:6379`，无密码（`common/conRedis.py`） |
+| Redis | `192.168.1.24:6379`，无密码，可用 `REDIS_HOST` / `REDIS_PORT` 覆盖 |
 
 slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（`com.yhl.sleepless.android` / `com.im.shiguang.android`）。
 
@@ -126,6 +126,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | `LIST_PASS` | `0` | 推送时额外列出通过用例（需 `PUSH_WX=1`） |
 | `WX_BOT_SLP` / `SLACK_BOT_SLP` | 内置测试群 | 通知 webhook，换群/轮换 key 不用改代码 |
 | `DB_HOST` / `DB_USER` / `DB_PASS` | `192.168.1.24` / `root` / `root` | 测试库连接信息 |
+| `REDIS_HOST` / `REDIS_PORT` | `192.168.1.24` / `6379` | Redis 连接信息 |
 
 ---
 

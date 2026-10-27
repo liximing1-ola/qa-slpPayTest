@@ -2,6 +2,25 @@ import urllib.parse
 from caseSlp.config import *
 
 
+def _encode(data):
+    """打印请求体并序列化成可放进 GET 查询串的形式
+
+    print 是历史调试输出（跑用例时能看到实际发出的参数），保留不动。
+    urlencode 会把引号转成 %27、空格转成 +，这里还原成服务端认的原样。
+    """
+    print(data)
+    query = urllib.parse.urlencode(data)
+    return query.replace('+', '').replace('%27', '%22')
+
+
+def _multi_uids(uids):
+    """多人送礼的三件套：uid 逗号串、麦位串、人数
+
+    麦位从 1 开始，与 uids 的顺序一一对应；调用方算金额和 num 都要用人数。
+    """
+    return ','.join(uids), ','.join(str(i + 1) for i in range(len(uids))), len(uids)
+
+
 # 国内Slp消费场景
 def encodeData(
         payType='package',
@@ -57,10 +76,7 @@ def encodeData(
                     "display_page":display_page
                 },
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     if payType == 'package':
         data = {
             "platform": "available",
@@ -89,17 +105,9 @@ def encodeData(
                     "display_page": display_page,
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'package-more':
-        p = []
-        uid = ','.join(uids)
-        num_more = len(uids)
-        for i in range(len(uids)):
-            p.append(str(i + 1))
-        position = ','.join(p)
+        uid, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "package",
@@ -127,10 +135,7 @@ def encodeData(
                     "display_page": display_page,
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'package-knightDefend':
         data = {
             "platform": "available",
@@ -146,10 +151,7 @@ def encodeData(
                     "useCoin": -1,
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'defend':
         data = {
             "platform": 'available',
@@ -165,10 +167,7 @@ def encodeData(
                     "useCoin": -1
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'defend-upgrade':
         data = {
             "platform": 'available',
@@ -180,10 +179,7 @@ def encodeData(
                     "useCoin": -1
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'defend-break':
         data = {
             "platform": 'available',
@@ -195,10 +191,7 @@ def encodeData(
                     "useCoin": -1
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'chat-coupon':
         data = {
             "platform": 'available',
@@ -222,17 +215,9 @@ def encodeData(
                     "gift_tab": "gift"
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'room-coupon':
-        p = []
-        uid = ','.join(uids)
-        num_more = len(uids)
-        for i in range(len(uids)):
-            p.append(str(i + 1))
-        position = ','.join(p)
+        uid, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "package",
@@ -259,17 +244,9 @@ def encodeData(
                 "gift_refer": "",
             }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'zx_box':  # 甄选礼盒
-        p = []
-        uid = ','.join(uids)
-        num_more = len(uids)
-        for i in range(len(uids)):
-            p.append(str(i + 1))
-        position = ','.join(p)
+        uid, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "package",
@@ -296,17 +273,9 @@ def encodeData(
                 "useCoin": -1
             }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'graffiti':
-        p = []
-        uid = ','.join(uids)
-        num_more = len(uids)
-        for i in range(len(uids)):
-            p.append(str(i + 1))
-        position = ','.join(p)
+        uid, position, num_more = _multi_uids(uids)
         graffiti_feature=[]
         for i in range(num):
             x = 40
@@ -332,10 +301,7 @@ def encodeData(
                     "graffiti_feature": graffiti_feature
                 },
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'choose_song':  # 点歌
         data = {
             "platform": "available",
@@ -349,10 +315,7 @@ def encodeData(
                     "version": 1
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'naming_song':  # 冠歌
         data = {
             "platform": "available",
@@ -372,17 +335,9 @@ def encodeData(
                 "ucnum": naming_song['ucnum'],
             }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'starship-im':
-        p = []
-        uid = ','.join(uids)
-        num_more = len(uids)
-        for i in range(len(uids)):
-            p.append(str(i + 1))
-        position = ','.join(p)
+        uid, position, num_more = _multi_uids(uids)
         data = {
             "platform": "available",
             "type": "group-chat-gift",
@@ -407,10 +362,7 @@ def encodeData(
                     "gift_tab": "gift"
                 }
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     elif payType == 'talent_show':
         data = {
             "platform": "available",
@@ -425,10 +377,7 @@ def encodeData(
                     "broker_uid": uid
                 },
         }
-        print(data)
-        d = urllib.parse.urlencode(data)
-        data = d.replace('+', '').replace('%27', '%22')
-        return data
+        return _encode(data)
     else:
         # 未知 payType 原来会静默返回 None，调用方拿 None 去发请求，
         # 用例最终报的是“响应不对”而不是“场景写错”，排查成本很高，这里直接抛错暴露调用方问题

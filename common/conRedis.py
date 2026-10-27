@@ -1,3 +1,5 @@
+import os
+
 import redis
 from typing import Union, List, Dict, Any, Optional
 
@@ -5,9 +7,10 @@ from typing import Union, List, Dict, Any, Optional
 class conRedis:
     """Redis 客户端封装，提供以 key(s) 为核心的增删改查操作"""
 
+    # 测试环境 redis 地址，可用 REDIS_HOST / REDIS_PORT 覆盖（与 MySQL 的 DB_HOST 一个口径，换环境不用改代码）
     redis_config = {
-        'host_slp': '192.168.1.24',  # slp测试服务器 redis
-        'port': 6379  # 端口
+        'host_slp': os.environ.get('REDIS_HOST') or '192.168.1.24',
+        'port': int(os.environ.get('REDIS_PORT') or 6379),  # 端口
     }
 
     _pools = {}

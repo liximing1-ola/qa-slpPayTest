@@ -14,15 +14,12 @@ class updateCode:
         if appInfo == 'bb_php':
             Logs.get_log('gitBranchError.log').error("bb_php 相关配置已废弃，codeInfo 中不存在 bb_php_path/bb_git_branch")
             return
-        elif appInfo == 'slp_php':#todo
-            gtr_path = config.codeInfo['slp_php_path']
-            git_branch = config.codeInfo['slp_git_branch']
-        elif appInfo == 'slp_common_rpc':
-            gtr_path = config.codeInfo['slp_common_rpc_path']
-            git_branch = config.codeInfo['slp_git_branch']
-        else:
+        if appInfo not in ('slp_php', 'slp_common_rpc'):
             Logs.get_log('gitBranchError.log').error("{} error".format(appInfo))
             return
+        # 这里只用到分支判定：codeInfo 里的 *_path 是服务器仓库路径的记录（部署时对照用），
+        # 代码不会真的去 pull —— 原本的两个分支各赋一次 gtr_path 但从未读取，属于死赋值
+        git_branch = config.codeInfo['slp_git_branch']
 
         Consts.startTime = time()
         if "dev" == git_branch:  # 当前线上分支

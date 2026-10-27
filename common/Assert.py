@@ -20,8 +20,10 @@ _ON_ALI_NODE = platform.node() == config.linux_node['ali']
 
 
 def _settle_before_assert():
-    """
-    :return:
+    """状态码/数值断言前的 rpc 延迟补偿
+
+    阿里测试机与服务器同机房、走内网，不再额外等待（否则全量跑一轮会白吃 40 秒）；
+    其他机器按 ASSERT_SLEEP 等待。
     """
     if ASSERT_SLEEP > 0 and not _ON_ALI_NODE:
         time.sleep(ASSERT_SLEEP)
