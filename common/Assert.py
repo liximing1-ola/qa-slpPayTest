@@ -9,24 +9,57 @@ import time
 from common import Consts
 from common.Config import config
 
-# rpc 接口延迟补偿：除阿里测试机外，每次校验状态码前先等一会，避免刚操作完就去读导致结果不一致。
-# 全量跑一遍每个用例都等一次，累计 40 秒左右，用环境变量 ASSERT_SLEEP 调整，设为 0 直接关闭。
+# rpc 接口延迟补偿：除同机房测试机外，每次校验状态码前先等一会，避免刚操作完就去读导致结果不一致。
+# 全量跑一遍 166 个状态码断言点各等一次，累计 50 秒，用环境变量 ASSERT_SLEEP 调整，设为 0 直接关闭。
 # 用 or 兜底：变量存在但为空（如 export ASSERT_SLEEP=）时不能被 float('') 抛错，那会让所有用例在 import 阶段就失败
 ASSERT_SLEEP = float(os.environ.get('ASSERT_SLEEP') or '0.3')
 # 轮询等待参数（见 assert_equal_eventually）：最多等多久、每次间隔多久
 WAIT_TIMEOUT = float(os.environ.get('WAIT_TIMEOUT') or '3')
 WAIT_INTERVAL = float(os.environ.get('WAIT_INTERVAL') or '0.2')
-_ON_ALI_NODE = platform.node() == config.linux_node['ali']
+# 同机房机器清单取 config.linux_node 里登记的所有测试机。
+# 原实现只比 linux_node['ali']（iZbp1fveowr7j693hrwb48Z），而实际执行机是 slp-dev（登记在
+# ali-slp/ali-xsg 下），于是「同机房免等待」这条分支从来没生效过：每轮白等约 50 秒，且没有任何
+# 输出会暴露这件事。判据是配置里已经写明的声明，不是猜的；机器名不认识时仍然等待（宁可慢，
+# 也不要在陌生环境里因为读得太早而红）。
+_SAME_IDC_NODES = set(node for node in config.linux_node.values() if node)
+_ON_SAME_IDC_NODE = platform.node() in _SAME_IDC_NODES
+# 兜底开关：去掉等待后若出现抖动，ASSERT_SETTLE=1 强制恢复补偿，不必改代码再回滚
+_FORCE_SETTLE = os.environ.get('ASSERT_SETTLE') == '1'
 
 
 def _settle_before_assert():
-    """状态码/数值断言前的 rpc 延迟补偿
+    """状态码断言前的 rpc 延迟补偿
 
-    阿里测试机与服务器同机房、走内网，不再额外等待（否则全量跑一轮会白吃 40 秒）；
-    其他机器按 ASSERT_SLEEP 等待。
+    只在「不在同机房清单里的机器」上生效（那份清单见 Config.linux_node）。
+    机器名对不上时宁可等：这类补偿漏掉只是慢，加上不当会红，两种代价不对称。
     """
-    if ASSERT_SLEEP > 0 and not _ON_ALI_NODE:
+    if ASSERT_SLEEP > 0 and (_FORCE_SETTLE or not _ON_SAME_IDC_NODE):
         time.sleep(ASSERT_SLEEP)
+
+
+def environment_summary():
+    """本轮真正生效的环境参数，由 runner 在开跑前打一行
+
+    这些值多数来自环境变量：一旦 export 错了（例如为了撞频控把 REQUEST_INTERVAL 设成 0.1
+    忘了改回来），报告本身看不出来，事后只知道「那轮快得反常」，说不清按什么参数跑的。
+    """
+    # 延迟 import：Request 是上层请求封装，Assert 是底层断言，模块顶部引入会形成反向依赖
+    from common.Request import FREQUENT_RETRY, REQUEST_INTERVAL
+
+    node = platform.node()
+    if _FORCE_SETTLE:
+        settle = '{}s/次（ASSERT_SETTLE=1 强制补偿）'.format(ASSERT_SLEEP)
+    elif ASSERT_SLEEP <= 0:
+        settle = '关闭（ASSERT_SLEEP=0）'
+    elif _ON_SAME_IDC_NODE:
+        settle = '0s（同机房免等待，{} 命中 linux_node）'.format(node)
+    else:
+        settle = '{}s/次（{} 不在 linux_node 里，按异机房处理）'.format(ASSERT_SLEEP, node)
+    return [
+        '[环境] 主机={}  断言延迟补偿={}'.format(node, settle),
+        '[环境] 请求间隔={}s  频控重试={}次  轮询等待={}s/{}s'.format(
+            REQUEST_INTERVAL, FREQUENT_RETRY, WAIT_TIMEOUT, WAIT_INTERVAL),
+    ]
 
 
 def assert_code(actual_code, expected_code=200):

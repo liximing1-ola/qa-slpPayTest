@@ -12,7 +12,7 @@ import sys
 import time
 import unittest
 
-from common import Logs, Scene
+from common import Assert, Logs, Scene
 from common.Config import config
 
 
@@ -125,6 +125,10 @@ class AllTestRunner(unittest.TextTestRunner):
     def run(self, test):
         # 进度日志要显示「第几条/共几条」，总数只能从 suite 上取
         self._total_cases = test.countTestCases()
+        # 开跑前先把本轮生效的环境参数打出来：补偿/间隔这类值一旦被环境变量改动又忘了改回，
+        # 光看报告只会觉得「这轮快得反常」，说不清到底按什么参数跑的
+        for line in Assert.environment_summary():
+            print(line, flush=True)
         return super().run(test)
 
     def _makeResult(self):
