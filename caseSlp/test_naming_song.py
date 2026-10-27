@@ -31,10 +31,13 @@ NAMING_SLEEP = None if NAMING_SLEEP is None else float(NAMING_SLEEP)
 def cache_wait(seconds):
 	"""改库之后、下单之前的等待。
 
-	这段等待名义上是「留出造数完成到访问的间隔」，但实测服务端读房间走 go2cache，
-	miss 就回源 DB，而缓存常态就不存在（ttl=-2）——也就是说改完库下一次请求就能读到。
-	那这几秒到底有用没用，用 NAMING_SLEEP 对照实验定：设 0 仍全绿就是纯浪费，
-	设 0 会红则说明它护着的是「上一条用例的服务端异步处理」，得按最小可用值定。
+	名义上是「留出造数完成到访问的间隔」。实测过 NAMING_SLEEP=0 与不设各 3 轮：
+	耗时 67.1s vs 76.0s，只差 9 秒，重试次数完全相同（都是每轮 1 条房间类型错误）。
+	也就是说这 52 秒里有 43 秒并非白等——它同时在为异步落库争取时间，去掉之后
+	那部分时间会转移到 assert_equal_eventually 的轮询里，并不会消失。
+
+	所以默认值保留原样：用 9 秒换一个更宽的等待窗口（5/8 秒 > WAIT_TIMEOUT 的 3 秒）
+	不划算，服务端变慢时反而是风险。NAMING_SLEEP 留作探针，等明确变快后再评测。
 	"""
 	time.sleep(seconds if NAMING_SLEEP is None else NAMING_SLEEP)
 
