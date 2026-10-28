@@ -245,7 +245,13 @@ class TestPayCreate(unittest.TestCase):
 1. **先单跑，再全量**。全量里随机 1~2 条红、单跑却必绿，基本是环境/缓存/顺序依赖，不是用例逻辑问题。
 2. **注意时区差**。测试机是 CST（东八区），**MySQL 是 UTC**：`from_unixtime` 出来的时间会比机器时间差 8 小时。往时间窗口里造数据时不要卡边界（比如插「上周一 00:00」），要放在窗口中间，否则任何时区偏差都会让它掉出区间。
 3. **Redis 连接配置的 key 是 `host_slp`**，不是 `host`；`conRedis.get(key)` 走的是 `decode_responses=True` 的连接，读 protobuf 之类的二进制值会抛 `UnicodeDecodeError`，这种场景用 `conRedis.getRawConn()`。
-4. **看到「房间类型错误」先查有没有 `[Retry]` 行**。这类偶发失败的真因可能在重试回放：首轮请求业务失败后，重试轮复用了那份失败响应，四轮都不重发请求，看起来就像服务端持续故障（已修复，见 `common/Request.py` 的 `_is_business_success`）。现在这句文案也不再是孤证：`caseSlp/test_naming_song.py` 的下单一律走 `post_pay()`，命中房间类错误时会把房间现场一并写进失败原因（Redis 的 `exists/ttl/len/has_factory_type` + 库内行数/类型/`deleted`/房主），据此一眼分开两种情形：**行数≠1 或 `deleted`≠0 → 环境数据坏了**；**库内完全正确 → 服务端侧偶发（RPC/回源失败复用同一句文案）**，交给 `@Retry` 兜底即可，不用再复现一遍。另外没必要主动删 `Room.Data.<rid>`：库数据正确时，缓存刷新交给 binlog 同步任务即可——实测缓存绝大多数时间不存在（`ttl=-2`），但用例照样通过，「缓存不在」本身不是判据。
+4. **看到「房间类型错误」先看失败现场，不用再复现**。这句文案也不再是孤证：`caseSlp/test_naming_song.py` 的下单一律走 `post_pay()`，命中房间类错误时会把现场写进失败原因（毫秒时刻 + `Room.Data` 的 `exists/ttl/len/has_factory_type` + `tavern_enable`/`gate_chseq` 两个开关 + 库内行数/类型/`deleted`/房主），据此一次就能分开两种情形：**行数≠1 或 `deleted`≠0 → 环境数据坏了**；**库内正确且两个开关与常态一致 → 服务端侧问题**。
+
+   后者实测**不是「随机偶发」**：7 轮跑下来每轮命名颂（10 条）恰好 1 条失败，约 10% 的请求失败率，而全量 137 条里只出现 1 次；失败用例分散在 6 条不同用例上（002/005/006/007×2/008）。注意「每轮恰好 1 条」本身就是线索——若按独立 10% 随机，连续 7 轮都恰好 1 条的概率只有 0.09%，更像服务端有个周期任务（binlog 消费/缓存重建）每轮撞上一次。已排除的：库内数据、`Room.Data` 缺失（binlog 刷新后 DEL、请求时回源重建，miss 属正常）、`Room.Desc`（只是房间名）、`tavern_enable`、`gate_chseq`、代码删房间。剩下只能是服务端内部（回源 RPC 超时/多实例路由/并发中间态）：拿现场里那个毫秒时刻去对服务端日志即可（机器是 CST，服务端日志若为 UTC 差 8 小时）。目前由 `@Retry(max_n=3, sleep=5)` 兜住，代价是每轮多花约 10 秒。
+
+   另外没必要主动删 `Room.Data.<rid>`：库数据正确时，缓存刷新交给 binlog 同步任务即可——实测缓存绝大多数时间不存在（`ttl=-2`），但用例照样通过，「缓存不在」本身不是判据。
+
+   （历史坑：重试轮曾复用首轮的业务失败响应，四轮都不重发请求，看起来像服务端持续故障；已由 `common/Request.py` 的 `_is_business_success` 修掉，改回放逻辑时别退回去。）
 5. **环境数据先行断言**。用例开头用 `checkRidFactoryType(rid)` / `checkUserBroker(uid)` 这类断言确认房间类型、公会关系，环境被改坏时能一眼看出是“数据不对”而不是“代码坏了”。
 6. **改完先编译**：`python3 -m compileall -q caseSlp caseXsg common`，比跑一遍全量快得多。
 
