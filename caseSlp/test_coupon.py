@@ -17,10 +17,7 @@ class TestPayCreate(unittest.TestCase):
 	def test_001(self, des='私聊,9折券(有损),打赏单个礼物,按9折成交,券已消耗'):
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, money=default_money)
-		mysql.updateUserMoneyClearSql(uid)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
-		mysql.updateUserGodSql(uid, 2)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 1
@@ -55,10 +52,7 @@ class TestPayCreate(unittest.TestCase):
 	def test_002(self, des='私聊,9折券(有损),打赏多个礼物,按9折成交,券已消耗'):
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, money=default_money)
-		mysql.updateUserMoneyClearSql(uid)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
-		mysql.updateUserGodSql(uid, 2)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 10
@@ -246,10 +240,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gsUid
 		default_money = 99999999
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, money=default_money)
-		mysql.updateUserMoneyClearSql(uid)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
-		mysql.updateUserGodSql(uid, 2)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 1
@@ -285,10 +276,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gsUid
 		default_money = 99999999
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, money=default_money)
-		mysql.updateUserMoneyClearSql(uid)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
-		mysql.updateUserGodSql(uid, 2)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 10
@@ -329,10 +317,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 2)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 1
@@ -365,10 +350,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 2)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		num = 10
@@ -406,11 +388,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
 
 		num = 1
-		mysql.updateUserGodSql(gs_A_uid, 0)
-		mysql.updateUserGodSql(gs_B_uid, 1)
-		mysql.updateMoneySql(payUid, giftId['211026']['price'] * num * len(uids))
-		mysql.updateUserMoneyClearSql(gs_A_uid, gs_B_uid, normal_uid)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, gs_A_uid, gs_B_uid, normal_uid, money=giftId['211026']['price'] * num * len(uids), god_status={gs_A_uid: 0, gs_B_uid: 1})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		data = encodeData(
@@ -448,11 +426,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(normal_uid), False)  # 确认 uid不是工会成员
 
 		num = 10
-		mysql.updateUserGodSql(gs_A_uid, 0)
-		mysql.updateUserGodSql(gs_B_uid, 1)
-		mysql.updateMoneySql(payUid, giftId['211026']['price'] * num * len(uids))
-		mysql.updateUserMoneyClearSql(gs_A_uid, gs_B_uid, normal_uid)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, gs_A_uid, gs_B_uid, normal_uid, money=giftId['211026']['price'] * num * len(uids), god_status={gs_A_uid: 0, gs_B_uid: 1})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89297']['cid'], 1)
 		data = encodeData(

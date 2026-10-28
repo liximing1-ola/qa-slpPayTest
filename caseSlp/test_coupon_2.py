@@ -35,10 +35,7 @@ class TestPayCreate(unittest.TestCase):
 		"""
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, money=default_money)
-		mysql.updateUserMoneyClearSql(uid)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
-		mysql.updateUserGodSql(uid, 2)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89370']['cid'], 1)
 		num = 1

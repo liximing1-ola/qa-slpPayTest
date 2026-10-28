@@ -303,10 +303,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-soundchat")  # 确认rid是直播房
 		uid = gs_A_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 2)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -334,10 +331,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-soundchat")  # 确认rid是直播房
 		uid = gs_A_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 2)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -365,10 +359,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-soundchat")  # 确认rid是直播房
 		uid = gs_A_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 0)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 0})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -396,10 +387,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-soundchat")  # 确认rid是直播房
 		uid = gs_A_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 0)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 0})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -427,10 +415,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 2)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -458,10 +443,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 2)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -489,10 +471,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 0)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 0})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -519,10 +498,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-friend")  # 确认rid不是直播房
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 0)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 0})
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -551,10 +527,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkRidFactoryType(rid), "business-talent-show")  # 确认rid是才艺厅
 		uid = gs_A_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 2)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 2})
 		mysql.deleteXsMicPermission(rid)
 		mysql.updateXsChatroomConfig(rid, uid=uid, position=0)
 		talent_show = {
@@ -590,10 +563,7 @@ class TestPayCreate(unittest.TestCase):
 		rid = mysql.selectUserInfoSql('vip')
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 0)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 0})
 
 		# 断言是否展示预期中的标签
 		assert_equal(check_vip_pop(uid, "vip"), True)
@@ -624,10 +594,7 @@ class TestPayCreate(unittest.TestCase):
 		rid = mysql.selectUserInfoSql('vip')
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 0)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 0})
 
 		# 断言是否展示预期中的标签
 		assert_equal(check_vip_pop(uid, "vip"), True)
@@ -658,10 +625,7 @@ class TestPayCreate(unittest.TestCase):
 		rid = mysql.selectUserInfoSql('vip')
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.updateMoneySql(uid)
-		mysql.updateUserGodSql(uid, 0)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, uid, money=default_money, god_status={uid: 0})
 		mysql.insertXsUserCommodity(payUid, cid=giftId['69']['cid'], num=default_num)
 		cid = int(mysql.selectUserInfoSql('id_commodity', payUid, cid=giftId['69']['cid']))
 
