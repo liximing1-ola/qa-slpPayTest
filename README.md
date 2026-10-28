@@ -97,7 +97,11 @@ crontab -e
 0 2 * * * cd /home/<user>/qa-slpPayTest && python3 run_crontab_case.py slp >> log/cron.log 2>&1
 ```
 
-`run_crontab_case.py` 与 `run_all_case.py` 的区别：不拉取代码分支、不逐条播报通过用例，只出汇总和失败清单，适合无人值守。
+`run_crontab_case.py` 与 `run_all_case.py` 的区别：不拉取代码分支、不逐条播报通过用例，只出汇总和失败清单，适合无人值守。它也认 `CASE`（写法相同），改完汇总/落盘逻辑后不必跑完 137 条就能验证：
+
+```bash
+CASE=test_check python3 run_crontab_case.py slp
+```
 
 ---
 

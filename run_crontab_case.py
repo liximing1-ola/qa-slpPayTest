@@ -24,6 +24,10 @@ PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
 # 失败/异常逐条播报的条数上限：每条 icon 都会 @all 并在外网拉一次图，
 # 失败较多时刷屏又慢，完整清单在汇总消息里，这里只做提醒
 MAX_ICON_ALERT = 3
+# 只跑指定用例：不设则全量（与 run_all_case 同一套写法）。
+# 定时任务的汇总/落盘/退出码逻辑与全量入口是两份代码，没有这个开关就只能跑 137 条
+# 才能验证它们，实际成本高到没人会去验证——留个口子，改汇总逻辑后用它快速过一遍
+CASE = os.environ.get('CASE', '').strip()
 
 
 def notify(test_result, app_info):
@@ -93,7 +97,7 @@ def main(app_info):
         # console=False：否则会先给 caseResult.log 挂上控制台 handler，导致 notify 里同名的 console=False 失效
         Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(app_info, error))
 
-    test_result = AllTestRunner(verbosity=2).run(build_suite(app_info))
+    test_result = AllTestRunner(verbosity=2).run(build_suite(app_info, CASE))
     # 重试后才通过的用例：最终状态是 PASS，但每条背后都是一次真实的断言失败。
     # 定时任务场景控制台没人看，所以完整清单落 log/retryCase.log，推送里只带一行摘要
     retry_text = retry_report(test_result)
