@@ -330,6 +330,17 @@ class TestPayCreate(unittest.TestCase):
 
 ## 提交约定
 
+- **分支：改动提交在 `lxm`，同时 fast-forward 同步一份到 `master`**。服务器定时任务拉的是 master，两条分支必须始终指向同一个提交：
+
+  ```bash
+  git push origin lxm
+  git checkout master
+  git merge --ff-only lxm
+  git push origin master
+  git checkout lxm
+  ```
+
+  `--ff-only` 不是可选项：它拒掉任何合并提交，两条分支永远是同一条历史线。否则一旦 master 上多出一个 merge commit，同步就变成「两边各自长东西」，以后想合只能手工挑提交
 - 提交信息用中文写清「为什么改」，一次提交一件事
 - 用 `git add -u`（只暂存已跟踪文件）而不是 `git add -A`，别把临时脚本、日志、`.commit_msg.txt` 带进提交
 - 推送前跑一遍 `python pre_push_audit.py`（七类检查）：解析与 import、重构函数的分支覆盖、悬空调用、未用 import/零引用定义、账户读值写法、**验证强度**。退出码非 0 就不要推
