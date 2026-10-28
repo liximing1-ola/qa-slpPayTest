@@ -437,12 +437,20 @@ def retry_report(result, title='重试后才通过的用例'):
 
 
 def retry_summary(result):
-    """推送用的一行摘要：没有重试时也要明确写「无」，否则分不清是没重试还是没统计"""
+    """推送/控制台用的一行摘要：没有重试时也要明确写「无」，否则分不清是没重试还是没统计
+
+    带上占比是为了看趋势：重试率高说明有稳定存在的服务端问题（实测约 8%，集中在
+    naming_song 的「房间类型错误」）。这类失败被 @Retry 兜住后报告永远是全绿，
+    这个百分比就是它唯一的存在证明——服务端修好会掉到 0，恶化会涨。
+    """
     records = getattr(result, 'retried', None) or {}
     if not records:
         return '重试后才通过: 无'
     total = sum(len(item['events']) for item in records.values())
-    return '重试后才通过: {} 条 / 共 {} 次，明细见 log/retryCase.log'.format(len(records), total)
+    count = result_counts(result)['total']
+    rate = '（{:.1f}%）'.format(len(records) * 100.0 / count) if count else ''
+    return '重试后才通过: {} 条 / 共 {} 次{}，明细见 log/retryCase.log'.format(
+        len(records), total, rate)
 
 
 def _split_long_line(text, limit):

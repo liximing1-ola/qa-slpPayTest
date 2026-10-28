@@ -9,7 +9,7 @@ from common import Logs, Consts
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
-						   not_pass_summary, parse_app, result_counts, retry_report, split_message)
+						   not_pass_summary, parse_app, result_counts, retry_report, retry_summary, split_message)
 
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，企业微信的 markdown 展示效果不理想，
 # 需要恢复推送时用 PUSH_WX=1
@@ -61,6 +61,9 @@ def main(appInfo):
 		# flush=True：stdout 重定向到文件时是块缓冲，不刷会延迟到进程退出才落盘
 		print(des, flush=True)
 		Logs.get_log('caseResult.log', console=False).info(des)
+		# 固定行：重试率是「被 @Retry 兜住的服务端问题」唯一的存在证明。没有这一行，
+		# 「全绿」就分不出「真的没问题」和「有问题但被重试掉了」。
+		print(retry_summary(test_result), flush=True)
 		report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(appInfo))
 		print(report_text, flush=True)
 		Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)

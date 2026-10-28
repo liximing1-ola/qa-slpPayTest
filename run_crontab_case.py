@@ -101,6 +101,11 @@ def main(app_info):
     # 重试后才通过的用例：最终状态是 PASS，但每条背后都是一次真实的断言失败。
     # 定时任务场景控制台没人看，所以完整清单落 log/retryCase.log，推送里只带一行摘要
     retry_text = retry_report(test_result)
+    # 摘要固定打一行（不管有没有重试）：只看 runCode.log 时也能看出「这轮有没有被重试兜住的问题」
+    # console=False：否则会给这个 logger 再挂一个控制台 handler，同一行会被打两次
+    retry_line = retry_summary(test_result)
+    print(retry_line, flush=True)
+    Logs.get_log('runCode.log', console=False).info(retry_line)
     if retry_text:
         print(retry_text, flush=True)
         Logs.get_log('retryCase.log', console=False, back_count=30).info(retry_text)
