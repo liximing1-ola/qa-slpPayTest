@@ -14,6 +14,7 @@ from common.tools import (  # noqa: F401
     get_test_token,
     check_vip_pop,
     prepare_test_data,
+    reset_room_acs,
     prepare_vip_pop_data,
     read_vip_pop,
     prepare_room_data,

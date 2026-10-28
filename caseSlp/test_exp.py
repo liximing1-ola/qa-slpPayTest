@@ -42,8 +42,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.deleteUserAccountSql('user_title_new', payUid)  # 关闭贵族,还原数据
 		mysql.deleteUserAccountSql('pay_room_money', payUid)  # 修改vip值,还原数据
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['骑士']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 		# 上面刚把双方的 vip/人气 复位，基线必然是 0。不为 0 只可能有两种原因：上游用例的异步
@@ -79,8 +78,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['男爵']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -112,8 +110,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['子爵']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -145,8 +142,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['伯爵']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -178,8 +174,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['侯爵']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -211,8 +206,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['公爵']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -244,8 +238,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['亲王']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -277,8 +270,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['国王']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -310,8 +302,7 @@ class TestPayCreate(unittest.TestCase):
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['皇帝']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -351,8 +342,7 @@ class TestPayCreate(unittest.TestCase):
 
 		prepare_vip_pop_data(payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['皇帝']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip = mysql.selectUserInfoSql('pay_room_money', payUid)
 		payUid_old_pop = mysql.selectUserInfoSql('popularity', payUid)
@@ -447,8 +437,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['亲王']['level'])
 		prepare_vip_pop_data(payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['皇帝']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -551,8 +540,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['公爵']['level'])
 		prepare_vip_pop_data(payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['公爵']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 
@@ -654,8 +642,7 @@ class TestPayCreate(unittest.TestCase):
 		mysql.updateUserInfoSql('user_title_new', uid, level=juewei_level['公爵']['level'])
 		prepare_vip_pop_data(payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['公爵']['level'])
-		mysql.updateMoneySql(payUid, default_money)
-		mysql.deleteUserAccountSql('user_commodity', payUid)
+		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
 

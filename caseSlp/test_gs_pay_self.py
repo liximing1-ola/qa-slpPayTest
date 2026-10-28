@@ -4,7 +4,7 @@ __desc__ = "主播,自刷"
 import unittest
 
 from caseSlp.config import *
-from caseSlp.tools import prepare_test_data
+from caseSlp.tools import prepare_test_data, reset_room_acs
 from common.Assert import assert_between, assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
@@ -74,8 +74,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gs_A_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(uid, uid,gs_A_room_owner_1_uid,gs_A_ceo_uid, money=default_money, god_status={uid: 1})
-		mysql.deleteXsstRoomacsSum(uid)
-		mysql.insertXsstRoomacsSum(uid, gs_A_rid_1)
+		reset_room_acs(uid, gs_A_rid_1)
 		mysql.updateMoneySql(
 			uid,
 			money=giftId['69']['price'] * rate_money,
@@ -122,8 +121,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gs_A_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(uid, uid,gs_A_room_owner_1_uid,gs_A_ceo_uid, money=default_money, god_status={uid: 1})
-		mysql.deleteXsstRoomacsSum(uid)
-		mysql.insertXsstRoomacsSum(uid, gs_A_rid_1)
+		reset_room_acs(uid, gs_A_rid_1)
 		mysql.updateMoneySql(
 			uid,
 			money=giftId['69']['price'] * rate_money,

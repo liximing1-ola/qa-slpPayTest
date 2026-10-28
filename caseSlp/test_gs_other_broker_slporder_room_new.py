@@ -4,7 +4,7 @@ __desc__ = "跨档-派单-主播分成"
 import unittest
 
 from caseSlp.config import *
-from caseSlp.tools import prepare_test_data
+from caseSlp.tools import prepare_test_data, reset_room_acs
 from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
@@ -20,8 +20,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, gs_B_room_owner_1_uid, gs_B_ceo_uid, money=default_money, god_status={uid: 2})
-		mysql.deleteXsstRoomacsSum(uid)
-		mysql.insertXsstRoomacsSum(uid, gs_B_rid_1)
+		reset_room_acs(uid, gs_B_rid_1)
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -41,8 +40,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, gs_B_room_owner_1_uid, gs_B_ceo_uid, money=default_money, god_status={uid: 2})
-		mysql.deleteXsstRoomacsSum(uid)
-		mysql.insertXsstRoomacsSum(uid, gs_B_rid_3)
+		reset_room_acs(uid, gs_B_rid_3)
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -62,8 +60,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, gs_B_room_owner_1_uid, gs_B_ceo_uid, money=default_money, god_status={uid: 2})
-		mysql.deleteXsstRoomacsSum(uid)
-		mysql.insertXsstRoomacsSum(uid, gs_B_rid_4)
+		reset_room_acs(uid, gs_B_rid_4)
 		data = encodeData(
 			rid=rid,
 			payType='package',
@@ -83,8 +80,7 @@ class TestPayCreate(unittest.TestCase):
 		uid = gs_B_uid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
 		prepare_test_data(payUid, uid, gs_B_room_owner_1_uid, gs_B_ceo_uid, money=default_money, god_status={uid: 2})
-		mysql.deleteXsstRoomacsSum(uid)
-		mysql.insertXsstRoomacsSum(uid, gs_B_rid_5)
+		reset_room_acs(uid, gs_B_rid_5)
 		data = encodeData(
 			rid=rid,
 			payType='package',

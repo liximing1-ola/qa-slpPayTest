@@ -129,6 +129,22 @@ def prepare_test_data(pay_uid, *target_uids, money=None, clear_commodity=True, g
             mysql.updateUserGodSql(uid, status)
 
 
+def reset_room_acs(uid, rid):
+    """
+    把用户在厅内的收入统计重置成「只剩当前厅一行」
+
+    xsst_roomacs_sum 是累计值：上一轮用例打的赏会叠进来，分成断言就会莫名
+    多出上一轮的金额。用例里原本各写两行（先删干净、再插当前厅），17 处重复，
+    语义只存在于读代码的人脑子里；收成一处之后，这里要补字段也只改一遍。
+    :param uid: 被测用户（一般是主播）
+    :param rid: 要保留的那一行对应的厅
+    """
+    from common.conSlpXsgMysql import conMysql as mysql
+
+    mysql.deleteXsstRoomacsSum(uid)
+    mysql.insertXsstRoomacsSum(uid, rid)
+
+
 def prepare_vip_pop_data(uid, pay_uid=None):
     """
     准备 VIP/人气值 相关的数据清理
