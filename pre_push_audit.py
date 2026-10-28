@@ -43,7 +43,8 @@ import re
 import sys
 
 SELF = 'pre_push_audit.py'
-CASE_PACKAGES = ['caseSlp', 'caseXsg']
+# 三个用例包都要审：caseStress 是并发与幂等用例，走独立入口运行，但不能因此成为审计盲区
+CASE_PACKAGES = ['caseSlp', 'caseXsg', 'caseStress']
 # 有意保留的零引用定义：README 里记录过的公共断言 API，用例随时可能引用
 ZERO_REF_ALLOWED = {'assert_in_text'}
 
@@ -61,7 +62,7 @@ def fail(message):
 
 
 def source_files():
-    """common / caseSlp / caseXsg 下的全部 .py，加上根目录的脚本（跳过 _ 开头的临时文件）"""
+    """common / caseSlp / caseXsg / caseStress 下的全部 .py，加上根目录的脚本（跳过 _ 开头的临时文件）"""
     for root in ['common'] + CASE_PACKAGES:
         if not os.path.isdir(root):
             continue
@@ -264,7 +265,8 @@ print('\n[6] 账户读值的断言写法')
 bad_plain = []
 bad_eager = []
 for path, tree in trees.items():
-    if not (target(path).startswith('caseSlp/') or target(path).startswith('caseXsg/')):
+    if not (target(path).startswith('caseSlp/') or target(path).startswith('caseXsg/')
+            or target(path).startswith('caseStress/')):
         continue
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or not node.args:
@@ -561,7 +563,7 @@ if undefined:
 # （tools / Assert / conMysql 方法）时最容易出的错。这里拿真实函数对象
 # 的签名去 bind_partial，只校验实参能不能安放，不看默认值。
 print('\n[11] 调用点实参与签名')
-REPO_PREFIXES = ('common.', 'caseSlp.', 'caseXsg.')
+REPO_PREFIXES = ('common.', 'caseSlp.', 'caseXsg.', 'caseStress.')
 
 
 def repo_function(obj):

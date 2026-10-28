@@ -170,22 +170,27 @@ class AllTestRunner(unittest.TextTestRunner):
         return result
 
 
-def build_suite(app_info, case_expr=''):
+def build_suite(app_info, case_expr='', case_dir_name=''):
     """按 App 名装配用例集
 
     :param app_info: config.appName 的取值（SLP / XSG）；不支持时抛 ValueError，让入口显式报错
     :param case_expr: 逗号分隔的混合写法，空则全量执行（run_crontab_case 不传，行为与全量一致）
         省略：test_check                             只跑 caseSlp/test_check.py
         带点：test_check.TestPayCreate.test_002      按完整用例名加载（可只写到类）
+    :param case_dir_name: 用例目录名，空则按 App 映射（caseSlp / caseXsg）。并发与幂等用例放在
+        平级的 caseStress，由 run_stress_case 传进来——不能建成 caseSlp 的子目录：discover 是
+        递归的，子目录里的用例会被日常全量回归自动收进去
     unittest 的 discover 只能按**文件名** glob，写用例名是匹配不到文件的，所以两种写法分开处理
     """
-    case_dir = config.BASE_PATH
-    if app_info == config.appName['SLP']:
-        case_dir += '/caseSlp'
-    elif app_info == config.appName['XSG']:
-        case_dir += '/caseXsg'
-    else:
+    if app_info not in (config.appName['SLP'], config.appName['XSG']):
         raise ValueError('不支持的 App: {}, 仅支持 {}'.format(app_info, config.appName))
+
+    if case_dir_name:
+        case_dir = '{}/{}'.format(config.BASE_PATH, case_dir_name)
+    elif app_info == config.appName['SLP']:
+        case_dir = config.BASE_PATH + '/caseSlp'
+    else:
+        case_dir = config.BASE_PATH + '/caseXsg'
 
     testcase = unittest.TestSuite()
     loader = unittest.defaultTestLoader

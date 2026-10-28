@@ -37,6 +37,7 @@ python3 run_all_case.py xsg      # XSG 全量
 qa-slpPayTest/
 ├── run_all_case.py        # 全量入口：逐条播报 + 未通过清单（日常主入口）
 ├── run_crontab_case.py    # 定时任务入口：只汇总与播报失败/异常，不拉分支、不列通过用例，结果推企微
+├── run_stress_case.py     # 并发与幂等入口：上线前跑一轮，不进日常回归
 ├── Robot.py               # 结果通知：企业微信群机器人 webhook
 ├── autoGitPull.py         # 分支检查 + 记录上次执行时间
 ├── pre_push_audit.py      # 推送前全仓审查（十一类）
@@ -46,6 +47,10 @@ qa-slpPayTest/
 │   ├── tools.py           # 转发层，实现统一在 common/tools.py
 │   └── test_*.py
 ├── caseXsg/               # XSG 用例（结构与 caseSlp 一致）
+├── caseStress/            # 并发与幂等用例（独立入口，见「并发与幂等」）
+│   ├── config.py          # 并发账号组、重复提交次数
+│   ├── tools.py           # 重置余额 / 读余额 / 响应分类
+│   └── test_*.py
 ├── common/                # 公共能力，两个 App 共用
 │   ├── Config.py          # 环境地址、工程路径、分支信息
 │   ├── Session.py         # 登录取 token
@@ -76,7 +81,7 @@ qa-slpPayTest/
 所以本机的固定动作是这三条，全都不连服务端、不连库：
 
 ```bash
-python -m compileall -q caseSlp caseXsg common   # 语法能否解析
+python -m compileall -q caseSlp caseXsg caseStress common   # 语法能否解析
 python -m common.selfcheck                       # 框架守卫逻辑（频控退避 / 失败现场 / 轮询读值）
 python pre_push_audit.py                         # 全仓审查（十一类）
 ```
@@ -109,6 +114,30 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 ```
 
 不设 `CASE` 就是全量。写用例名（含 `.`）时按名字加载，找不到会造一条报错用例，**不会静默跳过**。
+
+### 并发与幂等（上线前跑一轮）
+
+```bash
+python3 run_stress_case.py slp
+CASE=test_pay_concurrent python3 run_stress_case.py slp    # 只跑并发那两条
+```
+
+这部分用例回答的是「服务端会不会超扣、会不会重复扣费」，不跟着每天的 cron 跑：它们会把账号余额、订单、分成数据搅乱，和日常那 137 条共用账号只会互相污染。
+
+为什么必须是独立目录 + 独立进程：
+
+1. 节流是 App 级全局锁（`common/Request` 的 `_interval_lock` 按 `tokenName` 排队），同进程多线程会被塞进同一个窗口，每个请求至少隔 `REQUEST_INTERVAL`——那样写出来的「并发」其实是串行，测的是限流而不是服务端。所以入口在 import 任何 `common` 模块之前把间隔归零。
+2. 用例会改动账号数据，混进日常回归就没法把一次「红」归因到某一类。
+
+| 用例 | 断言 |
+|---|---|
+| 四账号并发打同一主播 | 扣款总额 = 成功笔数 × 单价，且余额不得为负 |
+| 同账号并发两笔（余额只够一笔） | 钱与成功响应严格对应，不得透支 |
+| 同一请求连发 3 次 | 账与响应自洽；成交多于 1 笔时显著打印「待确认」 |
+
+前两条把「少扣」和「超扣」都当失败：余额只留单笔的量，多扣一次就变负，被区间断言挡住。
+
+最后一条是**现状探测**：打赏请求体里没有幂等键（只有 `sign` + 业务字段），「重复提交几次算正常」属产品口径，口径确定前只记录不判红。跑完在输出里搜 `[重复提交][待确认]`，拿到实测结论后再固化成断言。
 
 ### 定时任务
 

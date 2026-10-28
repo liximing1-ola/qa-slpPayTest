@@ -16,7 +16,8 @@ test_coupon 里全是券，test_gs_other_broker_* 里全是跨档公会分成。
 
 注意 caseSlp 与 caseXsg 有同名模块（test_gs_room / test_normal_room / test_exp 等），
 这里按模块名统一映射：两个 App 的同名文件描述的是同一类业务场景，一次只跑一个
-App，不会同时出现在报告里。
+App，不会同时出现在报告里。caseStress 是独立入口的并发与幂等用例，同样在这里登记，
+这样它的报告也能按场景族统计。
 """
 
 UNGROUPED = '未分组'
@@ -45,7 +46,9 @@ GROUPS = {
     'test_normal_pay_self': '普通用户·自刷',
     'test_normal_room': '普通用户·房间打赏',
     'test_normal_room_pay_self': '普通用户·房间自刷',
+    'test_pay_concurrent': '并发与幂等',
     'test_pretty_room': '靓号房',
+    'test_repeat_submit': '并发与幂等',
     'test_starship': '星舰',
     'test_zx_box': '甄选礼盒',
 }
