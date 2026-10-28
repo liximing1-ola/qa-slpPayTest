@@ -4,7 +4,7 @@
 与 run_all_case.py 的区别：不拉取代码分支、不逐条播报通过用例，只关注结果汇总与失败/异常通知。
 
 推送形态（PUSH_WX=1 时，cron 里就是这个用法）：
-    全部通过 -> 一条消息：标题 + 总数/通过/失败/异常/跳过 + 重试摘要 + 分支
+    全部通过 -> 一条消息：标题 + 总数/通过/失败/异常/跳过 + 重试摘要 + 代码版本
     有未通过 -> 同一条消息后面附上失败与异常清单（跳过不列，见 fail_summary）
     执行中断 -> 一条「执行异常」消息，说明用例没跑完，不能安静退出
 
@@ -13,6 +13,7 @@
     PUSH_WX=1 python run_crontab_case.py slp
 """
 import os
+import subprocess
 import sys
 import traceback
 
@@ -32,6 +33,32 @@ PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
 # 定时任务的汇总/落盘/退出码逻辑与全量入口是两份代码，没有这个开关就只能跑 137 条
 # 才能验证它们，实际成本高到没人会去验证——留个口子，改汇总逻辑后用它快速过一遍
 CASE = os.environ.get('CASE', '').strip()
+
+
+def git_revision():
+    """当前这份代码是哪一版，形如 master@b91b736
+
+    原来这里读 config.codeInfo['slp_git_branch']。那个值标的是**被测服务端**
+    （slp-php / slp-common-rpc）的分支，默认写死 "dev"，跟「本轮跑的是哪份测试
+    代码」没有关系；服务器实际 clone 的是 master，推送里却写 dev，等于每天报一次
+    假信息，而且没人会去核对。直接问 git，读到什么就是什么。
+    """
+    cwd = os.path.dirname(os.path.abspath(__file__))
+
+    def read(args):
+        return subprocess.check_output(args, cwd=cwd, stderr=subprocess.DEVNULL,
+                                       universal_newlines=True, timeout=5).strip()
+
+    try:
+        branch = read(['git', 'rev-parse', '--abbrev-ref', 'HEAD'])
+        commit = read(['git', 'rev-parse', '--short', 'HEAD'])
+    except Exception:
+        # 没装 git、不在仓库里、或者 git 卡住：宁可这行显示「未知」，也不能让推送失败
+        return ''
+    if not commit:
+        return ''
+    # detached HEAD 时 --abbrev-ref 返回字面量 HEAD，这时只报提交号
+    return commit if branch in ('', 'HEAD') else '{}@{}'.format(branch, commit)
 
 
 def push_lines(lines, app_info):
@@ -93,13 +120,12 @@ def notify(test_result, app_info):
     # 只推一条（超过企微单条上限才拆）：全通过时就是几行结果，有未通过时把清单
     # 附在后面。不再逐条发 icon —— 每条都会 @all，失败几条就刷几次屏，
     # 而清单本来就在这条消息里，提醒和内容分开反而是多一次打扰
-    branch = config.codeInfo.get('slp_git_branch', '') if app_info == config.appName['不夜星球'] else '-'
     lines = [
         "**{}** 定时任务结果".format(app_info),
         "总数 {}, 通过 {}, 失败 {}, 异常 {}, 跳过 {}".format(
             counts['total'], pass_count, counts['fail'], counts['error'], counts['skip']),
         retry_summary(test_result),
-        "代码分支: {}".format(branch),
+        "代码: {}".format(git_revision() or '未知'),
     ]
     # 失败与异常全部列出；跳过的只在上面那行里给个数（已知下线，每天列一遍是噪音）
     fail_text = fail_summary(test_result)
