@@ -123,13 +123,50 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
    tail -n 200 log/failCase.log      # 需要看堆栈时
    ```
    企业微信推送默认关闭，需要推送时：`PUSH_WX=1 python3 run_crontab_case.py slp`
-3. **定时任务**（可选）：
+3. **定时任务**：
+
+   先确认 python3 的绝对路径——cron 的 PATH 很精简，只写 `python3` 在 cron 里经常找不到：
+
    ```bash
+   which python3      # 例如 /usr/bin/python3
    crontab -e
-   # 每天凌晨 2 点执行
-   0 2 * * * cd /home/<user>/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
    ```
-4. **退出码**：`run_all_case.py` / `run_crontab_case.py` 执行结束后会按结果返回退出码，
+
+   ```cron
+   # 每天 03:00 拉最新代码后跑全量；日志按日期落盘，同时清理 30 天前的
+   0 3 * * * cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+   ```
+
+   几处不是随手写的：
+
+   - **用 `run_crontab_case.py` 不用 `run_all_case.py`**：前者专为定时任务，不逐条播报通过用例，只打汇总 + 未通过清单；137 条全量下来后者几千行，日志没法看
+   - **每天先 `git pull --ff-only`**：不拉的话定时任务跑的永远是部署那天的代码，改过的用例根本不会生效。`--ff-only` 避免在服务器上产生合并提交；用 `;` 不用 `&&`，pull 失败也继续用现有代码跑，不把整条链断掉
+   - **日志按日期分文件**：`cron.log` 会无限增长，`$(date +\%F)` 一天一个（cron 里 `%` 必须转义成 `\%`）
+   - **清理日志要放在最前面**：`{ }` 的退出码取块内最后一条命令，把 `find` 放在末尾会把 python 的退出码盖掉，cron 就永远收不到失败信号（MAILTO / 调度平台告警全失效）
+   - **`find ... -mtime +30 -delete`**：只删 30 天前的，不会动当天正在写的文件
+   - **`mkdir -p log` 必须在重定向之前**：`>> log/cron_x.log` 是 shell 在开始执行前打开的文件，目录不存在就直接报错，整条命令连 python 都不会起动
+   - **时间选凌晨**：全量约 5 分钟、会造数扣费，避开有人手工测试的时段
+   - **服务器上不要手工改代码**：`git pull --ff-only` 遇到本地修改会直接拒绝，日志里会一直报 pull 失败，而用例跑的还是旧代码
+
+   需要同时推企业微信群：把命令里的 `run_crontab_case.py` 前面加上 `PUSH_WX=1 `。
+
+4. **看结果、追趋势**：
+
+   ```bash
+   tail -30 log/cron_$(date +%F).log                    # 当天结果
+   grep -h '重试后才通过' log/cron_*.log | sort | uniq -c   # 每天一行，这就是趋势
+   ```
+
+   第二行值得每天看一眼：`重试后才通过: N 条（X%）` 统计的是「被 @Retry 兜住、但确实失败过一次」的请求。
+   当前它稳定指向 naming_song 的「房间类型错误」（服务端约 8% 拒绝，证据见 README 排查手册第 4 条），
+   服务端修好后这行会变成「无」。全量口径只有 0.7%（分母 137，而这个文件只跑一轮），
+   想看清这个 bug 就单跑它（分子分母都是 10 条，信噪比高 14 倍）：
+
+   ```bash
+   CASE=test_naming_song python3 run_all_case.py slp 2>&1 | grep '重试后才通过'
+   ```
+
+5. **退出码**：`run_all_case.py` / `run_crontab_case.py` 执行结束后会按结果返回退出码，
    可直接被 cron 告警、调度平台或 `cmd && 下一步` 识别：
 
    | 退出码 | 含义 |
@@ -138,10 +175,8 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
    | `1` | 存在失败或异常（跳过不计） |
    | `2` | 命令行参数错误（如 `run_crontab_case.py slpp`） |
 
-   ```bash
-   # 失败时让 cron 发邮件 / 触发告警（MAILTO 生效的前提就是非 0 退出码）
-   0 2 * * * cd /home/<user>/qa-slpPayTest && python3 run_all_case.py slp >> log/cron.log 2>&1
-   ```
+   **注意：被 `@Retry` 救回来的用例不算失败，退出码仍是 0。** 只靠退出码会漏掉「稳定存在但被重试掩盖」的问题，
+   必须配合上面那行重试率一起看。失败时让 cron 发邮件：在 crontab 顶部加 `MAILTO="你的邮箱"`（前提就是非 0 退出码）。
 
 ---
 
