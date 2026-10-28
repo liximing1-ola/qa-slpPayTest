@@ -11,6 +11,10 @@
 4. 未使用的 import、共享层零引用定义
 5. 读账户表的断言是否写了轮询版，且轮询版的第一个参数确实是 lambda
    （写成同步读值，实测会让 36% 的用例靠重试才有结果）
+6. 验证强度：断言是否被 if 包住（条件不成立就整段不校验）、被 except 吞掉、
+   被注释掉、或容差放宽到个位以上
+   —— 这些 case 的目的是发现服务端支付逻辑的问题，任何「让用例更容易过」的写法
+   都要拦住：为了 pass 而放松校验，等于把这个 case 废掉
 
 用法：python pre_push_audit.py
 退出码：0 全部通过；1 有问题，逐条列在最后
@@ -28,6 +32,12 @@ CASE_PACKAGES = ['caseSlp', 'caseXsg']
 ZERO_REF_ALLOWED = {'assert_in_text'}
 
 problems = []
+# 提醒级问题：不影响退出码，但要人看一眼（如 skip 数量突增，可能是用 skip 躲失败）
+warnings = []
+
+
+def warn(message):
+    warnings.append(message)
 
 
 def fail(message):
@@ -259,8 +269,85 @@ if bad_plain:
 if bad_eager:
     fail('轮询版的第一个参数必须是 lambda，不能是提前读好的值: {}'.format(bad_eager))
 
+# ---------- 7. 验证强度：防止为了通过而弱化校验 ----------
+# 这个仓库的 case 是用来发现服务端支付逻辑问题的，不是用来交绿报告的。验证口径一旦放松，
+# 报告变绿但问题就消失了。下面四类「让用例更容易过」的写法在这里拦住：
+#   a. 条件断言：assert 被 if 包住，条件不成立时整段校验静默跳过
+#   b. 断言被 try 吞掉：except 分支没有 raise，失败变成了继续往下跑
+#   c. 被注释掉的断言：历史上就有人用这招「修好」用例
+#   d. 容差放宽到个位以上：金额、次数都是整数，容忍 2 以上等于不校验
+print('\n[7] 验证强度（防止弱化校验）')
+# 按数值/多值分支是必要写法，不是弱化；白名单只此一个文件
+COND_ASSERT_ALLOWED = {'common/Assert.py'}
+# 轮询助手本来就要捕获断言失败后重试（中间态不算失败），超时那一轮仍会 raise
+SWALLOW_ALLOWED = {'common/Assert.py'}
+conditional = []
+swallowed = []
+commented = []
+loose = []
+for path, tree in trees.items():
+    rel = target(path)
+    parents = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assert):
+            if isinstance(parents.get(node), (ast.If, ast.IfExp, ast.While)) and rel not in COND_ASSERT_ALLOWED:
+                conditional.append('{}:{}'.format(rel, node.lineno))
+        elif isinstance(node, ast.Try):
+            # 只看 try 体里真的有断言的那种，避免把普通容错（如现场读取失败不影响主流程）误报
+            body_has_assert = False
+            for stmt in node.body:
+                for inner in ast.walk(stmt):
+                    if isinstance(inner, ast.Assert) or (
+                            isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)
+                            and inner.func.id.startswith('assert')):
+                        body_has_assert = True
+            if not body_has_assert:
+                continue
+            for handler in node.handlers:
+                if not any(isinstance(inner, ast.Raise) for inner in ast.walk(handler)) \
+                        and rel not in SWALLOW_ALLOWED:
+                    swallowed.append('{}:{}'.format(rel, handler.lineno))
+        elif isinstance(node, ast.Compare) and isinstance(node.left, ast.Call) \
+                and isinstance(node.left.func, ast.Name) and node.left.func.id == 'abs':
+            for op, comparator in zip(node.ops, node.comparators):
+                if isinstance(op, (ast.Lt, ast.LtE)) and isinstance(comparator, ast.Constant) \
+                        and isinstance(comparator.value, (int, float)) and comparator.value > 1:
+                    loose.append('{}:{}'.format(rel, node.lineno))
+for path, text in sources.items():
+    for lineno, line in enumerate(text.splitlines(), 1):
+        # 必须整行就是一句断言才算（行首 # 后直接跟断言）；写得宽松会把注释里提到
+        # 「assert_x(...)」这种说明文字也当成被注释掉的断言。两种写法都要覆盖：
+        # 裸语句 `# assert a == b` 和函数调用 `# assert_equal(a, b)`
+        if re.match(r'^#\s*(self\.|Assert\.)?assert(_[a-z_]*\(|\s)', line.strip()):
+            commented.append('{}:{}'.format(path, lineno))
+print('    条件断言: {} 处  断言被 except 吞掉: {} 处  注释掉的断言: {} 处  过度容差: {} 处'.format(
+    len(conditional), len(swallowed), len(commented), len(loose)))
+if conditional:
+    fail('断言被 if 包住，条件不成立时整段校验会被跳过: {}'.format(conditional))
+if swallowed:
+    fail('断言在 try 里但 except 没有 raise，失败被吞掉: {}'.format(swallowed))
+if commented:
+    fail('断言被注释掉: {}'.format(commented))
+if loose:
+    fail('数值容差大于 1（金额/次数是整数，容忍到个位以上等于不校验）: {}'.format(loose))
+# skip 数量只提醒不判失败：功能下线确实会新增 skip，但「用 skip 躲开失败」也是这个形态，
+# 数量变了就让人看一眼理由（基线：装饰器 8 个、运行时 skipTest 3 处）
+skip_marks = len(re.findall(r'@unittest\.skip', blob))
+skip_runtime = len(re.findall(r'skipTest\(', blob))
+print('    skip 装饰器: {} 个  运行时 skipTest: {} 处（基线 8 / 3）'.format(skip_marks, skip_runtime))
+if (skip_marks, skip_runtime) != (8, 3):
+    warn('skip 数量偏离基线（{} / {}，基线 8 / 3）：确认是功能下线，不是用 skip 躲失败'.format(
+        skip_marks, skip_runtime))
+
 # ---------- 结论 ----------
 print('\n' + '=' * 60)
+if warnings:
+    print('提醒（不影响结论，但要看一眼）：')
+    for item in warnings:
+        print('  -', item)
 if problems:
     print('审查未通过，{} 个问题：'.format(len(problems)))
     for item in problems:
