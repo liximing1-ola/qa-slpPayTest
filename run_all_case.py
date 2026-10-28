@@ -5,7 +5,7 @@ from time import time
 
 from Robot import robot
 from autoGitPull import updateTime, updateCode
-from common import Logs, Consts
+from common import Logs, Consts, preflight
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, fail_detail_text, not_pass_report,
@@ -21,10 +21,21 @@ PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
 CASE = os.environ.get('CASE', '').strip()
 # 推送时是否额外逐条列出通过的用例：默认关闭，通过用例动辄上百条，会把真正要看的失败清单挤到后面
 LIST_PASS = os.environ.get('LIST_PASS', '0') == '1'
+# 环境不可用时 main 返回这个标记而不是 counts：没有一轮用例结果可报
+ENV_DOWN = 'env_down'
 
 
 def main(appInfo):
 	if appInfo == config.appName['不夜星球'] or appInfo == config.appName['小拾光']:
+		# 开跑前先确认环境可用：环境不通时用例会一条条失败到结束，那不是回归信号，
+		# 而且会把「真的全挂了」这个信号提前用掉。不可用就不跑，退出码 3
+		ok, rows, hint = preflight.gate(appInfo)
+		if not ok:
+			if PUSH_WX:
+				for chunk in split_message(preflight.push_message(rows, hint)):
+					robot('markdown', chunk, bot='slp')
+			return ENV_DOWN
+
 		to = 'wx'
 		print("*" * 50)
 		# 开关关掉时不要再打"消息推送到:wx"，否则日志里会和后面的"推送已关闭"互相矛盾
@@ -103,6 +114,9 @@ def main(appInfo):
 
 if __name__ == "__main__":
 	counts = main(parse_app(sys.argv))
+	if counts == ENV_DOWN:
+		# 与 1（有用例失败）区分：没跑和跑了但红是两件事，日志里要能一眼分清
+		sys.exit(preflight.EXIT_ENV_DOWN)
 
 	# 退出码：有失败/异常时返回 1，便于 cron、调度平台或 cmd && 后续命令感知本轮失败
 	sys.exit(1 if counts and (counts['fail'] or counts['error']) else 0)

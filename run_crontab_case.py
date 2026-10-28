@@ -7,6 +7,7 @@
     全部通过 -> 两行：一行绿色结论 + 一行灰色尾注（跳过/重试/耗时/版本）
     有未通过 -> 结论行 + 编号清单（文件::方法 / 用例描述 / 一行原因）
     0 条用例 -> 红色「0 条用例被执行」，退出码 2。这不是通过
+    环境不可用 -> 红色「环境不可用，本轮未执行」，退出码 3。一条用例都不跑
     执行中断 -> 一条红色「执行中断」消息，说明用例没跑完，不能安静退出
 
 整个仓库只有自己看这条推送，所以排版以「扫一眼就能判断今天要不要动手」为准：
@@ -23,12 +24,13 @@ import time
 import traceback
 
 from Robot import robot
-from common import Logs
+from common import Logs, preflight
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, duration_text, fail_detail_text,
-                           not_pass_report, parse_app, push_fail_lines, result_counts,
-                           retry_digits, retry_report, retry_summary, split_message)
+                           group_lines, group_report, not_pass_report, parse_app,
+                           push_fail_lines, result_counts, retry_digits, retry_report,
+                           retry_summary, split_message)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
 # 是否推送到企业微信群：默认关闭，cron 命令里显式写 PUSH_WX=1 打开。
@@ -38,6 +40,8 @@ PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
 # 定时任务的汇总/落盘/退出码逻辑与全量入口是两份代码，没有这个开关就只能跑 137 条
 # 才能验证它们，实际成本高到没人会去验证——留个口子，改汇总逻辑后用它快速过一遍
 CASE = os.environ.get('CASE', '').strip()
+# 体检不通过时 main 返回这个标记，而不是 counts：没有一轮用例结果可报
+ENV_DOWN = 'env_down'
 
 
 def git_revision():
@@ -135,6 +139,8 @@ def push_message(counts, test_result, app_info, elapsed):
     lines = ['<font color="warning">**{}**</font>　<font color="comment">通过 {} / {}</font>'.format(
                  bad, counts['pass'], counts['total']),
              tail]
+    # 先告诉「哪一类在退化」，再给逐条清单：前者决定要不要立刻处理，后者决定处理什么
+    lines.extend(group_lines(test_result))
     lines.extend(push_fail_lines(test_result))
     return lines
 
@@ -162,6 +168,13 @@ def notify(test_result, app_info, elapsed=0):
     print(report_text, flush=True)
     Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)
 
+    # 按场景族统计：控制台/日志里永远给全量，看的是「这次是某一类整体跨了，
+    # 还是东一条西一条」——只看失败清单回答不了这个问题
+    group_text = group_report(test_result)
+    if group_text:
+        print(group_text, flush=True)
+        Logs.get_log('caseResult.log', console=False).info(group_text)
+
     # 失败/异常的完整堆栈只写文件、不打控制台（控制台已有上面带编号的完整清单）
     if failures or errors:
         Logs.get_log('failCase.log', console=False, back_count=30).error(fail_detail_text(test_result))
@@ -183,6 +196,15 @@ def main(app_info):
     if app_info not in APP_SUPPORTED:
         Logs.get_log('runCode.log').error('{} 执行异常'.format(app_info))
         return None
+
+    # 开跑前先确认环境可用。环境不通时继续跑，结果是 137 条逐条失败——它不是
+    # 回归信号，而且会把「真的全挂了」这个信号提前用掉。不可用就不跑，明说
+    # app_info 就是 slp / xsg（parse_app 返回 config.appName 的值），正好是 config.appInfo 的键
+    ok, rows, hint = preflight.gate(app_info)
+    if not ok:
+        if PUSH_WX:
+            push_lines(preflight.push_message(rows, hint), app_info)
+        return ENV_DOWN
 
     # 定时任务是长期运行场景，先刷新一次 token，避免 token 过期导致全量失败
     try:
@@ -209,7 +231,7 @@ def main(app_info):
 
 
 def run(argv):
-    """命令行入口：返回退出码（0 全通过 / 1 有失败或异常 / 2 没跑完）
+    """命令行入口：返回退出码（0 全通过 / 1 有失败或异常 / 2 没跑完 / 3 环境不可用）
 
     退出码的判定单独成函数，否则只能靠真起一个进程去验证「执行中断」这种分支，
     而它恰好是最不希望在生产里才第一次生效的分支。
@@ -231,6 +253,9 @@ def run(argv):
         # parse_app 已经拦了错误参数，这里只防配置里的 App 名与支持列表不一致
         print('[{}] 不在支持列表，未执行'.format(app), flush=True)
         return 2
+    if counts == ENV_DOWN:
+        # 与 1（有用例失败）区分：没跑和跑了但红是两件事，日志里要能一眼分清
+        return preflight.EXIT_ENV_DOWN
     if not counts['total']:
         # 0 条用例不是「全部通过」：套件加载失败、CASE 过滤器写错、模块被注释掉都会
         # 走到这里。退出码仍给 0 的话，cron 和群里看到的都是「没事」，比红的更危险

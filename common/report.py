@@ -13,6 +13,7 @@ import time
 import unittest
 
 from common import Assert, Logs, Scene, runFailed
+from common.case_groups import group_of
 from common.Config import config
 
 
@@ -312,6 +313,65 @@ def result_counts(result):
             'fail': len(result.failures),
             'error': len(result.errors),
             'skip': len(result.skipped)}
+
+
+def group_stats(result):
+    """按场景族统计本轮结果：{组名: {'total': 执行数, 'bad': 未通过数}}
+
+    total 不含跳过：跳过的是已确认下线的功能，算进分母会让通过率失真，也会把
+    「这一类最近在退化」的信号稀释掉。
+    """
+    stats = {}
+
+    def touch(case, bad=0):
+        item = stats.setdefault(group_of(case), {'total': 0, 'bad': 0})
+        item['total'] += 1
+        item['bad'] += bad
+
+    for case in getattr(result, 'successes', []) or []:
+        touch(case)
+    for items in (result.failures, result.errors):
+        for case, _reason in items:
+            touch(case, 1)
+    return stats
+
+
+def group_lines(result, max_groups=5):
+    """推送用：只列有未通过的场景族，按未通过数倒序；全绿时返回空
+
+    全绿不列：每天把 24 个场景刷一遍，人就不看了。失败时这几行能直接回答
+    「是某一类集中出问题，还是散落在多处」——两种情况的处置完全不同。
+    """
+    bad = [(name, item) for name, item in group_stats(result).items() if item['bad']]
+    if not bad:
+        return []
+    bad.sort(key=lambda pair: (-pair[1]['bad'], pair[0]))
+    lines = ['', '<font color="warning">未通过涉及 {} 个场景</font>'.format(len(bad))]
+    for name, item in bad[:max_groups]:
+        lines.append('　{}　{} 条中 {} 条'.format(name, item['total'], item['bad']))
+    if len(bad) > max_groups:
+        lines.append('　…另有 {} 个场景，见 log/notPassCase.log'.format(len(bad) - max_groups))
+    return lines
+
+
+def group_report(result):
+    """控制台/日志用：列出本轮所有场景族（含零失败的），看全局用
+
+    中文宽度不等宽，不追求列对齐——对齐不了反而更乱，宁可简单拼接。
+    """
+    stats = group_stats(result)
+    if not stats:
+        return ''
+    lines = ['', LINE_SEP, '按场景族统计（不含跳过）', LINE_SEP]
+    for name, item in sorted(stats.items(), key=lambda pair: (-pair[1]['bad'], pair[0])):
+        mark = '' if not item['bad'] else '   ← {} 条未通过'.format(item['bad'])
+        lines.append('{}　{} 条{}'.format(name, item['total'], mark))
+    total = sum(item['total'] for item in stats.values())
+    bad = sum(item['bad'] for item in stats.values())
+    lines.append(LINE_SEP)
+    lines.append('共 {} 个场景，{} 条执行，{} 条未通过'.format(len(stats), total, bad))
+    lines.append(LINE_SEP)
+    return '\n'.join(lines)
 
 
 def not_pass_lines(result, with_detail=True):

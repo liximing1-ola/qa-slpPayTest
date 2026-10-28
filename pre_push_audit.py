@@ -8,16 +8,20 @@
    （deleteUserAccountSql 的表名 / selectUserInfoSql 的 accountType / encodeData 的 payType）
    —— 这类「分支被合并掉一个但没人发现」的问题，光看 diff 和跑局部用例都查不出来
 3. 调用点的方法是否还存在（防止删方法后留下悬空调用）
-4. 未使用的 import、共享层零引用定义
-5. 读账户表的断言是否写了轮询版，且轮询版的第一个参数确实是 lambda
+4. 未使用的 import
+5. 共享层的零引用定义
+6. 读账户表的断言是否写了轮询版，且轮询版的第一个参数确实是 lambda
    （写成同步读值，实测会让 36% 的用例靠重试才有结果）
-6. 验证强度：断言是否被 if 包住（条件不成立就整段不校验）、被 except 吞掉、
+7. 验证强度：断言是否被 if 包住（条件不成立就整段不校验）、被 except 吞掉、
    被注释掉、或容差放宽到个位以上
    —— 这些 case 的目的是发现服务端支付逻辑的问题，任何「让用例更容易过」的写法
    都要拦住：为了 pass 而放松校验，等于把这个 case 废掉
-7. 密钥泄露：.py / .md 里不许出现 GitHub token、企微 webhook key、私钥、
+8. 密钥泄露：.py / .md 里不许出现 GitHub token、企微 webhook key、私钥、
    URL 内嵌账号密码、第三方 app_secret
    —— 凭据一提交就永久留在 git 历史里，删文件也回收不了，只能重新生成
+9. 场景族登记：新增的用例模块必须在 common/case_groups.py 里登记
+   —— 漏登记不会报错，只会让这一类悄悄归到「未分组」、从分类统计里消失，
+   比没有统计更糟：看的人会以为「这类没问题」
 
 用法：python pre_push_audit.py
 退出码：0 全部通过；1 有问题，逐条列在最后
@@ -375,6 +379,31 @@ for path, text in scanned.items():
 print('    扫描 {} 个文件（.py + .md），疑似密钥 {} 处'.format(len(scanned), len(leaks)))
 if leaks:
     fail('发现疑似密钥（凭据只能走环境变量或本地凭据存储，不要写进仓库）: {}'.format(leaks))
+
+# ---------- 9. 场景族登记 ----------
+# 推送和日志都按场景族汇总，靠的是 common/case_groups.py 这张表。新增用例文件时
+# 忘了加一行，它不会报错，只会让那一类悄悄归到「未分组」——而「未分组」这一行
+# 没人会去看，等于这类用例从统计里消失了。
+print('\n[9] 场景族登记（用例模块 → 业务场景族）')
+from common import case_groups
+
+case_modules = set()
+for package in CASE_PACKAGES:
+    if not os.path.isdir(package):
+        continue
+    for name in os.listdir(package):
+        if name.startswith('test_') and name.endswith('.py'):
+            case_modules.add(name[:-3])
+missing = sorted(set(case_modules) - set(case_groups.GROUPS))
+print('    用例模块 {} 个，已登记 {} 个，未登记 {}'.format(
+    len(case_modules), len(case_groups.GROUPS), len(missing)))
+if missing:
+    fail('用例模块未登记场景族，会归到「{}」而不出现在分类统计里: {}'.format(
+        case_groups.UNGROUPED, missing))
+# 反向也要查：表里留着已经删掉的模块，说明这张表已经没人维护，早晚会失真
+stale = sorted(set(case_groups.GROUPS) - case_modules)
+if stale:
+    warn('分组表里有不存在的用例模块: {}'.format(stale))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)
