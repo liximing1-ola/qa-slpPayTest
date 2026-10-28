@@ -44,12 +44,17 @@ def push_lines(lines, app_info):
     ok = True
     for chunk in split_message(lines):
         try:
-            robot('markdown', chunk, bot='slp')
+            # robot 内部已经兜住了网络异常，这里再包一层是防以后改动把异常漏出去
+            sent = robot('markdown', chunk, bot='slp')
         except Exception as error:
-            ok = False
-            text = '[{}] 企业微信推送失败: {}'.format(app_info, error)
-            print(text, flush=True)
-            Logs.get_log('runCode.log', console=False).error(text)
+            sent = False
+            print('[{}] 企业微信推送异常: {}'.format(app_info, error), flush=True)
+        if sent:
+            continue
+        ok = False
+        # 最可能是 WX_BOT_SLP 没设：群里没消息，日志里必须能查到原因
+        Logs.get_log('runCode.log', console=False).error(
+            '[{}] 企业微信消息未发出（检查 WX_BOT_SLP），内容前 80 字: {}'.format(app_info, chunk[:80]))
     return ok
 
 

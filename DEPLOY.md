@@ -94,7 +94,7 @@ pip3 install -r requirements.txt    # 依赖有变更时执行
 | 环境变量 | 默认值 | 用途 |
 |---------|--------|------|
 | `DB_HOST` / `DB_USER` / `DB_PASS` | 见 `common/Config.py` | MySQL 连接 |
-| `WX_BOT_SLP` | 见 `common/Config.py` | 企微通知（换群/轮换 key） |
+| `WX_BOT_SLP` | **无默认值** | 企微机器人 webhook，必填（只能走环境变量，仓库里不留 key） |
 | `ASSERT_SLEEP` | `0.3` | 断言前等待秒数，设 `0` 可提速 |
 | `REQUEST_INTERVAL` | `2` | 同账号请求最小间隔（频控） |
 | `PUSH_WX` | `0` | 是否推送到企业微信群；cron 命令里显式写 `PUSH_WX=1`，手工跑默认不推 |
@@ -112,6 +112,26 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
 
 ---
 
+## 凭据
+
+服务器上只放两样凭据，都不进仓库、不进 crontab 明文：
+
+| 凭据 | 放哪里 | 为什么 |
+|------|--------|--------|
+| 企微 webhook key | `~/.slp_env`（600） | 拿到就能往群里发任意消息 |
+| GitHub 访问令牌 | `~/.git-credentials`（600） | 只用于 `git pull`，给读权限就够 |
+
+**GitHub 令牌不要写进 remote URL**。`git remote set-url origin https://<user>:<token>@github.com/...` 会把令牌存进 `.git/config`，任何人 `git remote -v` 都能看到，截图、报错日志也会原样带出来：
+
+```bash
+git remote set-url origin https://github.com/<owner>/<repo>.git
+git config credential.helper store     # 下一次 pull 输一次，之后存在 ~/.git-credentials
+```
+
+**一旦泄露（截图、日志、聊天记录里出现过）就只能换新的**。令牌进了 git 历史或聊天记录就收不回来，删当前文件也没用；有效处置只有去 GitHub 撤销并重新生成。服务器只负责部署，新令牌只勾 `repo` 读权限，不要给写——一台被改坏的执行机能 push 代码，等于把发布权交了出去
+
+---
+
 ## 注意事项
 
 1. **测试用例范围**：`run_all_case.py` 的 `all_case()` 里 `pattern` 现为 `test_*.py`（全量），只调试单个文件时把这一行改成对应文件名
@@ -122,7 +142,12 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
    tail -n 100 log/notPassCase.log   # 未通过清单（先看这个）
    tail -n 200 log/failCase.log      # 需要看堆栈时
    ```
-   企业微信推送默认关闭，需要推送时：`PUSH_WX=1 python3 run_crontab_case.py slp`（定时任务命令里已经带了）
+   企业微信推送默认关闭。需要推送时要同时给两个变量：`PUSH_WX=1`（开开关）和 `WX_BOT_SLP`（webhook 地址，无默认值）：
+
+   ```bash
+   PUSH_WX=1 WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>' \
+       python3 run_crontab_case.py slp
+   ```
 3. **定时任务**：
 
    先确认 python3 的绝对路径——cron 的 PATH 很精简，只写 `python3` 在 cron 里经常找不到：
@@ -134,7 +159,16 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
 
    ```cron
    # 每天 10:00 拉最新代码后跑全量并推送到企微；日志按日期落盘，同时清理 30 天前的
-   0 10 * * * cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+   0 10 * * * . /home/<user>/.slp_env && cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+   ```
+
+   `~/.slp_env` 里只放一行 webhook（`chmod 600`）：
+
+   ```bash
+   cat > /home/<user>/.slp_env <<'EOF'
+   export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
+   EOF
+   chmod 600 /home/<user>/.slp_env
    ```
 
    几处不是随手写的：
@@ -147,6 +181,7 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
    - **`find ... -mtime +30 -delete`**：只删 30 天前的，不会动当天正在写的文件
    - **`mkdir -p log` 必须在重定向之前**：`>> log/cron_x.log` 是 shell 在开始执行前打开的文件，目录不存在就直接报错，整条命令连 python 都不会起动
    - **`PUSH_WX=1` 写在 cron 行里，不写进代码默认值**：定时任务要推送，本地手工跑一轮不该往群里发测试消息；群里一个上午出现三四条「总数137，通过137」会让人很快就不看它了
+   - **webhook key 放 `~/.slp_env` 而不是写进 cron 行**：crontab 是明文，能登这台机器的人 `crontab -l` 就看得见；key 拿到就能往群里发任意消息。600 权限的文件至少跟登录权限一个级别
    - **时间选 10:00**：全量约 5 分钟、会造数扣费，这个点有人在场，推出来的失败当天就能跟进；凌晨跑则等于把问题压到第二天
    - **服务器上不要手工改代码**：`git pull --ff-only` 遇到本地修改会直接拒绝，日志里会一直报 pull 失败，而用例跑的还是旧代码
 

@@ -1,22 +1,21 @@
 """
 通知机器人：企业微信群机器人 webhook
 
-webhook 地址支持用环境变量覆盖，换群、轮换 key 都不用改代码：
-    WX_BOT_SLP     企业微信机器人 webhook（默认指向不夜星球测试通知群）
-只保留企业微信一个通道：slack webhook 与已下线项目（伴伴/PT/starify）的地址一并删除，
-避免 key 继续留在仓库里。
+webhook 地址只从环境变量读，仓库里不留默认值：
+    WX_BOT_SLP     企业微信机器人 webhook（不夜星球测试通知群）
+
+key 相当于「在群里发言」的权限。一旦提交进 git，它就会永久留在历史里——
+后续删掉文件也回收不了（谁 clone 都能翻出来），只能重新生成地址来作废。
+所以这类值一律走环境变量，不进代码。
+
+未配置时推送跳过并在控制台/日志里明确提示，不影响用例执行，也不影响退出码。
 """
 import os
-from time import localtime, strftime, time
 
 import requests
 
-from common import method
-
-# 企业微信群机器人 webhook
-WX_BOTS = {
-    'slp': os.environ.get('WX_BOT_SLP') or 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=998f0f30-0a19-4551-a9c5-def001c69908',
-}
+# 机器人别名 -> 环境变量名。别名仍保留，是为了调用点写 bot='slp' 而不是记环境变量名
+WX_BOT_ENV = {'slp': 'WX_BOT_SLP'}
 
 
 def _post(url, data):
@@ -24,62 +23,44 @@ def _post(url, data):
     return requests.post(url, headers={'Content-Type': 'application/json'}, json=data, timeout=5)
 
 
-def _mention_all(url):
-    """补充 @all 提醒：上一条消息发送成功后再补一条，避免重复打扰"""
-    _post(url, {
-        "msgtype": "text",
-        "text": {
-            "mentioned_mobile_list": ["@all"]
-        }
-    })
+def _bot_url(bot):
+    """取机器人 webhook；别名不存在或环境变量没设时返回 None（并说明原因）"""
+    env = WX_BOT_ENV.get(bot)
+    if not env:
+        print('未配置的通知机器人: {}，可选: {}'.format(bot, list(WX_BOT_ENV)))
+        return None
+    url = (os.environ.get(env) or '').strip()
+    if not url:
+        print('未设置 {}（企业微信群机器人 webhook），本次跳过推送'.format(env))
+        return None
+    return url
 
 
 def robot(mode, reason, bot='slp'):
     """
     发送通知
-    :param mode: markdown=正文即 markdown 内容；icon=带时间与配图的告警
-    :param reason: 正文（markdown 模式即 markdown 内容；icon 模式显示在配图下方）
-    :param bot: WX_BOTS 里的 key
+    :param mode: markdown=正文即 markdown 内容（早先的 icon 配图消息随旧项目下线删除，
+                 它依赖外网图床，失败时反而把通知本身带崩）
+    :param reason: 正文（markdown 内容）
+    :param bot: WX_BOT_ENV 里的别名
+    :return: True 已发送 / False 未发送（未配置 webhook、网络异常或服务端返回失败）
     """
-    if bot not in WX_BOTS:
-        print('未配置的通知机器人: {}，可选: {}'.format(bot, list(WX_BOTS)))
-        return
-    url = WX_BOTS[bot]
-
-    if mode == 'markdown':
-        data = {
-            "msgtype": "markdown",
-            "markdown": {
-                "content": reason
-            }
-        }
-
-    elif mode == 'icon':
-        now = strftime('%m-%d %H:%M', localtime(time()))
-        data = {
-            "msgtype": "news",
-            "news": {
-                "articles": [
-                    {
-                        "title": "{}, Execution is abnormal.Please check the status!".format(now),
-                        "description": reason,
-                        "url": "https://www.12306.cn/index/",
-                        "picurl": method.getImage(mode=1),
-                    }
-                ]
-            }
-        }
-
-    else:
-        # 只有 markdown / icon 在用（两个入口都传字面量）；早先的 fail / success / slack
-        # 随旧项目下线已无人调用，需要时从 git 历史取回
+    url = _bot_url(bot)
+    if not url:
+        return False
+    if mode != 'markdown':
+        # 只有 markdown 在用；旧项目的 icon / fail / success / slack 模式需要时从 git 历史取回
         print('robot 未支持的 mode: {}'.format(mode))
-        return
+        return False
 
-    response = _post(url, data)
-    # 只有告警（icon）发送成功后再补一条 @all，汇总消息不重复打扰
-    if mode == 'icon' and response.status_code == 200 and 'ok' in response.text:
-        _mention_all(url)
+    data = {"msgtype": "markdown", "markdown": {"content": reason}}
+    try:
+        response = _post(url, data)
+    except Exception as error:
+        # 网络问题不该把「用例跑完了」变成「执行异常」：调用方按 False 记日志即可
+        print('企业微信推送异常: {}'.format(error))
+        return False
+    return response.status_code == 200 and 'ok' in response.text
 
 
 if __name__ == '__main__':

@@ -15,6 +15,9 @@
    被注释掉、或容差放宽到个位以上
    —— 这些 case 的目的是发现服务端支付逻辑的问题，任何「让用例更容易过」的写法
    都要拦住：为了 pass 而放松校验，等于把这个 case 废掉
+7. 密钥泄露：.py / .md 里不许出现 GitHub token、企微 webhook key、私钥、
+   URL 内嵌账号密码、第三方 app_secret
+   —— 凭据一提交就永久留在 git 历史里，删文件也回收不了，只能重新生成
 
 用法：python pre_push_audit.py
 退出码：0 全部通过；1 有问题，逐条列在最后
@@ -341,6 +344,37 @@ print('    skip 装饰器: {} 个  运行时 skipTest: {} 处（基线 8 / 3）'
 if (skip_marks, skip_runtime) != (8, 3):
     warn('skip 数量偏离基线（{} / {}，基线 8 / 3）：确认是功能下线，不是用 skip 躲失败'.format(
         skip_marks, skip_runtime))
+
+# ---------- 8. 密钥泄露 ----------
+# 凭据一旦随提交进仓库，就永久留在 git 历史里：删掉当前文件也没用，谁 clone 都能翻出来，
+# 只能重新生成来作废。已经踩过两次：企微 webhook key 写死在 Robot.py；GitHub PAT 被写进
+# 服务器的 remote URL 后随截图外传。这类值只允许走环境变量或本地凭据存储。
+print('\n[8] 密钥泄露（凭据不入库）')
+# 文档里给人看的占位符不算泄露：<key>、YOUR_TOKEN 这类紧跟尖括号的写法都放过
+SECRET_PATTERNS = [
+    ('GitHub token', re.compile(r'\b(?:ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})')),
+    ('企微 webhook key', re.compile(r'webhook/send\?key=(?!<)[0-9a-fA-F-]{16,}')),
+    ('私钥', re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----')),
+    # 排除尖括号：文档里给人看的 `https://<user>:<token>@host` 是占位符，不算泄露；
+    # 真令牌不会带尖括号，两者不会误判
+    ('URL 内嵌凭据', re.compile(r'://[^/\s:@<>]+:[^@\s<>]{6,}@')),
+    ('app_secret', re.compile(r'app_secret=(?!<)[A-Za-z0-9]{12,}')),
+]
+# 扫 .py 之外也要扫 .md：写进文档的 key 同样泄露；但跳过本文件，它自己就写着这些规则
+scanned = {path: text for path, text in sources.items() if path != SELF}
+for name in sorted(os.listdir('.')):
+    if name.endswith('.md') and os.path.isfile(name):
+        with io.open(name, encoding='utf-8', errors='replace') as handle:
+            scanned[name] = handle.read()
+leaks = []
+for path, text in scanned.items():
+    for lineno, line in enumerate(text.splitlines(), 1):
+        for label, pattern in SECRET_PATTERNS:
+            if pattern.search(line):
+                leaks.append('{}:{} {}'.format(path, lineno, label))
+print('    扫描 {} 个文件（.py + .md），疑似密钥 {} 处'.format(len(scanned), len(leaks)))
+if leaks:
+    fail('发现疑似密钥（凭据只能走环境变量或本地凭据存储，不要写进仓库）: {}'.format(leaks))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)

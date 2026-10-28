@@ -4,36 +4,11 @@
 历史遗留的 dictToList / dictToListSlack / getValue / checkPath / getUserTitle / reason_slp
 已确认全仓库零引用（并发脚本删掉后就没人调了），这里一并移除；
 checkPath 还引用着已下线项目的 'PT' 机器人，属于会直接报错的死代码。
+
+getImage 也随通知里的 icon 配图模式一并删除：它唯一调用方是 Robot.py 的 icon 分支，
+而那个分支同样已无人调用。同时带走一处硬编码：mxnzp 图片接口的 app_id / app_secret
+原来直接写在 URL 里，等于凭据进仓库。
 """
-import random
-
-import requests
-
-
-# 随机获取图片
-def getImage(mode=2):
-    """
-    通知里用的配图。第三方图片接口不可用时退化为固定图床，
-    不能让「取图失败」把失败通知本身带崩。
-    :param mode: 1=mxnzp 随机图, 2=shibe 随机狗图, 其他=固定图床
-    """
-    url = 'https://www.mxnzp.com/api/image/girl/list/random?app_id=kilmc0p2ytsnawyp&app_secret=bnNoWElSVDBYbEhsc1EvYVM2WnVnZz09'
-    url_dog = 'https://shibe.online/api/shibes?count=1'
-    fallback = 'http://xs-image.oss-cn-hangzhou.aliyuncs.com/static/gift_big/{}.png'.format(random.randint(1, 1000))
-    try:
-        if mode == 1:
-            res = requests.get(url, timeout=3)
-            res.raise_for_status()
-            res = res.json()
-            if res['code'] == 1:
-                return res['data'][0]['imageUrl']
-        elif mode == 2:
-            res = requests.get(url_dog, timeout=3)
-            res = res.json()
-            return res[0]
-    except Exception as error:
-        print('获取通知配图失败，使用默认图床: {}'.format(error))
-    return fallback
 
 
 # 检查当前字段是否在Json中存在

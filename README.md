@@ -93,17 +93,30 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 
 ### 定时任务
 
-服务器上每天 10:00 跑一轮全量，结果推到企业微信群。命令一条，不用打开编辑器（可重复执行，会替换掉旧的同名任务）：
+服务器上每天 10:00 跑一轮全量，结果推到企业微信群。webhook key 放在**仓库外**的 `~/.slp_env`（权限 600），代码、crontab 里都不出现它。
+
+**① 建凭据文件**（key 从企微群「群机器人」里取）：
+
+```bash
+cat > /home/<user>/.slp_env <<'EOF'
+export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
+EOF
+chmod 600 /home/<user>/.slp_env
+```
+
+**② 装 cron**（可重复执行，会替换掉旧的同名任务）：
 
 ```bash
 cat > /tmp/slp_cron <<'EOF'
-# 每天 10:00 拉最新代码后跑全量；日志按日期落盘，同时清理 30 天前的
-0 10 * * * cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+# 每天 10:00 拉最新代码后跑全量并推送到企微；日志按日期落盘，同时清理 30 天前的
+0 10 * * * . /home/<user>/.slp_env && cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
 EOF
 
 (crontab -l 2>/dev/null | grep -v 'run_crontab_case.py slp'; cat /tmp/slp_cron) | crontab -
 rm -f /tmp/slp_cron; crontab -l
 ```
+
+为什么 key 单独放一个文件：crontab 内容是明文，能登这台机器的人 `crontab -l` 就看得见；而 webhook key 拿到就能往群里发任意消息。放 600 权限的文件里，至少跟登录权限一个级别，也不会随 crontab 内容被拷来拷去。
 
 推送形态：
 
@@ -155,7 +168,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | `FREQUENT_RETRY` | `2` | 命中频控/防重文案（「请勿频繁操作」「请求太慢了，请稍后重试」等）后的重试次数，退避按 2s、4s 递增 |
 | `PUSH_WX` | `0` | 是否推送企业微信群；`run_crontab_case.py` 的 cron 命令里显式写 `PUSH_WX=1`，手工跑不带就不会往群里发消息 |
 | `LIST_PASS` | `0` | 推送时额外列出通过用例（需 `PUSH_WX=1`） |
-| `WX_BOT_SLP` | 见 `common/Config.py` | 企微机器人 webhook，换群/轮换 key 不用改代码 |
+| `WX_BOT_SLP` | **必填**（无默认值） | 企微机器人 webhook，只从环境变量读；仓库里不留 key，未设置时推送跳过并在日志里说明 |
 | `DB_HOST` / `DB_USER` / `DB_PASS` | 见 `common/Config.py` | 测试库连接信息 |
 | `REDIS_HOST` / `REDIS_PORT` | 见 `common/Config.py` | Redis 连接信息 |
 
@@ -343,5 +356,6 @@ class TestPayCreate(unittest.TestCase):
   `--ff-only` 不是可选项：它拒掉任何合并提交，两条分支永远是同一条历史线。否则一旦 master 上多出一个 merge commit，同步就变成「两边各自长东西」，以后想合只能手工挑提交
 - 提交信息用中文写清「为什么改」，一次提交一件事
 - 用 `git add -u`（只暂存已跟踪文件）而不是 `git add -A`，别把临时脚本、日志、`.commit_msg.txt` 带进提交
-- 推送前跑一遍 `python pre_push_audit.py`（七类检查）：解析与 import、重构函数的分支覆盖、悬空调用、未用 import/零引用定义、账户读值写法、**验证强度**。退出码非 0 就不要推
+- 推送前跑一遍 `python pre_push_audit.py`（八类检查）：解析与 import、重构函数的分支覆盖、悬空调用、未用 import/零引用定义、账户读值写法、**验证强度**、**密钥泄露**。退出码非 0 就不要推
+- 凭据不进仓库：webhook key、GitHub 令牌、密码一律走环境变量或本机凭据存储。它们一旦进了 git 历史就永久留在那里，删掉文件也回收不了，只能重新生成——审计第 8 类会拦住（GitHub token / 企微 webhook / 私钥 / URL 内嵌密码 / app_secret）
 - 代码改动完成、自检通过后直接提交推送，不留半成品
