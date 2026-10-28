@@ -159,7 +159,7 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
 
    ```cron
    # 每天 10:00 拉最新代码后跑全量并推送到企微；日志按日期落盘，同时清理 30 天前的
-   0 10 * * * . /home/<user>/.slp_env && cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+   0 10 * * * . /home/<user>/.slp_env; cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
    ```
 
    `~/.slp_env` 里只放一行 webhook（`chmod 600`）：
@@ -182,6 +182,7 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
    - **`mkdir -p log` 必须在重定向之前**：`>> log/cron_x.log` 是 shell 在开始执行前打开的文件，目录不存在就直接报错，整条命令连 python 都不会起动
    - **`PUSH_WX=1` 写在 cron 行里，不写进代码默认值**：定时任务要推送，本地手工跑一轮不该往群里发测试消息；群里一个上午出现三四条「总数137，通过137」会让人很快就不看它了
    - **webhook key 放 `~/.slp_env` 而不是写进 cron 行**：crontab 是明文，能登这台机器的人 `crontab -l` 就看得见；key 拿到就能往群里发任意消息。600 权限的文件至少跟登录权限一个级别
+   - **`. 文件;` 后面用分号不用 `&&`**：文件不在时 `&&` 会短路整条命令，连用例都不跑且不报错；分号则照常跑用例，只是不推送，日志里会写「未设置 WX_BOT_SLP」。宁可少一条推送，不能少跑一轮用例
    - **时间选 10:00**：全量约 5 分钟、会造数扣费，这个点有人在场，推出来的失败当天就能跟进；凌晨跑则等于把问题压到第二天
    - **服务器上不要手工改代码**：`git pull --ff-only` 遇到本地修改会直接拒绝，日志里会一直报 pull 失败，而用例跑的还是旧代码
 

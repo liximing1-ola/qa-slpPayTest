@@ -109,7 +109,7 @@ chmod 600 /home/<user>/.slp_env
 ```bash
 cat > /tmp/slp_cron <<'EOF'
 # 每天 10:00 拉最新代码后跑全量并推送到企微；日志按日期落盘，同时清理 30 天前的
-0 10 * * * . /home/<user>/.slp_env && cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+0 10 * * * . /home/<user>/.slp_env; cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
 EOF
 
 (crontab -l 2>/dev/null | grep -v 'run_crontab_case.py slp'; cat /tmp/slp_cron) | crontab -
@@ -117,6 +117,8 @@ rm -f /tmp/slp_cron; crontab -l
 ```
 
 为什么 key 单独放一个文件：crontab 内容是明文，能登这台机器的人 `crontab -l` 就看得见；而 webhook key 拿到就能往群里发任意消息。放 600 权限的文件里，至少跟登录权限一个级别，也不会随 crontab 内容被拷来拷去。
+
+`. 文件;` 后面用**分号不用 `&&`**：凭据文件一旦不在了（换机器、误删），`&&` 会让整条命令短路——连用例都不跑，也不报错，看起来就像「今天一切正常」。用分号的话，用例照跑，只是不推送，日志里那行「未设置 WX_BOT_SLP」会说明原因。宁可少一条推送，不能少跑一轮用例。
 
 推送形态：
 
