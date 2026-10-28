@@ -97,7 +97,7 @@ pip3 install -r requirements.txt    # 依赖有变更时执行
 | `WX_BOT_SLP` | 见 `common/Config.py` | 企微通知（换群/轮换 key） |
 | `ASSERT_SLEEP` | `0.3` | 断言前等待秒数，设 `0` 可提速 |
 | `REQUEST_INTERVAL` | `2` | 同账号请求最小间隔（频控） |
-| `PUSH_WX` | `0` | 是否推送到企业微信群，默认为关闭 |
+| `PUSH_WX` | `0` | 是否推送到企业微信群；cron 命令里显式写 `PUSH_WX=1`，手工跑默认不推 |
 | `LIST_PASS` | `0` | 推送时列出通过用例（需 `PUSH_WX=1`） |
 
 ```bash
@@ -122,7 +122,7 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
    tail -n 100 log/notPassCase.log   # 未通过清单（先看这个）
    tail -n 200 log/failCase.log      # 需要看堆栈时
    ```
-   企业微信推送默认关闭，需要推送时：`PUSH_WX=1 python3 run_crontab_case.py slp`
+   企业微信推送默认关闭，需要推送时：`PUSH_WX=1 python3 run_crontab_case.py slp`（定时任务命令里已经带了）
 3. **定时任务**：
 
    先确认 python3 的绝对路径——cron 的 PATH 很精简，只写 `python3` 在 cron 里经常找不到：
@@ -133,8 +133,8 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
    ```
 
    ```cron
-   # 每天 03:00 拉最新代码后跑全量；日志按日期落盘，同时清理 30 天前的
-   0 3 * * * cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+   # 每天 10:00 拉最新代码后跑全量并推送到企微；日志按日期落盘，同时清理 30 天前的
+   0 10 * * * cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
    ```
 
    几处不是随手写的：
@@ -145,10 +145,11 @@ export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
    - **清理日志要放在最前面**：`{ }` 的退出码取块内最后一条命令，把 `find` 放在末尾会把 python 的退出码盖掉，cron 就永远收不到失败信号（MAILTO / 调度平台告警全失效）
    - **`find ... -mtime +30 -delete`**：只删 30 天前的，不会动当天正在写的文件
    - **`mkdir -p log` 必须在重定向之前**：`>> log/cron_x.log` 是 shell 在开始执行前打开的文件，目录不存在就直接报错，整条命令连 python 都不会起动
-   - **时间选凌晨**：全量约 5 分钟、会造数扣费，避开有人手工测试的时段
+   - **`PUSH_WX=1` 写在 cron 行里，不写进代码默认值**：定时任务要推送，本地手工跑一轮不该往群里发测试消息；群里一个上午出现三四条「总数137，通过137」会让人很快就不看它了
+   - **时间选 10:00**：全量约 5 分钟、会造数扣费，这个点有人在场，推出来的失败当天就能跟进；凌晨跑则等于把问题压到第二天
    - **服务器上不要手工改代码**：`git pull --ff-only` 遇到本地修改会直接拒绝，日志里会一直报 pull 失败，而用例跑的还是旧代码
 
-   需要同时推企业微信群：把命令里的 `run_crontab_case.py` 前面加上 `PUSH_WX=1 `。
+   需要改推送开关时，不用重新整条配置，直接把这一行里的 `PUSH_WX=1` 换成 `PUSH_WX=0` 重新执行即可（crontab 里可以直接 `crontab -l | sed 's/PUSH_WX=1/PUSH_WX=0/' | crontab -`）。
 
 4. **看结果、追趋势**：
 

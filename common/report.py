@@ -337,6 +337,28 @@ def not_pass_summary(result, title='未通过用例', with_detail=True):
     return '{}\n{}'.format(header, '\n'.join(lines))
 
 
+def fail_summary(result, title='未通过用例'):
+    """只列失败与异常，跳过的只算在计数里；全部通过时返回空串
+
+    推送要的就是这个形态：全通过只发一行结果，有未通过时把清单附在同一条消息里。
+    这里刻意不列 SKIP——跳过的是已确认下线的功能（当前 12 条，内容永远不变），
+    每天推一遍明细会把真正需要处理的问题淹在噪音里。
+    """
+    total = len(result.failures) + len(result.errors)
+    if not total:
+        return ''
+    lines = []
+    # 失败与异常分开遍历，不能用 elif 串起来，否则有失败时异常用例永远不显示
+    for status, items in (('FAIL', result.failures), ('ERROR', result.errors)):
+        for case, reason in items:
+            des = case_des(result, case)
+            lines.append('[{}] {}{}'.format(status, case_name(case), ' | {}'.format(des) if des else ''))
+            detail = reason_brief(reason)
+            if detail:
+                lines.append('    {}'.format(detail))
+    return '{}（共 {} 条）\n{}'.format(title, total, '\n'.join(lines))
+
+
 # 控制台 / 日志用的分隔线，宽度不用太长，云服务器上 80 列终端也能完整显示
 LINE_SEP = '-' * 88
 

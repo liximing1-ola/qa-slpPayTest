@@ -36,8 +36,8 @@ python3 run_all_case.py xsg      # 小拾光全量
 ```
 qa-slpPayTest/
 ├── run_all_case.py        # 全量入口：逐条播报 + 未通过清单（日常主入口）
-├── run_crontab_case.py    # 定时任务入口：只汇总与播报失败/异常，不拉分支、不列通过用例
-├── Robot.py               # 结果通知：企业微信群机器人 / slack webhook
+├── run_crontab_case.py    # 定时任务入口：只汇总与播报失败/异常，不拉分支、不列通过用例，结果推企微
+├── Robot.py               # 结果通知：企业微信群机器人 webhook
 ├── autoGitPull.py         # 分支检查 + 记录上次执行时间
 ├── deploy.sh              # 云服务器一键部署
 ├── caseSlp/               # 不夜星球用例
@@ -93,13 +93,30 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 
 ### 定时任务
 
+服务器上每天 10:00 跑一轮全量，结果推到企业微信群。命令一条，不用打开编辑器（可重复执行，会替换掉旧的同名任务）：
+
 ```bash
-crontab -e
-# 每天凌晨 2 点跑 SLP，结果追加到 log/cron.log
-0 2 * * * cd /home/<user>/qa-slpPayTest && python3 run_crontab_case.py slp >> log/cron.log 2>&1
+cat > /tmp/slp_cron <<'EOF'
+# 每天 10:00 拉最新代码后跑全量；日志按日期落盘，同时清理 30 天前的
+0 10 * * * cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+EOF
+
+(crontab -l 2>/dev/null | grep -v 'run_crontab_case.py slp'; cat /tmp/slp_cron) | crontab -
+rm -f /tmp/slp_cron; crontab -l
 ```
 
-`run_crontab_case.py` 与 `run_all_case.py` 的区别：不拉取代码分支、不逐条播报通过用例，只出汇总和失败清单，适合无人值守。它也认 `CASE`（写法相同），改完汇总/落盘逻辑后不必跑完 137 条就能验证：
+推送形态：
+
+| 本轮结果 | 群里的消息 |
+|---|---|
+| 全部通过 | 一条：`总数 137, 通过 125, 失败 0, 异常 0, 跳过 12` + 重试摘要 + 分支 |
+| 有失败/异常 | 同一条后面附完整清单（`[FAIL] 模块.类.方法 | 用例描述` + 一行原因） |
+| 执行中断 | 一条「执行异常」：用例没跑完，堆栈落 `log/runCode.log` |
+| 推送本身失败 | 只记日志不打退出码：网络抖动不该把「用例跑完了」说成「执行异常」 |
+
+跳过的 12 条只计数、不列明细——它们是已确认下线的功能，每天列一遍会把真问题淹掉。
+
+`run_crontab_case.py` 与 `run_all_case.py` 的区别：不拉取代码分支、不逐条播报通过用例，只出汇总和失败清单，适合无人值守。它也认 `CASE`（写法相同），改完汇总/落盘逻辑后不必跑完 137 条就能验证，加 `PUSH_WX=0` 就不会往群里发消息：
 
 ```bash
 CASE=test_check python3 run_crontab_case.py slp
@@ -136,9 +153,9 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | `RETRY_SLEEP` | `1` | 重试间隔基数，第 n 次重试等 `n × RETRY_SLEEP` 秒，设 `0` 改为立即重试 |
 | `REQUEST_INTERVAL` | `2` | 同一账号两次请求的最小间隔（服务端频控） |
 | `FREQUENT_RETRY` | `2` | 命中频控/防重文案（「请勿频繁操作」「请求太慢了，请稍后重试」等）后的重试次数，退避按 2s、4s 递增 |
-| `PUSH_WX` | `0` | 是否推送企业微信群；默认关闭，结果只落控制台与日志 |
+| `PUSH_WX` | `0` | 是否推送企业微信群；`run_crontab_case.py` 的 cron 命令里显式写 `PUSH_WX=1`，手工跑不带就不会往群里发消息 |
 | `LIST_PASS` | `0` | 推送时额外列出通过用例（需 `PUSH_WX=1`） |
-| `WX_BOT_SLP` / `SLACK_BOT_SLP` | 见 `common/Config.py` | 通知 webhook，换群/轮换 key 不用改代码 |
+| `WX_BOT_SLP` | 见 `common/Config.py` | 企微机器人 webhook，换群/轮换 key 不用改代码 |
 | `DB_HOST` / `DB_USER` / `DB_PASS` | 见 `common/Config.py` | 测试库连接信息 |
 | `REDIS_HOST` / `REDIS_PORT` | 见 `common/Config.py` | Redis 连接信息 |
 
@@ -150,7 +167,7 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 |--------|------|
 | `0` | 全部用例通过 |
 | `1` | 存在失败或异常（跳过不计） |
-| `2` | 命令行参数错误（两个入口都只接受 slp / xsg；传错直接退出，不会静默跑一轮覆盖日志） |
+| `2` | 没跑完：命令行参数错误（两个入口都只接受 slp / xsg，传错直接退出，不会静默跑一轮覆盖日志），或定时任务执行中途抛异常（连库失败、suite 构造异常等） |
 
 在 `cmd && 下一步`、cron 告警、调度平台里都靠这个退出码判断本轮结果。
 
