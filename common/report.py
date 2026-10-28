@@ -298,6 +298,83 @@ def not_pass_count(result):
     return len(result.failures) + len(result.errors) + len(result.skipped)
 
 
+# ---------- 失败性质：让「几条红」变成「红在哪一层」 ----------
+# 同样是 3 条红，处置完全不同：环境挂→重跑；造数挂→看数据；接口 500→告警服务端；
+# 断言不符→分成算错，要查代码。不分层的话，这三种情况在报告里长得一模一样。
+FAIL_ENV = '环境'
+FAIL_DATA = '造数'
+FAIL_API = '接口'
+FAIL_ASSERT = '断言'
+FAIL_OTHER = '其他'
+# 展示顺序固定：越靠前越应该先处理
+FAIL_KINDS = (FAIL_ENV, FAIL_DATA, FAIL_API, FAIL_ASSERT, FAIL_OTHER)
+
+# 判据全部来自实际见过的失败文本，不是猜的：
+#   接口  assert_code 抛的「Actual Code: 500, Expected Code: 200」
+#   断言  assert_equal/assert_body 抛的「实际结果: x, 预期结果: y」及其变体
+#   环境  连不上库/缓存/接口：Can't connect、timed out、Max retries exceeded 等
+#   造数  pymysql 的非连接类报错（表不存在、唯一键冲突），发生在用例前置阶段
+#   其他  脚本自身（KeyError/TypeError）或没见过的形态
+ENV_KEYWORDS = (
+    "Can't connect", 'timed out', 'Timeout', 'Max retries exceeded',
+    'HTTPConnectionPool', 'Connection refused', 'Name or service not known',
+    'requests.exceptions', 'ConnectionError', 'ConnectionResetError',
+    'BrokenPipeError', 'redis.exceptions',
+)
+ASSERT_KEYWORDS = ('实际结果:', '实际返回值', '预期返回内容包含')
+
+
+def failure_kind(reason_text):
+    """把一条未通过原因归到五个性质之一
+
+    判断顺序有讲究：先认「Actual Code」再认断言关键字，最后才看连接类关键字。
+    反过来会误判：一条断言失败的现场里也可能带着请求 URL（timed out 不会，但
+    Max retries exceeded 这类文案会出现在网络失败里），宁可先认断言这种确定性文案。
+    """
+    text = str(reason_text or '')
+    if 'Actual Code:' in text:
+        return FAIL_API
+    if any(keyword in text for keyword in ASSERT_KEYWORDS):
+        return FAIL_ASSERT
+    if any(keyword in text for keyword in ENV_KEYWORDS):
+        return FAIL_ENV
+    if 'pymysql' in text:
+        return FAIL_DATA
+    return FAIL_OTHER
+
+
+def fail_kind_counts(result):
+    """[(性质, 条数), ...]，只含出现过的性质，按 FAIL_KINDS 固定顺序"""
+    counts = {}
+    for items in (result.failures, result.errors):
+        for _case, reason in items:
+            kind = failure_kind(reason)
+            counts[kind] = counts.get(kind, 0) + 1
+    return [(kind, counts[kind]) for kind in FAIL_KINDS if counts.get(kind)]
+
+
+def fail_kind_line(result):
+    """推送用：只在有「非断言」失败时给一行性质分布
+
+    全是断言失败时不加：那是这个仓库的常态（服务端算错了），单列一行「断言 3」
+    只是把上面那句「3 失败」换个说法。混合时必给，否则「3 条里有 1 条是连不上库」
+    这件事在群里看不出来——而它恰好决定要不要重跑。
+    """
+    pairs = fail_kind_counts(result)
+    if not pairs or all(kind == FAIL_ASSERT for kind, _count in pairs):
+        return []
+    return ['<font color="comment">{}</font>'.format(
+        '　'.join('{} {}'.format(kind, count) for kind, count in pairs))]
+
+
+def fail_kind_report(result):
+    """控制台/日志用：不论什么性质都完整列一行，作为这一轮的存档"""
+    pairs = fail_kind_counts(result)
+    if not pairs:
+        return ''
+    return '失败性质: {}'.format('，'.join('{} {} 条'.format(kind, count) for kind, count in pairs))
+
+
 def result_counts(result):
     """
     执行结果计数。setUpClass/tearDownClass 报错时 unittest 把它记进 errors 但**不计入** testsRun，
@@ -433,9 +510,15 @@ def push_fail_lines(result, max_items=PUSH_FAIL_MAX):
 
     lines = []
     for index, (status, case, reason) in enumerate(items[:max_items], 1):
+        # 标签只给「需要看的人一眼分开」的情形：异常与失败不同（用例没跑完 vs 跑完算错），
+        # 非断言失败也不同（要重跑/看数据 vs 查代码）。普通断言失败不加标签，保持清单干净
+        marks = ([] if status == 'FAIL' else ['异常'])
+        kind = failure_kind(reason)
+        if kind != FAIL_ASSERT:
+            marks.append(kind)
         lines.append('')
         lines.append('**{}.**　{}{}'.format(index, push_case_label(case),
-                                            '' if status == 'FAIL' else '　(异常)'))
+                                            '　({})'.format('·'.join(marks)) if marks else ''))
         des = case_des(result, case)
         if des:
             lines.append('　　{}'.format(des))

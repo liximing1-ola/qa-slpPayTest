@@ -28,9 +28,9 @@ from common import Logs, preflight
 from common.Config import config
 from common.Session import Session
 from common.report import (AllTestRunner, build_suite, duration_text, fail_detail_text,
-                           group_lines, group_report, not_pass_report, parse_app,
-                           push_fail_lines, result_counts, retry_digits, retry_report,
-                           retry_summary, split_message)
+                           fail_kind_line, fail_kind_report, group_lines, group_report,
+                           not_pass_report, parse_app, push_fail_lines, result_counts,
+                           retry_digits, retry_report, retry_summary, split_message)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
 # 是否推送到企业微信群：默认关闭，cron 命令里显式写 PUSH_WX=1 打开。
@@ -139,7 +139,8 @@ def push_message(counts, test_result, app_info, elapsed):
     lines = ['<font color="warning">**{}**</font>　<font color="comment">通过 {} / {}</font>'.format(
                  bad, counts['pass'], counts['total']),
              tail]
-    # 先告诉「哪一类在退化」，再给逐条清单：前者决定要不要立刻处理，后者决定处理什么
+    # 先给性质（要不要重跑/看数据），再给场景（哪一类在退化），最后才是逐条清单
+    lines.extend(fail_kind_line(test_result))
     lines.extend(group_lines(test_result))
     lines.extend(push_fail_lines(test_result))
     return lines
@@ -167,6 +168,13 @@ def notify(test_result, app_info, elapsed=0):
     report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(app_info))
     print(report_text, flush=True)
     Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)
+
+    # 失败性质固定打一行：连不上库（重跑）和分成算错（查代码）处置完全不同，
+    # 而两者在清单里只差一行字，不聚到一处就只能靠人眼一条条读
+    kind_text = fail_kind_report(test_result)
+    if kind_text:
+        print(kind_text, flush=True)
+        Logs.get_log('caseResult.log', console=False).info(kind_text)
 
     # 按场景族统计：控制台/日志里永远给全量，看的是「这次是某一类整体跨了，
     # 还是东一条西一条」——只看失败清单回答不了这个问题
