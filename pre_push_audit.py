@@ -26,6 +26,9 @@
    —— compileall 只查语法，`time.sleep(...)` 在删掉 import time 后依然编译通过，
    要等服务器真跑到那一行才 NameError；那一行如果刚好在 skip 或异常分支里，
    可能几轮都碰不到
+11. 调用点实参与签名：实参个数、关键字名是否还对得上函数定义
+   —— 第 3 类只管「方法还在不在」，改了参数名却漏改调用点，方法还在、编译也过，
+   要等跑到才 TypeError（重构公共助手时最常见）
 
 用法：python pre_push_audit.py
 退出码：0 全部通过；1 有问题，逐条列在最后
@@ -33,6 +36,7 @@
 import ast
 import builtins
 import importlib
+import inspect
 import io
 import os
 import re
@@ -550,6 +554,70 @@ print('    扫描 {} 个文件，未定义名字 {} 处{}'.format(
     '（{} 个文件因星号导入解析不了而跳过）'.format(len(skipped_star)) if skipped_star else ''))
 if undefined:
     fail('用到了但找不到绑定的名字（编译不报错，运行到才 NameError）: {}'.format(undefined))
+
+# ---------- 11. 调用点实参与签名 ----------
+# 第 3 类只管「方法还在不在」。改了参数名或位置却漏改调用点，方法还在、
+# compileall 也过，要等跑到那一行才 TypeError——而这正是重构公共助手
+# （tools / Assert / conMysql 方法）时最容易出的错。这里拿真实函数对象
+# 的签名去 bind_partial，只校验实参能不能安放，不看默认值。
+print('\n[11] 调用点实参与签名')
+REPO_PREFIXES = ('common.', 'caseSlp.', 'caseXsg.')
+
+
+def repo_function(obj):
+    """只认仓库内定义的普通函数/方法；类、内置、第三方不管"""
+    module = getattr(obj, '__module__', '') or ''
+    if not module.startswith(REPO_PREFIXES) or inspect.isclass(obj) or not callable(obj):
+        return None
+    return obj
+
+
+signature_bad = []
+signature_calls = 0
+for path in sorted(trees):
+    if path.split('/')[0] not in CASE_PACKAGES:
+        continue
+    module_name = path[:-3].replace('/', '.')
+    try:
+        module = importlib.import_module(module_name)
+    except Exception:
+        continue   # 导不进来已在第 1 类报过，这里不重复
+    namespace = vars(module)
+    # 同名被本地赋值过（可能是个可调用对象别名）就不查，宁可漏报不误报
+    rebound = set()
+    for node in ast.walk(trees[path]):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            rebound.add(node.id)
+    for node in ast.walk(trees[path]):
+        if not isinstance(node, ast.Call):
+            continue
+        if isinstance(node.func, ast.Name) and node.func.id not in rebound:
+            target = repo_function(namespace.get(node.func.id))
+            label = node.func.id
+        elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) \
+                and node.func.value.id in ('mysql', 'conMysql', 'conRedis'):
+            owner = namespace.get(node.func.value.id)
+            target = repo_function(getattr(owner, node.func.attr, None))
+            label = '{}.{}'.format(node.func.value.id, node.func.attr)
+        else:
+            continue
+        if target is None:
+            continue
+        # *args / **kwargs 写法静态定不下来，交给运行期
+        if any(isinstance(a, ast.Starred) for a in node.args):
+            continue
+        if any(kw.arg is None for kw in node.keywords):
+            continue
+        signature_calls += 1
+        args = [0] * len(node.args)
+        kwargs = {kw.arg: 0 for kw in node.keywords}
+        try:
+            inspect.signature(target).bind_partial(*args, **kwargs)
+        except TypeError as error:
+            signature_bad.append('{}:{} {} -> {}'.format(path, node.lineno, label, error))
+print('    可校验调用 {} 处，实参与签名不符 {} 处'.format(signature_calls, len(signature_bad)))
+if signature_bad:
+    fail('调用点实参与函数签名不符（编译不报错，运行到才 TypeError）: {}'.format(signature_bad))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)
