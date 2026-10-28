@@ -97,23 +97,25 @@ def push_lines(lines, app_info):
 
 
 def push_message(counts, test_result, app_info, elapsed):
-    """企微消息正文：没事两行看完，有事才展开清单
+    """企微消息正文：第一行只放结论，剩下的全部降级到灰字
 
-    三种形态刻意长得不一样：
+    三种形态：
         0 条     -> 红色「0 条用例被执行」。套件加载失败、CASE 写错都会走到这里，
                     当成「全部通过」发出去比红的还危险
-        全通过   -> 一行绿色结论 + 一行灰色尾注
-        有未通过 -> 结论行 + 编号清单
-    每天节奏一致，变红的位置才会被注意到；格式天天换，人就不看了。
+        全通过   -> 绿色「通过 125 / 137」
+        有未通过 -> 橙色「2 失败　1 异常」+ 灰色通过数，再附编号清单
+    第一行不放应用名：之前「slp 通过 125/137」两个粗体挤在一起，屏幕上最先
+    看到的是「slp」，真正需要的数字反而被压住了。
     """
     rev = git_revision() or '版本未知'
 
     if not counts['total']:
         # 0 条时「跳过/重试」都是无意义数据（还可能带上一轮的残留），只报耗时和版本
-        return ['**{}** <font color="warning">**0 条用例被执行**</font> · 套件为空或 CASE 写错，不算通过'.format(app_info),
-                '<font color="comment">{} · {}</font>'.format(duration_text(elapsed), rev)]
+        return ['<font color="warning">**本轮 0 条用例被执行**</font>　套件为空或 CASE 写错，不算通过',
+                '<font color="comment">{}　{}　{}</font>'.format(app_info, duration_text(elapsed), rev)]
 
-    tail = '<font color="comment">{}</font>'.format(' · '.join([
+    tail = '<font color="comment">{}</font>'.format('　'.join([
+        app_info,
         '跳过 {}'.format(counts['skip']),
         retry_digits(test_result),
         duration_text(elapsed),
@@ -122,13 +124,17 @@ def push_message(counts, test_result, app_info, elapsed):
 
     if not (counts['fail'] or counts['error']):
         # 不写「137 条全部通过」：137 里含 12 条跳过，写成全部通过就不准了
-        return ['**{}** <font color="info">通过 {}/{}</font>'.format(
-                    app_info, counts['pass'], counts['total']),
+        return ['<font color="info">**通过 {} / {}**</font>'.format(counts['pass'], counts['total']),
                 tail]
 
-    lines = ['**{}** 通过 {}/{} · <font color="warning">{} 失败 {} 异常</font>'.format(
-        app_info, counts['pass'], counts['total'], counts['fail'], counts['error']),
-        tail]
+    # 只列非零的那几项：写「0 失败　2 异常」既占位又没信息量
+    bad = '　'.join([item for item in (
+        '{} 失败'.format(counts['fail']) if counts['fail'] else '',
+        '{} 异常'.format(counts['error']) if counts['error'] else '',
+    ) if item])
+    lines = ['<font color="warning">**{}**</font>　<font color="comment">通过 {} / {}</font>'.format(
+                 bad, counts['pass'], counts['total']),
+             tail]
     lines.extend(push_fail_lines(test_result))
     return lines
 
@@ -217,8 +223,8 @@ def run(argv):
         print('定时任务执行异常: {}: {}'.format(type(error).__name__, error), flush=True)
         Logs.get_log('runCode.log', console=False).error('定时任务执行异常\n' + traceback.format_exc())
         if PUSH_WX:
-            push_lines(['**{}** <font color="warning">**执行中断**</font> · 本轮用例没有跑完，不能当成通过'.format(app),
-                        '<font color="comment">{}: {} · 完整堆栈 log/runCode.log</font>'.format(
+            push_lines(['<font color="warning">**执行中断**</font>　本轮用例没有跑完，不能当成通过',
+                        '<font color="comment">{}: {}　完整堆栈 log/runCode.log</font>'.format(
                             type(error).__name__, error)], app)
         return 2
     if counts is None:

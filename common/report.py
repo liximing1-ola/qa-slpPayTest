@@ -251,7 +251,7 @@ def _des_fallback(case):
 
 
 def push_case_label(case):
-    """推送清单里的用例标识：文件名 :: 方法名
+    """推送清单里的用例标识：文件名 · 方法名
 
     case_name 给的是「模块.类.方法」，在手机上太长；类名对定位没有帮助（同一个
     文件里的用例都在同一个类里），只留文件名和方法名。跨文件的同名 test_001
@@ -261,7 +261,7 @@ def push_case_label(case):
     parts = name.split('.')
     if len(parts) < 3:
         return name
-    return '{} :: {}'.format(parts[0] + '.py', parts[-1])
+    return '{} · {}'.format(parts[0] + '.py', parts[-1])
 
 
 # 企微机器人单条 markdown 内容上限 4096 字节，超过会被静默截断，
@@ -360,11 +360,10 @@ PUSH_FAIL_MAX = 10
 
 
 def push_fail_lines(result, max_items=PUSH_FAIL_MAX):
-    """推送用的未通过清单：编号 + 文件::方法 + 用例描述 + 一行原因（灰字）
+    """推送用的未通过清单：编号 + 文件名·方法 + 用例描述 + 一行原因（灰字）
 
-    与 not_pass_report 的区别在排版：那个是控制台/日志形态，一行一条；这里按「手机上
-    一眼能判断要不要现在处理」来排——编号顶格、方法名单独一行、原因压成灰色小字。
-    企微 markdown 不支持表格，层级只能靠颜色和空行做。
+    层级靠缩进做，不靠分隔符：编号顶格且加粗，描述和原因各缩进两个全角空格，
+    在手机上自然形成一个块、一眼能扫完。不用反引号：等宽字体夹在中文里显得格外生硬。
     """
     items = [(status, case, reason)
              for status, group in (('FAIL', result.failures), ('ERROR', result.errors))
@@ -372,31 +371,32 @@ def push_fail_lines(result, max_items=PUSH_FAIL_MAX):
     if not items:
         return []
 
-    lines = ['', '<font color="warning">**未通过**</font>']
+    lines = []
     for index, (status, case, reason) in enumerate(items[:max_items], 1):
         lines.append('')
-        lines.append('**{}.** `{}`{}'.format(index, push_case_label(case),
-                                            '' if status == 'FAIL' else ' (异常)'))
+        lines.append('**{}.**　{}{}'.format(index, push_case_label(case),
+                                            '' if status == 'FAIL' else '　(异常)'))
         des = case_des(result, case)
         if des:
-            lines.append(des)
+            lines.append('　　{}'.format(des))
         detail = reason_brief(reason, max_len=200)
         if detail:
-            lines.append('<font color="comment">{}</font>'.format(detail))
+            lines.append('　　<font color="comment">{}</font>'.format(detail))
     if len(items) > max_items:
         lines.append('')
-        lines.append('<font color="comment">另有 {} 条未列出，完整清单 log/notPassCase.log</font>'.format(
+        lines.append('<font color="comment">　另有 {} 条未列出，完整清单 log/notPassCase.log</font>'.format(
             len(items) - max_items))
     return lines
 
 
 def retry_digits(result):
-    """推送尾部用的重试计数：没有重试时明确写 0，不能只留空"""
+    """推送尾部用的重试计数：只报条数，没有重试时明确写 0
+
+    不写「3 条/4 次」：条数已经能回答「有没有用例被重试兜住」，次数留给
+    log/retryCase.log。尾注挤到折行反而更难读。
+    """
     records = getattr(result, 'retried', None) or {}
-    if not records:
-        return '重试 0'
-    return '重试 {} 条/{} 次'.format(
-        len(records), sum(len(item['events']) for item in records.values()))
+    return '重试 {}'.format(len(records))
 
 
 def duration_text(seconds):
