@@ -13,6 +13,11 @@ from common.conSlpXsgMysql import conMysql as mysql
 from common.runFailed import Retry
 
 
+# 大部分断言前不再放固定 time.sleep：这里的断言全是 assert_equal_eventually，它自己
+# 会按 WAIT_INTERVAL 轮询到 WAIT_TIMEOUT（默认 3s），外面再叠一个固定睡眠只会白等，
+# 还把「服务端多久后可读」这个信号盖住了——真慢的时候失败原因会写明等了多少秒。
+# 例外是加速卡那几条（test_013 起）：那里的 sleep 是「让加速卡覆盖整个结算窗口」
+# 的语义，卡一清就测不到加速效果，必须留着。
 @Retry(max_n=1)
 class TestPayCreate(unittest.TestCase):
 
@@ -54,7 +59,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['骑士']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['骑士']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -88,7 +92,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['男爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['男爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -122,7 +125,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['子爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['子爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -156,7 +158,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['伯爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['伯爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -190,7 +191,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['侯爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['侯爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -224,7 +224,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['公爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['公爵']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -258,7 +257,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['亲王']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['亲王']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -292,7 +290,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['国王']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['国王']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -326,7 +323,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['皇帝']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['皇帝']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + giftId['69']['price'])
@@ -374,7 +370,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(1)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
 		                        payUid_old_vip + len(uids) * num * juewei_level['皇帝']['update'] * giftId['69']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
@@ -426,7 +421,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid),
 		                        payUid_old_vip + juewei_level['皇帝']['update'] * room_defend['zhenai']['month']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid),
@@ -466,7 +460,6 @@ class TestPayCreate(unittest.TestCase):
 		)
 		res = post_request_session(pay_url, data, tokenName='slp', pay_uid=payUid)
 		assert_pay_success(res, des)
-		time.sleep(0.5)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', payUid), payUid_old_vip + juewei_level['皇帝']['update'] * defend['小宝贝']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('popularity', payUid), payUid_old_pop + juewei_level['皇帝']['update'] * defend['小宝贝']['price'] / 100)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('pay_room_money', uid), uid_old_vip + defend['小宝贝']['price'])
