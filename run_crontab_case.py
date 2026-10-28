@@ -23,14 +23,10 @@ import sys
 import time
 import traceback
 
-from Robot import robot
-from common import Logs, preflight
+from common import Logs, preflight, runflow
 from common.Config import config
-from common.Session import Session
-from common.report import (AllTestRunner, build_suite, duration_text, fail_detail_text,
-                           fail_kind_line, fail_kind_report, group_lines, group_report,
-                           not_pass_report, parse_app, push_fail_lines, result_counts,
-                           retry_digits, retry_report, retry_summary, split_message)
+from common.report import (AllTestRunner, build_suite, duration_text, fail_kind_line, group_lines,
+                           parse_app, push_fail_lines, retry_digits)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
 # 是否推送到企业微信群：默认关闭，cron 命令里显式写 PUSH_WX=1 打开。
@@ -68,36 +64,6 @@ def git_revision():
         return ''
     # detached HEAD 时 --abbrev-ref 返回字面量 HEAD，这时只报提交号
     return commit if branch in ('', 'HEAD') else '{}@{}'.format(branch, commit)
-
-
-def push_lines(lines, app_info):
-    """按企微单条上限拆分后逐条推送，返回是否全部发送成功
-
-    推送失败不能改变本轮结论：网络抖动时 requests 会抛异常，这时只记日志、
-    退出码仍然只表达「用例过没过」。但必须留下痕迹——群里没消息很容易被当成
-    「今天没跑」，而不是「推送坏了」。
-    """
-    ok = True
-    chunks = split_message(lines)
-    total = len(chunks)
-    for index, chunk in enumerate(chunks, 1):
-        if index > 1:
-            # 第二条起是「清单续」：单独出现在群里时看不出属于哪一轮，标上序号
-            chunk = '<font color="comment">{} ({}/{}) 清单续</font>\n{}'.format(
-                app_info, index, total, chunk)
-        try:
-            # robot 内部已经兜住了网络异常，这里再包一层是防以后改动把异常漏出去
-            sent = robot('markdown', chunk, bot='slp')
-        except Exception as error:
-            sent = False
-            print('[{}] 企业微信推送异常: {}'.format(app_info, error), flush=True)
-        if sent:
-            continue
-        ok = False
-        # 最可能是 WX_BOT_SLP 没设：群里没消息，日志里必须能查到原因
-        Logs.get_log('runCode.log', console=False).error(
-            '[{}] 企业微信消息未发出（检查 WX_BOT_SLP），内容前 80 字: {}'.format(app_info, chunk[:80]))
-    return ok
 
 
 def push_message(counts, test_result, app_info, elapsed):
@@ -151,42 +117,9 @@ def notify(test_result, app_info, elapsed=0):
 
     PUSH_WX=1 时再推一条企微消息，形态见 push_message。
     """
-    failures = test_result.failures
-    errors = test_result.errors
-    # 用 result_counts 而不是 testsRun - 失败 - 异常 - 跳过：
-    # setUpClass 报错时 testsRun 不含这条，相减会把「通过」算成负数
-    counts = result_counts(test_result)
-    pass_count = counts['pass']
-
-    des = "[{}] 用例总数: {}, 通过: {}, 失败: {}, 异常: {}, 跳过: {}".format(
-        app_info, counts['total'], pass_count, counts['fail'], counts['error'], counts['skip'])
-    # flush=True：stdout 重定向到文件时是块缓冲，不刷会延迟到进程退出才落盘
-    print(des, flush=True)
-    Logs.get_log('caseResult.log', console=False).info(des)
-
-    # 完整清单：编号 + 用例名称 + des + 失败明细，同时写一份到 log/notPassCase.log
-    report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(app_info))
-    print(report_text, flush=True)
-    Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)
-
-    # 失败性质固定打一行：连不上库（重跑）和分成算错（查代码）处置完全不同，
-    # 而两者在清单里只差一行字，不聚到一处就只能靠人眼一条条读
-    kind_text = fail_kind_report(test_result)
-    if kind_text:
-        print(kind_text, flush=True)
-        Logs.get_log('caseResult.log', console=False).info(kind_text)
-
-    # 按场景族统计：控制台/日志里永远给全量，看的是「这次是某一类整体跨了，
-    # 还是东一条西一条」——只看失败清单回答不了这个问题
-    group_text = group_report(test_result)
-    if group_text:
-        print(group_text, flush=True)
-        Logs.get_log('caseResult.log', console=False).info(group_text)
-
-    # 失败/异常的完整堆栈只写文件、不打控制台（控制台已有上面带编号的完整清单）
-    if failures or errors:
-        Logs.get_log('failCase.log', console=False, back_count=30).error(fail_detail_text(test_result))
-        print('失败/异常完整堆栈: log/failCase.log', flush=True)
+    counts = runflow.log_counts(test_result, app_info)
+    # 清单、失败性质、场景族统计、完整堆栈：与全量入口走同一段，避免两边各改各的
+    runflow.console_reports(test_result, app_info)
 
     if not PUSH_WX:
         print('企业微信推送已关闭（PUSH_WX=0），完整结果见上方输出与 log/notPassCase.log', flush=True)
@@ -195,7 +128,7 @@ def notify(test_result, app_info, elapsed=0):
     # 只推一条（超过企微单条上限才拆）：全通过时就是两行，有未通过时把编号清单
     # 附在后面。不再逐条发 icon —— 每条都会 @all，失败几条就刷几次屏，
     # 而清单本来就在这条消息里，提醒和内容分开反而是多一次打扰
-    push_lines(push_message(counts, test_result, app_info, elapsed), app_info)
+    runflow.push_lines(push_message(counts, test_result, app_info, elapsed), app_info)
     return counts
 
 
@@ -210,31 +143,18 @@ def main(app_info):
     # app_info 就是 slp / xsg（parse_app 返回 config.appName 的值），正好是 config.appInfo 的键
     ok, rows, hint = preflight.gate(app_info)
     if not ok:
-        if PUSH_WX:
-            push_lines(preflight.push_message(rows, hint), app_info)
+        runflow.env_down_notify(app_info, rows, hint, PUSH_WX)
         return ENV_DOWN
 
     # 定时任务是长期运行场景，先刷新一次 token，避免 token 过期导致全量失败
-    try:
-        Session.getSession(app_info)
-    except Exception as error:
-        # console=False：否则会先给 caseResult.log 挂上控制台 handler，导致 notify 里同名的 console=False 失效
-        Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(app_info, error))
+    runflow.refresh_token(app_info)
 
     started = time.time()
     test_result = AllTestRunner(verbosity=2).run(build_suite(app_info, CASE))
     elapsed = time.time() - started
     # 重试后才通过的用例：最终状态是 PASS，但每条背后都是一次真实的断言失败。
     # 定时任务场景控制台没人看，所以完整清单落 log/retryCase.log，推送里只带一行摘要
-    retry_text = retry_report(test_result)
-    # 摘要固定打一行（不管有没有重试）：只看 runCode.log 时也能看出「这轮有没有被重试兜住的问题」
-    # console=False：否则会给这个 logger 再挂一个控制台 handler，同一行会被打两次
-    retry_line = retry_summary(test_result)
-    print(retry_line, flush=True)
-    Logs.get_log('runCode.log', console=False).info(retry_line)
-    if retry_text:
-        print(retry_text, flush=True)
-        Logs.get_log('retryCase.log', console=False, back_count=30).info(retry_text)
+    runflow.log_retry(test_result)
     return notify(test_result, app_info, elapsed)
 
 
@@ -253,9 +173,9 @@ def run(argv):
         print('定时任务执行异常: {}: {}'.format(type(error).__name__, error), flush=True)
         Logs.get_log('runCode.log', console=False).error('定时任务执行异常\n' + traceback.format_exc())
         if PUSH_WX:
-            push_lines(['<font color="warning">**执行中断**</font>　本轮用例没有跑完，不能当成通过',
-                        '<font color="comment">{}: {}　完整堆栈 log/runCode.log</font>'.format(
-                            type(error).__name__, error)], app)
+            runflow.push_lines(['<font color="warning">**执行中断**</font>　本轮用例没有跑完，不能当成通过',
+                                '<font color="comment">{}: {}　完整堆栈 log/runCode.log</font>'.format(
+                                    type(error).__name__, error)], app)
         return 2
     if counts is None:
         # parse_app 已经拦了错误参数，这里只防配置里的 App 名与支持列表不一致

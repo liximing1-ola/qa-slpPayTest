@@ -3,14 +3,10 @@ import os
 import sys
 from time import time
 
-from Robot import robot
 from autoGitPull import updateTime, updateCode
-from common import Logs, Consts, preflight
+from common import Logs, Consts, preflight, runflow
 from common.Config import config
-from common.Session import Session
-from common.report import (AllTestRunner, build_suite, fail_detail_text, fail_kind_report,
-						   not_pass_report, not_pass_summary, parse_app, result_counts, retry_report,
-						   retry_summary, split_message)
+from common.report import AllTestRunner, build_suite, not_pass_summary, parse_app
 
 # 是否推送到企业微信群：默认关闭。当前直接在云服务器上看日志，企业微信的 markdown 展示效果不理想，
 # 需要恢复推送时用 PUSH_WX=1
@@ -32,9 +28,7 @@ def main(appInfo):
 		# 而且会把「真的全挂了」这个信号提前用掉。不可用就不跑，退出码 3
 		ok, rows, hint = preflight.gate(appInfo)
 		if not ok:
-			if PUSH_WX:
-				for chunk in split_message(preflight.push_message(rows, hint)):
-					robot('markdown', chunk, bot='slp')
+			runflow.env_down_notify(appInfo, rows, hint, PUSH_WX)
 			return ENV_DOWN
 
 		to = 'wx'
@@ -45,10 +39,7 @@ def main(appInfo):
 		# 刷新 Token（只调用一次）
 		# 与 run_crontab_case 保持一致：token 服务异常时不直接带着 traceback 退出，记日志后继续跑，
 		# 用例会逐条报错，比"一条都没跑"更容易定位
-		try:
-			Session.getSession(appInfo)
-		except Exception as error:
-			Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(appInfo, error))
+		runflow.refresh_token(appInfo)
 
 		# 检查代码更新（不阻塞测试执行）
 		updateCode.autoGitPull('slp_php')
@@ -60,38 +51,14 @@ def main(appInfo):
 		Consts.endTime = time()
 
 		# result_counts 会把 setUpClass/tearDownClass 报错补进总数，避免「总数: 0, 异常: 1」或「通过: -1」
-		counts = result_counts(test_result)
-		pass_count = counts['pass']
-		fail_count = counts['fail']
-		error_count = counts['error']
-		skip_count = counts['skip']
-		des = "用例总数: {}, 通过: {}, 失败: {}, 异常: {}, 跳过: {}".format(
-			counts['total'], pass_count, fail_count, error_count, skip_count)
+		# 结算行、重试行、清单、失败性质、场景族统计、完整堆栈都与定时任务入口共用同一段代码
+		counts = runflow.log_counts(test_result, appInfo)
+		des = runflow.counts_text(counts, appInfo)
 
-		# 结果直接打到控制台（nohup / crontab 的输出日志里能直接看到），
-		# 同时落到 log/notPassCase.log（只写文件，不与上面的 print 重复）；
-		# flush=True：stdout 重定向到文件时是块缓冲，不刷会延迟到进程退出才落盘
-		print(des, flush=True)
-		Logs.get_log('caseResult.log', console=False).info(des)
 		# 固定行：重试率是「被 @Retry 兜住的服务端问题」唯一的存在证明。没有这一行，
 		# 「全绿」就分不出「真的没问题」和「有问题但被重试掉了」。
-		print(retry_summary(test_result), flush=True)
-		report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(appInfo))
-		print(report_text, flush=True)
-		Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)
-
-		# 失败性质：连不上库（重跑）与分成算错（查代码）处置不同，先归堆再逐条看
-		kind_text = fail_kind_report(test_result)
-		if kind_text:
-			print(kind_text, flush=True)
-			Logs.get_log('caseResult.log', console=False).info(kind_text)
-
-		# 重试后才通过的用例：最终状态是 PASS，但每条背后都是一次真实的断言失败。
-		# 一轮全量实测 54 次，不看这份就等于每轮主动丢掉几十条排查线索
-		retry_text = retry_report(test_result)
-		if retry_text:
-			print(retry_text, flush=True)
-			Logs.get_log('retryCase.log', console=False, back_count=30).info(retry_text)
+		runflow.log_retry(test_result)
+		runflow.console_reports(test_result, appInfo)
 
 		if PUSH_WX:
 			# 推送时才拼消息：未通过用例放在最前面，避免末尾结论被截断
@@ -102,17 +69,10 @@ def main(appInfo):
 				for case in test_result.successes:
 					lines.append("{} - PASS".format(test_result.test_des_map.get(case, case.id())))
 			# 仍然超长时按字节拆成多条推送
-			for chunk in split_message(lines):
-				robot('markdown', chunk, bot='slp')
+			runflow.push_lines(lines, appInfo)
 		else:
 			print('企业微信推送已关闭（PUSH_WX=0），完整结果见上方输出与 log/notPassCase.log', flush=True)
 
-		# 失败/异常的完整堆栈只写文件、不打控制台：
-		# 1. 控制台已经有上方带编号的完整清单；
-		# 2. unittest 的 failures 列表直接 format 是一整行带 \n 转义的 repr，堆栈全糊在一起，没法看
-		if fail_count or error_count:
-			Logs.get_log('failCase.log', console=False, back_count=30).error(fail_detail_text(test_result))
-			print('失败/异常完整堆栈: log/failCase.log', flush=True)
 		return counts
 	else:
 		Logs.get_log('runCode.log').error('{} 执行异常'.format(appInfo))

@@ -53,6 +53,7 @@ qa-slpPayTest/
 │   ├── Assert.py          # 断言：状态码 / 等值 / 响应体 / 区间 / 轮询等值
 │   ├── runFailed.py       # Retry 装饰器（只重试断言失败）
 │   ├── report.py          # 结果汇总：编号 + 用例名 + des + 失败明细、按场景族统计
+│   ├── runflow.py         # 两个入口共用的执行流程：环境体检结论、刷新 token、计数与各类清单落盘
 │   ├── case_groups.py     # 用例模块 → 业务场景族（分类统计与推送看的都是这张表）
 │   ├── preflight.py       # 执行前环境体检：MySQL / Redis / 接口，不通不跑（退出码 3）
 │   ├── selfcheck.py       # 框架自身守卫逻辑的离线自检（不连库）
@@ -223,10 +224,10 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 | `progress.log` | 逐条实时进度：`[ 37/137] FAIL  12.30s  test_xxx.test_004` |
 | `failCase.log` | 失败与异常的完整堆栈 + **失败现场**（入参/响应/账户快照） |
 | `retryCase.log` | **重试后才通过**的用例清单：哪一轮、哪个断言先失败 |
-| `caseResult.log` | 每轮执行的条数汇总 + **失败性质**归堆 |
+| `caseResult.log` | 每轮执行的条数汇总 + **失败性质**归堆 + 场景族统计 + 重试摘要 |
 | `getSession.log` | token 获取情况 |
 | `updateGitCode.log` / `gitBranchError.log` | 分支检查与上次执行时间 |
-| `runCode.log` | 入口异常（如 App 名不认识） |
+| `runCode.log` | 入口异常（如 App 名不认识）；重试摘要（只看这一个文件的人也能判断这轮有没有被重试兜住的问题） |
 
 失败性质由失败文本自动判定（`common/report.py: failure_kind`），五类对应五种处理动作：
 
