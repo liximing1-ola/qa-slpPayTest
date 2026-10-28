@@ -173,16 +173,16 @@ class AllTestRunner(unittest.TextTestRunner):
 def build_suite(app_info, case_expr=''):
     """按 App 名装配用例集
 
-    :param app_info: config.appName 里的中文名；不支持时抛 ValueError，让入口显式报错
+    :param app_info: config.appName 的取值（SLP / XSG）；不支持时抛 ValueError，让入口显式报错
     :param case_expr: 逗号分隔的混合写法，空则全量执行（run_crontab_case 不传，行为与全量一致）
         省略：test_check                             只跑 caseSlp/test_check.py
         带点：test_check.TestPayCreate.test_002      按完整用例名加载（可只写到类）
     unittest 的 discover 只能按**文件名** glob，写用例名是匹配不到文件的，所以两种写法分开处理
     """
     case_dir = config.BASE_PATH
-    if app_info == config.appName['不夜星球']:
+    if app_info == config.appName['SLP']:
         case_dir += '/caseSlp'
-    elif app_info == config.appName['小拾光']:
+    elif app_info == config.appName['XSG']:
         case_dir += '/caseXsg'
     else:
         raise ValueError('不支持的 App: {}, 仅支持 {}'.format(app_info, config.appName))
@@ -210,17 +210,17 @@ def build_suite(app_info, case_expr=''):
 
 
 def parse_app(argv):
-    """解析命令行传入的 App，支持中文名与 slp/xsg 简写，缺省为不夜星球
+    """解析命令行传入的 App，支持 slp / xsg（大小写不敏感），缺省为 slp
 
     两个入口共用一份：口径分家会出现「同一个参数在两个脚本里行为不同」的问题。
     传错参数（如 slpp）时显式报错退出，不能静默回落到某个 App，
     否则会悄悄地跑一轮并覆盖日志。
     """
     arg = argv[1].strip().lower() if len(argv) >= 2 else 'slp'
-    if arg in (config.appName['不夜星球'], 'slp'):
-        return config.appName['不夜星球']
-    if arg in (config.appName['小拾光'], 'xsg'):
-        return config.appName['小拾光']
+    if arg in (config.appName['SLP'], 'slp'):
+        return config.appName['SLP']
+    if arg in (config.appName['XSG'], 'xsg'):
+        return config.appName['XSG']
     print('未知参数: {}，可用取值: slp / xsg'.format(arg), flush=True)
     sys.exit(2)
 

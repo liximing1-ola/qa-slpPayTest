@@ -1,6 +1,6 @@
 # qa-slpPayTest
 
-不夜星球（SLP）/ 小拾光（XSG）打赏与支付链路的接口自动化用例。
+SLP / XSG 打赏与支付链路的接口自动化用例。
 
 - **框架**：Python 3.9+、unittest（`discover` 自动收集，不用维护用例清单）
 - **依赖**：`requests` / `urllib3` / `PyMySQL` / `redis`，见 `requirements.txt`
@@ -11,7 +11,7 @@
 
 这 12 条是**刻意保留**的，不是懒得清：守护关系、星舰群这些是功能下线而非废弃，后续有恢复可能，恢复后去掉 `@unittest.skip` 就能复用（造数与断言都还在）。代价是「跳过 12」会长期出现在每轮报告里——因此判定标准是：**只要还可能恢复就留，确认永久下线的才删**。删不是禁忌，但需要一句明确的「永久下线」结论，否则等于把一段能复用的验证逻辑凭印象丢掉。
 
-**XSG（小拾光）用例集当前暂停维护**：`caseXsg/` 下 29 条保留不动，仅作为参考，不作为验收基线；slp 与 xsg 仍指向同一套测试环境（只差 `package` 参数），需要恢复时 `run_all_case.py xsg` 可直接跑。因此日常回归、基线对比只看 SLP 那 137 条。
+**XSG 用例集当前暂停维护**：`caseXsg/` 下 29 条保留不动，仅作为参考，不作为验收基线；slp 与 xsg 仍指向同一套测试环境（只差 `package` 参数），需要恢复时 `run_all_case.py xsg` 可直接跑。因此日常回归、基线对比只看 SLP 那 137 条。
 
 礼物优惠券另有一个容易踩的坑：**有损 / 无损不是独立开关，而是券商品的 `coupon_type` 决定的**——`gift_discount`（89297）折扣额平台减免、收礼方按实付分成（有损）；`pro_gift_discount`（89370）平台补贴、收礼方按原价分成（无损）。`pro_gift_discount` 目前只接入房间链路，私聊会被拒单，详见 `caseSlp/test_coupon_2.py` 文件头。
 
@@ -25,8 +25,8 @@ cd qa-slpPayTest
 pip3 install -r requirements.txt
 mkdir -p log                     # 运行日志目录，首次要手动建
 
-python3 run_all_case.py slp      # 不夜星球全量
-python3 run_all_case.py xsg      # 小拾光全量
+python3 run_all_case.py slp      # SLP 全量
+python3 run_all_case.py xsg      # XSG 全量
 ```
 
 ---
@@ -41,11 +41,11 @@ qa-slpPayTest/
 ├── autoGitPull.py         # 分支检查 + 记录上次执行时间
 ├── pre_push_audit.py      # 推送前全仓审查（十一类）
 ├── deploy.sh              # 云服务器一键部署
-├── caseSlp/               # 不夜星球用例
+├── caseSlp/               # SLP 用例
 │   ├── config.py          # 账号、房间、礼物、倍数等测试数据
 │   ├── tools.py           # 转发层，实现统一在 common/tools.py
 │   └── test_*.py
-├── caseXsg/               # 小拾光用例（结构与 caseSlp 一致）
+├── caseXsg/               # XSG 用例（结构与 caseSlp 一致）
 ├── common/                # 公共能力，两个 App 共用
 │   ├── Config.py          # 环境地址、工程路径、分支信息
 │   ├── Session.py         # 登录取 token
@@ -143,7 +143,7 @@ rm -f /tmp/slp_cron; crontab -l
 
 | 本轮结果 | 群里的消息 |
 |---|---|
-| 全部通过 | 两行：绿色 `通过 125 / 137` + 灰色尾注 `不夜星球　跳过 12　重试 1　4m52s　lxm@3adcbba` |
+| 全部通过 | 两行：绿色 `通过 125 / 137` + 灰色尾注 `slp　跳过 12　重试 1　4m52s　lxm@3adcbba` |
 | 有失败/异常 | 橙色结论行 `2 失败　1 异常`（附灰色通过数）→ 灰色性质行 `环境 1　造数 1　断言 1`（全是断言时不列）→ 有未通过的场景族 → 编号清单：`1.`　`test_gs_room.py · test_007`、用例描述、一行原因（灰字）；非断言失败在标题后标 `(造数)` / `(异常·环境)`；最多列 10 条，其余指向 `log/notPassCase.log` |
 | 0 条用例 | 红色 `本轮 0 条用例被执行`，退出码 2——套件为空或 `CASE` 写错，不算通过 |
 | 环境不可用 | 红色 `环境不可用，本轮未执行` + 探测失败的那几项，退出码 3——一条用例都不跑 |

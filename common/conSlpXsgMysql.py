@@ -408,8 +408,8 @@ class conMysql:
     def updateUserInfoSql(tableName, uid, level=10, growth=None):
         """修改用户爵位等级
 
-        :param growth: 贵族成长值。None 表示按 slp 的爵位成长值表换算；
-            小拾光（xsg）的爵位体系与 slp 完全不同（殿=2500 万，slp 同 level 的亲王只有 650 万），
+        :param growth: 贵族成长值。None 表示按 SLP 的爵位成长值表换算；
+            XSG 的爵位体系与 SLP 完全不同（殿=2500 万，SLP 同 level 的亲王只有 650 万），
             跨 App 用例必须显式传入本 App 的成长值，否则库里 level 与 growth 不自洽，
             服务端按 growth 换算爵位时会算出与用例预期不同的倍率。
         """

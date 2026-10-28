@@ -23,7 +23,7 @@ ENV_DOWN = 'env_down'
 
 
 def main(appInfo):
-	if appInfo == config.appName['不夜星球'] or appInfo == config.appName['小拾光']:
+	if appInfo == config.appName['SLP'] or appInfo == config.appName['XSG']:
 		# 开跑前先确认环境可用：环境不通时用例会一条条失败到结束，那不是回归信号，
 		# 而且会把「真的全挂了」这个信号提前用掉。不可用就不跑，退出码 3
 		ok, rows, hint = preflight.gate(appInfo)

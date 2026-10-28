@@ -22,10 +22,10 @@ class Session:
 		"""
 		urllib3.disable_warnings()
 		urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-		if env == config.appName['不夜星球']:
+		if env == config.appName['SLP']:
 			print("slp")
 			from caseSlp.config import payUid, gsUid, gs_B_uid
-		elif env == config.appName['小拾光']:
+		elif env == config.appName['XSG']:
 			print("xsg")
 			from caseXsg.config import payUid, gsUid, gs_B_uid_1 as gs_B_uid
 		else:

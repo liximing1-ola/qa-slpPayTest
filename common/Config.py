@@ -15,9 +15,11 @@ class config:
         'slp_common_rpc_path': r"/home/ecs-user/webroot/slp-common-rpc",
         'slp_git_branch': "dev",  # todo 调试用 "wzx" / dev分支  dev
     }
+    # App 名一律用缩写：同一份 App 既有中文名又有缩写，日志/推送/异常里就会出现两套说法，
+    # 排查时要多做一次「这是哪个 App」的翻译，徒增歧义
     appName = {
-        "不夜星球": 'slp',
-        "小拾光": 'xsg',
+        "SLP": 'slp',
+        "XSG": 'xsg',
     }
     # 服务器标识
     linux_node = {

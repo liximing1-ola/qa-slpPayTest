@@ -80,11 +80,11 @@ rates = {
 			"broker_rate": 0.1,  # 会长
 		},
 		"xsg-chat": {
-			"gs_rate": 0.9,  # 小拾光新用户,私聊 主播 0.9 money_cash_b
+			"gs_rate": 0.9,  # XSG 新用户,私聊 主播 0.9 money_cash_b
 			"gs_self_rate": 0.9,  # 主播,私聊,自刷
 		},
 		"xsg-vip-room": {  # 个人房
-			"gs_rate": 0.9,  # 小拾光新用户,个人房 主播 0.9 money_cash_b
+			"gs_rate": 0.9,  # XSG 新用户,个人房 主播 0.9 money_cash_b
 			"gs_self_rate": 0.9,  # 主播,个人房,自刷
 		}
 	},

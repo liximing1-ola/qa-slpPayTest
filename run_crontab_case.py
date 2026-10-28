@@ -28,7 +28,7 @@ from common.Config import config
 from common.report import (AllTestRunner, build_suite, duration_text, fail_kind_line, group_lines,
                            parse_app, push_fail_lines, retry_digits)
 
-APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
+APP_SUPPORTED = (config.appName['SLP'], config.appName['XSG'])
 # 是否推送到企业微信群：默认关闭，cron 命令里显式写 PUSH_WX=1 打开。
 # 不给默认值 1 是为了本地手工验证时不会往群里发测试消息
 PUSH_WX = os.environ.get('PUSH_WX', '0') == '1'
