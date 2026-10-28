@@ -22,11 +22,16 @@
 9. 场景族登记：新增的用例模块必须在 common/case_groups.py 里登记
    —— 漏登记不会报错，只会让这一类悄悄归到「未分组」、从分类统计里消失，
    比没有统计更糟：看的人会以为「这类没问题」
+10. 未定义名字：用到但当前作用域里找不到绑定的名字
+   —— compileall 只查语法，`time.sleep(...)` 在删掉 import time 后依然编译通过，
+   要等服务器真跑到那一行才 NameError；那一行如果刚好在 skip 或异常分支里，
+   可能几轮都碰不到
 
 用法：python pre_push_audit.py
 退出码：0 全部通过；1 有问题，逐条列在最后
 """
 import ast
+import builtins
 import importlib
 import io
 import os
@@ -404,6 +409,147 @@ if missing:
 stale = sorted(set(case_groups.GROUPS) - case_modules)
 if stale:
     warn('分组表里有不存在的用例模块: {}'.format(stale))
+
+# ---------- 10. 未定义名字 ----------
+# compileall 只查语法：删掉 `import time` 之后 `time.sleep(0.5)` 照样编译通过，
+# 只有真跑到那一行才会 NameError。这类错误如果落在 skip 用例或异常分支里，
+# 可能好几轮全量都碰不到，等碰到时又很容易被当成「偶发」。
+print('\n[10] 未定义名字（NameError 预防）')
+BUILTIN_NAMES = set(dir(builtins)) | {
+    '__file__', '__name__', '__doc__', '__package__', '__spec__', '__builtins__', 'WindowsError',
+}
+_STAR_CACHE = {}
+
+
+def star_import_names(module_name):
+    """`from X import *` 带来的名字：静态看不出，直接问模块要
+
+    返回 None 表示这个模块导不进来——此时无从得知星号带进了什么，
+    该文件宁可跳过不查，也不要把一堆正常名字误报成未定义。
+    """
+    if module_name not in _STAR_CACHE:
+        try:
+            module = importlib.import_module(module_name)
+            _STAR_CACHE[module_name] = {name for name in dir(module) if not name.startswith('_')}
+        except Exception:
+            _STAR_CACHE[module_name] = None
+    return _STAR_CACHE[module_name]
+
+
+def bind_target(node, names):
+    """赋值目标绑定的名字，含解包与星号写法"""
+    if isinstance(node, ast.Name):
+        names.add(node.id)
+    elif isinstance(node, (ast.Tuple, ast.List)):
+        for item in node.elts:
+            bind_target(item, names)
+    elif isinstance(node, ast.Starred):
+        bind_target(node.value, names)
+
+
+def scope_bindings(nodes):
+    """一段语句体里绑定的名字；不深入嵌套函数/类的内部（那是另一个作用域）"""
+    names = set()
+    stack = list(nodes)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for item in node.names:
+                if item.name != '*':
+                    names.add(item.asname or item.name.split('.')[0])
+            continue
+        if isinstance(node, ast.Assign):
+            for item in node.targets:
+                bind_target(item, names)
+        elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+            bind_target(node.target, names)
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            bind_target(node.target, names)
+        elif isinstance(node, ast.comprehension):
+            # 推导式/生成器的循环变量（`[x for x in ...]` 里的 x）也是绑定，
+            # 漏了它会把全仓 dozens 处 i / row / item 全报成未定义
+            bind_target(node.target, names)
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                if item.optional_vars is not None:
+                    bind_target(item.optional_vars, names)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+        elif isinstance(node, ast.NamedExpr):
+            bind_target(node.target, names)
+        stack.extend(ast.iter_child_nodes(node))
+    return names
+
+
+def undefined_names(path, tree, module_names):
+    """逐作用域找出「用到了但找不到绑定」的名字，返回 [(行号, 名字)]"""
+    found = []
+
+    def walk_scope(body, outer):
+        local = scope_bindings(body)
+        for node in body:
+            walk_node(node, [local] + outer)
+
+    def walk_node(node, scopes):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            # 装饰器、默认值在**外层**求值，必须用外层作用域
+            for sub in node.decorator_list + list(node.args.defaults):
+                walk_node(sub, scopes)
+            for sub in node.args.kw_defaults:
+                if sub is not None:
+                    walk_node(sub, scopes)
+            args = {a.arg for a in node.args.args + node.args.kwonlyargs}
+            args |= {a.arg for a in (node.args.vararg, node.args.kwarg) if a is not None}
+            walk_scope(node.body, [args] + scopes)   # 函数体还能看到外层（闭包）
+            return
+        if isinstance(node, ast.ClassDef):
+            for sub in node.decorator_list + node.bases + [k.value for k in node.keywords]:
+                walk_node(sub, scopes)
+            walk_scope(node.body, scopes)
+            return
+        if isinstance(node, ast.Lambda):
+            args = {a.arg for a in node.args.args + node.args.kwonlyargs}
+            args |= {a.arg for a in (node.args.vararg, node.args.kwarg) if a is not None}
+            walk_node(node.body, [args] + scopes)
+            return
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            if node.id not in module_names and not any(node.id in scope for scope in scopes):
+                found.append((node.lineno, node.id))
+            return
+        for child in ast.iter_child_nodes(node):
+            walk_node(child, scopes)
+
+    walk_scope(tree.body, [])
+    return found
+
+
+undefined = []
+skipped_star = []
+for path, tree in trees.items():
+    if path == SELF:
+        continue
+    module_names = set(BUILTIN_NAMES) | scope_bindings(tree.body)
+    unresolvable = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and any(item.name == '*' for item in node.names):
+            names = star_import_names(node.module or '')
+            if names is None:
+                unresolvable = True
+            else:
+                module_names |= names
+    if unresolvable:
+        skipped_star.append(path)
+        continue
+    for lineno, name in undefined_names(path, tree, module_names):
+        undefined.append('{}:{} {}'.format(path, lineno, name))
+print('    扫描 {} 个文件，未定义名字 {} 处{}'.format(
+    len(trees), len(undefined),
+    '（{} 个文件因星号导入解析不了而跳过）'.format(len(skipped_star)) if skipped_star else ''))
+if undefined:
+    fail('用到了但找不到绑定的名字（编译不报错，运行到才 NameError）: {}'.format(undefined))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)
