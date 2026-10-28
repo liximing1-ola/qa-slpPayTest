@@ -14,9 +14,15 @@ from common.Session import Session
 
 # 单次请求超时时间（秒），避免网络异常时用例无限挂起
 REQUEST_TIMEOUT = 30
-# 同一账号两次请求的最小间隔（秒），避免网络异常时用例无限挂起；需要提速时可用环境变量覆盖，
-# 例如 REQUEST_INTERVAL=0.5。注意用 or 而非默认参数：export REQUEST_INTERVAL= 这种空值会让 float('') 在 import 阶段抛错
-REQUEST_INTERVAL = float(os.environ.get('REQUEST_INTERVAL') or 2)
+# 同一 App 两次请求的最小间隔（秒）。2026-10-28 实测：2 秒 → 292s，1 秒 → 201s，
+# 相差 91 秒；两轮均 0 失败，日志里「请勿频繁操作/请求太慢」一次未出现，
+# 首轮重试增加的那几条全是服务端 500 与「房间类型错误」，与节流无关，故默认降至 1。
+# 需要提速时可用环境变量覆盖（如 REQUEST_INTERVAL=0.5）。注意用 or 而非默认参数：
+# export REQUEST_INTERVAL= 这种空值会让 float('') 在 import 阶段抛错
+REQUEST_INTERVAL = float(os.environ.get('REQUEST_INTERVAL') or 1)
+# 命中频控后的退避基数（秒），第 n 次退避等 n 倍。与 REQUEST_INTERVAL 解耦：
+# 调小间隔是为了提速，不应该顺带把退避也调弱——退避太短会连着撞同一道防重墙
+FREQUENT_BACKOFF = float(os.environ.get('FREQUENT_BACKOFF') or 2)
 # 命中频控后的最大重试次数：设为 0 表示不重试，直接把频控响应交给用例判断
 FREQUENT_RETRY = int(os.environ.get('FREQUENT_RETRY') or 2)
 # 频控/防重的文案不止一种：早期只见过「请勿频繁操作」，实测还出现过「请求太慢了，请稍后重试」。
@@ -217,7 +223,7 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
         # 退避按倍数递增（2 秒、4 秒…）：防重窗口多长不确定，固定间隔容易连着撞同一堵墙
         keyword = _frequent_keyword(body)
         if attempt < FREQUENT_RETRY and keyword is not None:
-            backoff = REQUEST_INTERVAL * (attempt + 1)
+            backoff = FREQUENT_BACKOFF * (attempt + 1)
             print('[频控] 命中"{}", {} 秒后重试（第 {}/{} 次）'.format(
                 keyword, backoff, attempt + 1, FREQUENT_RETRY))
             time.sleep(backoff)

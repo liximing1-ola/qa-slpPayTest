@@ -11,6 +11,7 @@
   3. 读账户表用的轮询版真的会重读，超时也会把「等了多少秒」写进失败原因。
      全仓 567 处余额/统计断言都靠它，它一旦退化成「只读一次」，全量会重新回到
      37% 的用例靠重试才有结果的状态。
+4. 频控退避不跟着请求间隔缩水（降默认间隔是为了提速，不能顺带把退避调弱）。
 
 运行：python -m common.selfcheck
 """
@@ -90,17 +91,21 @@ def _check(name, func):
         print('  FAIL {} -> {}'.format(name, error))
 
 
-def _with_scripted(bodies, interval=2.0, frequent_retry=2):
+def _with_scripted(bodies, interval=2.0, frequent_retry=2, backoff=2.0):
     """装好假 requests / 假 token / 假 sleep，返回 (request 模块, 假 requests, 假 time)"""
     from common import Request
 
     fake_requests = _ScriptedRequests(bodies)
     fake_time = _FakeTime()
-    old = (Request.requests, Request.time, Request.Session, Request.REQUEST_INTERVAL, Request.FREQUENT_RETRY)
+    # 退避基数也要固定：它现在与环境变量解耦，若本机 export 了 FREQUENT_BACKOFF，
+    # 自检会拿着别的值去比 2.0/4.0 而假红
+    old = (Request.requests, Request.time, Request.Session, Request.REQUEST_INTERVAL,
+           Request.FREQUENT_RETRY, Request.FREQUENT_BACKOFF)
     Request.requests = fake_requests
     Request.time = fake_time
     Request.REQUEST_INTERVAL = interval
     Request.FREQUENT_RETRY = frequent_retry
+    Request.FREQUENT_BACKOFF = backoff
     Request._last_request_at.clear()
 
     class _FakeSession(object):
@@ -114,8 +119,8 @@ def _with_scripted(bodies, interval=2.0, frequent_retry=2):
 
 def _restore(old):
     from common import Request
-    (Request.requests, Request.time, Request.Session,
-     Request.REQUEST_INTERVAL, Request.FREQUENT_RETRY) = old
+    (Request.requests, Request.time, Request.Session, Request.REQUEST_INTERVAL,
+     Request.FREQUENT_RETRY, Request.FREQUENT_BACKOFF) = old
 
 
 def check_frequent_retry_then_success():
@@ -188,6 +193,26 @@ def check_backoff_is_increasing():
     # 退避把时间推过去之后，_wait_for_interval 不会再补间隔，所以这里只会剩退避这两次
     backoffs = [s for s in fake_time.sleeps if s >= 2.0]
     assert backoffs == [2.0, 4.0], '退避应递增 2.0/4.0，实际 {}'.format(fake_time.sleeps)
+
+
+def check_backoff_independent_of_interval():
+    """调小请求间隔不能顺带把频控退避也调弱
+
+    退避原本写的是 REQUEST_INTERVAL × n，把默认间隔从 2 降到 1 之后，
+    频控退避会悄悄变成 1s/2s——提速的代价就变成了「撞频控后更容易再撞」。
+    这条锁住两者解耦：间隔 1 秒时退避仍必须是 2.0/4.0。
+    """
+    Request, _, fake_time, old = _with_scripted([
+        {'success': False, 'msg': '请勿频繁操作'},
+        {'success': False, 'msg': '请勿频繁操作'},
+        {'success': True},
+    ], interval=1.0, frequent_retry=2, backoff=2.0)
+    try:
+        Request.post_request_session('test.local/decouple', {'a': 1}, tokenName='slp', pay_uid=1)
+    finally:
+        _restore(old)
+    backoffs = [s for s in fake_time.sleeps if s >= 2.0]
+    assert backoffs == [2.0, 4.0], '间隔 1s 时退避仍应为 2.0/4.0，实际 {}'.format(fake_time.sleeps)
 
 
 def check_non_json_body_not_frequent():
@@ -320,6 +345,7 @@ def main():
     _check('正常响应不重试', check_no_frequent_single_call)
     _check('实测见过的频控文案都能命中', check_all_keywords)
     _check('退避间隔递增', check_backoff_is_increasing)
+    _check('退避不受请求间隔影响', check_backoff_independent_of_interval)
     _check('非 json 响应不误判、不崩溃', check_non_json_body_not_frequent)
 
     print('框架自检：失败现场（common.Scene）')
