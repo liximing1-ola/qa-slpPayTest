@@ -4,23 +4,20 @@ __desc__ = "公会主播-房间打赏"
 import unittest
 
 from caseXsg.config import *
-from caseXsg.tools import prepare_test_data
+from caseXsg.tools import XsgTravelerMixin, prepare_test_data
 from common.Assert import assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
-from common.conRedis import conRedis
 from common.conSlpXsgMysql import conMysql as mysql
 from common.runFailed import Retry
 
 
 @Retry(max_n=1)
-class TestPayCreate(unittest.TestCase):
-	def setUp(self):
-		if self._testMethodName in ("test_005","test_006","test_007","test_008"):
-			conRedis.set(f"Xs.Traveler.XSG.{payUid}", 1)
+class TestPayCreate(XsgTravelerMixin, unittest.TestCase):
+	# 「不夜活跃」身份对这四条生效，Redis 的取放统一在 XsgTravelerMixin 里
+	traveler_tests = ('test_005', 'test_006', 'test_007', 'test_008')
+	traveler_uid = payUid
 
-	def tearDown(self):
-		conRedis.delete(f"Xs.Traveler.XSG.{payUid}")
 	def test_001(self, des='非不夜-新用户,商业房,非跨档,已配置<=总计96%,按配置分成(mc)'):
 
 		rid = gs_A_rid_1

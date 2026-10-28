@@ -18,6 +18,7 @@ import requests
 
 from common import Request
 from common.Config import config
+from common.conRedis import conRedis
 
 
 def merge_dicts(*args):
@@ -301,3 +302,34 @@ def get_last_weekday_timestamp(weekday_num=1):
     last_weekday = last_weekday.replace(hour=0, minute=0, second=0, microsecond=0)
 
     return int(last_weekday.timestamp())
+
+
+class XsgTravelerMixin(object):
+    """「不夜活跃」用户的公共前置：给打赏账号打上 XSG 旅行者标记
+
+    caseXsg 下 5 个用例文件原本各抄一份 setUp/tearDown，唯一差别是「哪几条用例要标」：
+    私聊只有 test_002，公会房间是 test_005~test_008。差别用类属性声明，Redis 的
+    取放只留一份——否则日后改 key 格式，5 个文件里漏掉一个，就会出现“某几条用例
+    单独跑绿、全量跑红”这种最难查的偏差。
+
+    用法（类属性写在类体里，此时 config 的 star import 已经在作用域内）：
+        class TestPayCreate(XsgTravelerMixin, unittest.TestCase):
+            traveler_tests = ('test_002',)
+            traveler_uid = payUid
+    """
+    # 需要打标记的方法名；空元组表示这个文件一条都不标
+    traveler_tests = ()
+    # 打赏账号 uid；由子类指定，common 层不反向依赖 case 的配置
+    traveler_uid = None
+
+    def traveler_key(self):
+        return 'Xs.Traveler.XSG.{}'.format(self.traveler_uid)
+
+    def setUp(self):
+        # 同样用 _testMethodName 判断：重试轮次里方法名不变，行为与原来一致
+        if self._testMethodName in self.traveler_tests:
+            conRedis.set(self.traveler_key(), 1)
+
+    def tearDown(self):
+        # 无论本轮有没有打过标记都删：残留的标记会让下一条用例的定价走错档
+        conRedis.delete(self.traveler_key())

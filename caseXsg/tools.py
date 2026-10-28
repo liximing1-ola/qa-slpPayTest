@@ -22,4 +22,5 @@ from common.tools import (  # noqa: F401
     insert_coupon,
     insert_package_gift,
     get_last_weekday_timestamp,
+    XsgTravelerMixin,
 )
