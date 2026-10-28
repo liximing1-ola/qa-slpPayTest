@@ -250,6 +250,20 @@ def _des_fallback(case):
     return '(未取到用例描述)'
 
 
+def push_case_label(case):
+    """推送清单里的用例标识：文件名 :: 方法名
+
+    case_name 给的是「模块.类.方法」，在手机上太长；类名对定位没有帮助（同一个
+    文件里的用例都在同一个类里），只留文件名和方法名。跨文件的同名 test_001
+    靠这一行就能区分开，不用再翻日志去猜是哪个文件。
+    """
+    name = case_name(case)
+    parts = name.split('.')
+    if len(parts) < 3:
+        return name
+    return '{} :: {}'.format(parts[0] + '.py', parts[-1])
+
+
 # 企微机器人单条 markdown 内容上限 4096 字节，超过会被静默截断，
 # 长消息必须在发送前拆成多条，否则末尾的结论会被切掉
 MAX_MSG_BYTES = 3900
@@ -333,30 +347,64 @@ def not_pass_summary(result, title='未通过用例', with_detail=True):
     lines = not_pass_lines(result, with_detail=with_detail)
     header = '{}（共 {} 条）'.format(title, not_pass_count(result))
     if not lines:
+        # 0 条用例时写「全部用例通过」是自相矛盾的：套件没加载出来、CASE 写错都会是 0 条，
+        # 这时候说「通过」等于把「什么都没跑」报成「没事」
+        if not result_counts(result)['total']:
+            return '{}\n本轮执行了 0 条用例'.format(header)
         return '{}\n无，全部用例通过'.format(header)
     return '{}\n{}'.format(header, '\n'.join(lines))
 
 
-def fail_summary(result, title='未通过用例'):
-    """只列失败与异常，跳过的只算在计数里；全部通过时返回空串
+# 推送里最多列多少条：再多就不适合塞在聊天窗口里了，完整清单在 log/notPassCase.log
+PUSH_FAIL_MAX = 10
 
-    推送要的就是这个形态：全通过只发一行结果，有未通过时把清单附在同一条消息里。
-    这里刻意不列 SKIP——跳过的是已确认下线的功能（当前 12 条，内容永远不变），
-    每天推一遍明细会把真正需要处理的问题淹在噪音里。
+
+def push_fail_lines(result, max_items=PUSH_FAIL_MAX):
+    """推送用的未通过清单：编号 + 文件::方法 + 用例描述 + 一行原因（灰字）
+
+    与 not_pass_report 的区别在排版：那个是控制台/日志形态，一行一条；这里按「手机上
+    一眼能判断要不要现在处理」来排——编号顶格、方法名单独一行、原因压成灰色小字。
+    企微 markdown 不支持表格，层级只能靠颜色和空行做。
     """
-    total = len(result.failures) + len(result.errors)
-    if not total:
-        return ''
-    lines = []
-    # 失败与异常分开遍历，不能用 elif 串起来，否则有失败时异常用例永远不显示
-    for status, items in (('FAIL', result.failures), ('ERROR', result.errors)):
-        for case, reason in items:
-            des = case_des(result, case)
-            lines.append('[{}] {}{}'.format(status, case_name(case), ' | {}'.format(des) if des else ''))
-            detail = reason_brief(reason)
-            if detail:
-                lines.append('    {}'.format(detail))
-    return '{}（共 {} 条）\n{}'.format(title, total, '\n'.join(lines))
+    items = [(status, case, reason)
+             for status, group in (('FAIL', result.failures), ('ERROR', result.errors))
+             for case, reason in group]
+    if not items:
+        return []
+
+    lines = ['', '<font color="warning">**未通过**</font>']
+    for index, (status, case, reason) in enumerate(items[:max_items], 1):
+        lines.append('')
+        lines.append('**{}.** `{}`{}'.format(index, push_case_label(case),
+                                            '' if status == 'FAIL' else ' (异常)'))
+        des = case_des(result, case)
+        if des:
+            lines.append(des)
+        detail = reason_brief(reason, max_len=200)
+        if detail:
+            lines.append('<font color="comment">{}</font>'.format(detail))
+    if len(items) > max_items:
+        lines.append('')
+        lines.append('<font color="comment">另有 {} 条未列出，完整清单 log/notPassCase.log</font>'.format(
+            len(items) - max_items))
+    return lines
+
+
+def retry_digits(result):
+    """推送尾部用的重试计数：没有重试时明确写 0，不能只留空"""
+    records = getattr(result, 'retried', None) or {}
+    if not records:
+        return '重试 0'
+    return '重试 {} 条/{} 次'.format(
+        len(records), sum(len(item['events']) for item in records.values()))
+
+
+def duration_text(seconds):
+    """执行耗时：不足一分钟按秒，超过按「分秒」，避免出现 372.4s 这种要心算的写法"""
+    seconds = int(round(seconds))
+    if seconds < 60:
+        return '{}s'.format(seconds)
+    return '{}m{:02d}s'.format(seconds // 60, seconds % 60)
 
 
 # 控制台 / 日志用的分隔线，宽度不用太长，云服务器上 80 列终端也能完整显示
@@ -421,7 +469,9 @@ def not_pass_report(result, title='未通过用例'):
                  title, len(records), counts['FAIL'], counts['ERROR'], counts['SKIP']),
              LINE_SEP]
     if not records:
-        lines.append('无，全部用例通过')
+        # 0 条用例时不能写「全部通过」：套件没加载出来、CASE 写错都会落到这里，
+        # 这时说「通过」等于把「什么都没跑」报成「没事」
+        lines.append('本轮执行了 0 条用例' if not result_counts(result)['total'] else '无，全部用例通过')
         lines.append(LINE_SEP)
         return '\n'.join(lines)
     for index, record in enumerate(records, 1):

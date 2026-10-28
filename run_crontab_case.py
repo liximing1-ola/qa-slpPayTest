@@ -4,9 +4,13 @@
 与 run_all_case.py 的区别：不拉取代码分支、不逐条播报通过用例，只关注结果汇总与失败/异常通知。
 
 推送形态（PUSH_WX=1 时，cron 里就是这个用法）：
-    全部通过 -> 一条消息：标题 + 总数/通过/失败/异常/跳过 + 重试摘要 + 代码版本
-    有未通过 -> 同一条消息后面附上失败与异常清单（跳过不列，见 fail_summary）
-    执行中断 -> 一条「执行异常」消息，说明用例没跑完，不能安静退出
+    全部通过 -> 两行：一行绿色结论 + 一行灰色尾注（跳过/重试/耗时/版本）
+    有未通过 -> 结论行 + 编号清单（文件::方法 / 用例描述 / 一行原因）
+    0 条用例 -> 红色「0 条用例被执行」，退出码 2。这不是通过
+    执行中断 -> 一条红色「执行中断」消息，说明用例没跑完，不能安静退出
+
+整个仓库只有自己看这条推送，所以排版以「扫一眼就能判断今天要不要动手」为准：
+没事的时候刻意只留两行——天天刷屏的长消息，人会在第三天开始不看它。
 
 用法：
     python run_crontab_case.py slp
@@ -15,15 +19,16 @@
 import os
 import subprocess
 import sys
+import time
 import traceback
 
 from Robot import robot
 from common import Logs
 from common.Config import config
 from common.Session import Session
-from common.report import (AllTestRunner, build_suite, fail_detail_text, fail_summary,
-                           not_pass_report, parse_app, result_counts, retry_report, retry_summary,
-                           split_message)
+from common.report import (AllTestRunner, build_suite, duration_text, fail_detail_text,
+                           not_pass_report, parse_app, push_fail_lines, result_counts,
+                           retry_digits, retry_report, retry_summary, split_message)
 
 APP_SUPPORTED = (config.appName['不夜星球'], config.appName['小拾光'])
 # 是否推送到企业微信群：默认关闭，cron 命令里显式写 PUSH_WX=1 打开。
@@ -69,7 +74,13 @@ def push_lines(lines, app_info):
     「今天没跑」，而不是「推送坏了」。
     """
     ok = True
-    for chunk in split_message(lines):
+    chunks = split_message(lines)
+    total = len(chunks)
+    for index, chunk in enumerate(chunks, 1):
+        if index > 1:
+            # 第二条起是「清单续」：单独出现在群里时看不出属于哪一轮，标上序号
+            chunk = '<font color="comment">{} ({}/{}) 清单续</font>\n{}'.format(
+                app_info, index, total, chunk)
         try:
             # robot 内部已经兜住了网络异常，这里再包一层是防以后改动把异常漏出去
             sent = robot('markdown', chunk, bot='slp')
@@ -85,10 +96,47 @@ def push_lines(lines, app_info):
     return ok
 
 
-def notify(test_result, app_info):
+def push_message(counts, test_result, app_info, elapsed):
+    """企微消息正文：没事两行看完，有事才展开清单
+
+    三种形态刻意长得不一样：
+        0 条     -> 红色「0 条用例被执行」。套件加载失败、CASE 写错都会走到这里，
+                    当成「全部通过」发出去比红的还危险
+        全通过   -> 一行绿色结论 + 一行灰色尾注
+        有未通过 -> 结论行 + 编号清单
+    每天节奏一致，变红的位置才会被注意到；格式天天换，人就不看了。
+    """
+    rev = git_revision() or '版本未知'
+
+    if not counts['total']:
+        # 0 条时「跳过/重试」都是无意义数据（还可能带上一轮的残留），只报耗时和版本
+        return ['**{}** <font color="warning">**0 条用例被执行**</font> · 套件为空或 CASE 写错，不算通过'.format(app_info),
+                '<font color="comment">{} · {}</font>'.format(duration_text(elapsed), rev)]
+
+    tail = '<font color="comment">{}</font>'.format(' · '.join([
+        '跳过 {}'.format(counts['skip']),
+        retry_digits(test_result),
+        duration_text(elapsed),
+        rev,
+    ]))
+
+    if not (counts['fail'] or counts['error']):
+        # 不写「137 条全部通过」：137 里含 12 条跳过，写成全部通过就不准了
+        return ['**{}** <font color="info">通过 {}/{}</font>'.format(
+                    app_info, counts['pass'], counts['total']),
+                tail]
+
+    lines = ['**{}** 通过 {}/{} · <font color="warning">{} 失败 {} 异常</font>'.format(
+        app_info, counts['pass'], counts['total'], counts['fail'], counts['error']),
+        tail]
+    lines.extend(push_fail_lines(test_result))
+    return lines
+
+
+def notify(test_result, app_info, elapsed=0):
     """汇总执行结果：未通过清单完整写到控制台与 log/notPassCase.log
 
-    PUSH_WX=1 时再推一条企微消息：全通过只发计数，有失败/异常把清单附在同一条里。
+    PUSH_WX=1 时再推一条企微消息，形态见 push_message。
     """
     failures = test_result.failures
     errors = test_result.errors
@@ -117,22 +165,10 @@ def notify(test_result, app_info):
         print('企业微信推送已关闭（PUSH_WX=0），完整结果见上方输出与 log/notPassCase.log', flush=True)
         return counts
 
-    # 只推一条（超过企微单条上限才拆）：全通过时就是几行结果，有未通过时把清单
+    # 只推一条（超过企微单条上限才拆）：全通过时就是两行，有未通过时把编号清单
     # 附在后面。不再逐条发 icon —— 每条都会 @all，失败几条就刷几次屏，
     # 而清单本来就在这条消息里，提醒和内容分开反而是多一次打扰
-    lines = [
-        "**{}** 定时任务结果".format(app_info),
-        "总数 {}, 通过 {}, 失败 {}, 异常 {}, 跳过 {}".format(
-            counts['total'], pass_count, counts['fail'], counts['error'], counts['skip']),
-        retry_summary(test_result),
-        "代码: {}".format(git_revision() or '未知'),
-    ]
-    # 失败与异常全部列出；跳过的只在上面那行里给个数（已知下线，每天列一遍是噪音）
-    fail_text = fail_summary(test_result)
-    if fail_text:
-        lines.append(fail_text)
-    # 失败用例多时消息会超过企微单条上限，按字节拆成多条推送，避免结论被截断
-    push_lines(lines, app_info)
+    push_lines(push_message(counts, test_result, app_info, elapsed), app_info)
     return counts
 
 
@@ -149,7 +185,9 @@ def main(app_info):
         # console=False：否则会先给 caseResult.log 挂上控制台 handler，导致 notify 里同名的 console=False 失效
         Logs.get_log('caseResult.log', console=False).error('[{}] 刷新 token 失败: {}'.format(app_info, error))
 
+    started = time.time()
     test_result = AllTestRunner(verbosity=2).run(build_suite(app_info, CASE))
+    elapsed = time.time() - started
     # 重试后才通过的用例：最终状态是 PASS，但每条背后都是一次真实的断言失败。
     # 定时任务场景控制台没人看，所以完整清单落 log/retryCase.log，推送里只带一行摘要
     retry_text = retry_report(test_result)
@@ -161,7 +199,7 @@ def main(app_info):
     if retry_text:
         print(retry_text, flush=True)
         Logs.get_log('retryCase.log', console=False, back_count=30).info(retry_text)
-    return notify(test_result, app_info)
+    return notify(test_result, app_info, elapsed)
 
 
 def run(argv):
@@ -179,13 +217,18 @@ def run(argv):
         print('定时任务执行异常: {}: {}'.format(type(error).__name__, error), flush=True)
         Logs.get_log('runCode.log', console=False).error('定时任务执行异常\n' + traceback.format_exc())
         if PUSH_WX:
-            push_lines(['**{}** 定时任务执行异常'.format(app),
-                        '执行中断，本轮用例没有跑完：{}: {}'.format(type(error).__name__, error),
-                        '完整堆栈: log/runCode.log'], app)
+            push_lines(['**{}** <font color="warning">**执行中断**</font> · 本轮用例没有跑完，不能当成通过'.format(app),
+                        '<font color="comment">{}: {} · 完整堆栈 log/runCode.log</font>'.format(
+                            type(error).__name__, error)], app)
         return 2
     if counts is None:
         # parse_app 已经拦了错误参数，这里只防配置里的 App 名与支持列表不一致
         print('[{}] 不在支持列表，未执行'.format(app), flush=True)
+        return 2
+    if not counts['total']:
+        # 0 条用例不是「全部通过」：套件加载失败、CASE 过滤器写错、模块被注释掉都会
+        # 走到这里。退出码仍给 0 的话，cron 和群里看到的都是「没事」，比红的更危险
+        print('[{}] 本轮执行了 0 条用例，视为异常'.format(app), flush=True)
         return 2
     # 有失败/异常返回 1，便于 cron、调度平台或 cmd && 后续命令感知本轮失败
     return 1 if (counts['fail'] or counts['error']) else 0
