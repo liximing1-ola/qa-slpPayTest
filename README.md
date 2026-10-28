@@ -124,7 +124,7 @@ rm -f /tmp/slp_cron; crontab -l
 
 | 本轮结果 | 群里的消息 |
 |---|---|
-| 全部通过 | 一条：`总数 137, 通过 125, 失败 0, 异常 0, 跳过 12` + 重试摘要 + 代码版本（`master@b91b736`，运行时问 git，不读配置） |
+| 全部通过 | 一条：`总数 137, 通过 125, 失败 0, 异常 0, 跳过 12` + 重试摘要 + 代码版本（`lxm@b91b736`，运行时问 git，不读配置） |
 | 有失败/异常 | 同一条后面附完整清单（`[FAIL] 模块.类.方法 | 用例描述` + 一行原因） |
 | 执行中断 | 一条「执行异常」：用例没跑完，堆栈落 `log/runCode.log` |
 | 推送本身失败 | 只记日志不打退出码：网络抖动不该把「用例跑完了」说成「执行异常」 |
@@ -345,10 +345,17 @@ class TestPayCreate(unittest.TestCase):
 
 ## 提交约定
 
-- **分支：改动提交在 `lxm`，同时 fast-forward 同步一份到 `master`**。服务器定时任务拉的是 master，两条分支必须始终指向同一个提交：
+- **分支：改动都提交在 `lxm`，服务器定时任务也跟 `lxm`**
 
   ```bash
   git push origin lxm
+  ```
+
+  服务器工作副本就停在 `lxm` 上，cron 里的 `git pull` 拉的是当前分支的上游，不需要写分支名。
+
+  `master` 保留一份 fast-forward 快照（直接 clone 时默认分支就是最新的），两条分支永远指向同一个提交：
+
+  ```bash
   git checkout master
   git merge --ff-only lxm
   git push origin master
@@ -356,6 +363,9 @@ class TestPayCreate(unittest.TestCase):
   ```
 
   `--ff-only` 不是可选项：它拒掉任何合并提交，两条分支永远是同一条历史线。否则一旦 master 上多出一个 merge commit，同步就变成「两边各自长东西」，以后想合只能手工挑提交
+
+  只推 `lxm` 不影响定时任务，master 忘了同步也只是快照旧一点——把服务器指向开发分支，就是为了避免「代码推上去了但服务器还在另一个分支上等」这种静默偏差
+
 - 提交信息用中文写清「为什么改」，一次提交一件事
 - 用 `git add -u`（只暂存已跟踪文件）而不是 `git add -A`，别把临时脚本、日志、`.commit_msg.txt` 带进提交
 - 推送前跑一遍 `python pre_push_audit.py`（八类检查）：解析与 import、重构函数的分支覆盖、悬空调用、未用 import/零引用定义、账户读值写法、**验证强度**、**密钥泄露**。退出码非 0 就不要推

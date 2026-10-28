@@ -66,7 +66,7 @@ git --version
 
 ```bash
 cd /home/<user>/qa-slpPayTest
-git pull origin master
+git pull                 # 拉当前分支（lxm）的上游，不用写分支名
 pip3 install -r requirements.txt    # 依赖有变更时执行
 ```
 
@@ -175,7 +175,16 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
 
    - **用 `run_crontab_case.py` 不用 `run_all_case.py`**：前者专为定时任务，不逐条播报通过用例，只打汇总 + 未通过清单；137 条全量下来后者几千行，日志没法看
    - **每天先 `git pull --ff-only`**：不拉的话定时任务跑的永远是部署那天的代码，改过的用例根本不会生效。`--ff-only` 避免在服务器上产生合并提交；用 `;` 不用 `&&`，pull 失败也继续用现有代码跑，不把整条链断掉
-   - **服务器只需要跟 master**：开发分支是 `lxm`，每次提交都会 fast-forward 同步一份到 master（见 README 提交约定），所以这里不用加 `origin lxm`，也不用在服务器上切分支
+   - **服务器工作副本停在 `lxm`**：开发提交都在 lxm 上，cron 的 `git pull` 拉的是当前分支的上游，所以先把分支切过去：
+
+     ```bash
+     git fetch origin
+     git checkout -B lxm origin/lxm
+     git branch --set-upstream-to=origin/lxm lxm
+     git rev-parse --abbrev-ref HEAD      # 应为 lxm
+     ```
+
+     停在 master 上也能跑，但一旦某次只推了 lxm（master 忘了同步），服务器拉到的就是旧代码——这种偏差不会报错，只会安静地跑上一版
    - **日志按日期分文件**：`cron.log` 会无限增长，`$(date +\%F)` 一天一个（cron 里 `%` 必须转义成 `\%`）
    - **清理日志要放在最前面**：`{ }` 的退出码取块内最后一条命令，把 `find` 放在末尾会把 python 的退出码盖掉，cron 就永远收不到失败信号（MAILTO / 调度平台告警全失效）
    - **`find ... -mtime +30 -delete`**：只删 30 天前的，不会动当天正在写的文件
