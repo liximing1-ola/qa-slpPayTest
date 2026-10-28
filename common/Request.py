@@ -234,6 +234,10 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
         # elapsed.microseconds 只是秒以下的部分，total_seconds() 才是完整耗时
         'time_consuming': response.elapsed.total_seconds() * 1000,
         'time_total': response.elapsed.total_seconds(),
+        # 响应头带出来只为了排查：集群里某台实例异常时，「命中哪台」是唯一能从客户端
+        # 拿到的硬证据（8% 这种量级很接近 1/12，先看是不是集中在一台）。只记不判。
+        # getattr 兜底：自检/替代用的假响应不一定有 headers，不能因为缺这个字段就把用例搞红
+        'headers': dict(getattr(response, 'headers', None) or {}),
     }
     # 只记不判：让失败时的 log/failCase.log 能直接看到入参/响应，不用再复现一轮
     Scene.record_exchange(data, pay_uid, response.status_code, body)

@@ -27,6 +27,9 @@ class _FakeResponse(object):
         self._body = body
         self.status_code = code
         self.text = text if text is not None else str(body)
+        # 真响应一定有 headers，post_request_session 会把它带进 result 供排查用；
+        # 这里给一个带实例标识的假头，让自检也走一遍那条取值路径
+        self.headers = {'X-Backend-Server': 'fake-node-1', 'Content-Type': 'application/json'}
 
         class _Elapsed(object):
             @staticmethod

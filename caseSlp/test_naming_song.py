@@ -95,6 +95,30 @@ def snapshot_room(rid):
 		print('[room] {} {}'.format(rid, room_scene(rid)))
 
 
+# 响应头里可能指向后端实例的字段。集群里若有一台实例异常/版本旧，命中它就失败，
+# 而 8% 这个量级很接近 1/12（一台/十二台）——先看失败是不是集中在一个 IP 上。
+# 服务端日志拿不到时，这是客户端能自己拿到的硬证据
+NODE_HEADERS = ('server', 'via', 'x-backend-server', 'x-real-ip', 'x-upstream',
+				'x-request-id', 'x-trace-id', 'traceparent', 'x-server-id')
+
+
+def response_hint(res):
+	"""失败时客户端自己能拿到的两个线索：耗时 + 后端实例标识
+
+	耗时用来分开「校验不通过」和「超时/慢查询」：前者通常和成功请求一个量级，
+	后者会明显偏长（几秒）。不需要服务端配合就能判断。
+	"""
+	parts = ['耗时={}ms'.format(round(res.get('time_consuming') or 0))]
+	headers = res.get('headers') or {}
+	node = {k: v for k, v in headers.items() if k.lower() in NODE_HEADERS}
+	if node:
+		parts.append('后端={}'.format(node))
+	else:
+		# 响应头里没有任何实例标识也是结论：这条路查不下去，不必再来回试
+		parts.append('后端=(响应头里无实例标识)')
+	return ' '.join(parts)
+
+
 def post_pay(rid, data, des):
 	"""下单。命中「房间类型错误」时把房间现场写进失败原因再抛出。
 
@@ -109,8 +133,8 @@ def post_pay(rid, data, des):
 	if isinstance(body, dict) and body.get('msg') == ROOM_TYPE_ERROR:
 		# 带上整包：目前只有 success/msg，但万一服务端以后补上 trace/request id，
 		# 那才是能和服务端日志对上的东西，不用再改代码
-		detail = '{}：实际返回值 {}, 服务端整包 {}, 预期 任何非房间类错误（房间现场: {}）'.format(
-			reason(des, res), ROOM_TYPE_ERROR, body, room_scene(rid))
+		detail = '{}：实际返回值 {}, {}，服务端整包 {}, 预期 任何非房间类错误（房间现场: {}）'.format(
+			reason(des, res), ROOM_TYPE_ERROR, response_hint(res), body, room_scene(rid))
 		Consts.fail_case_reason.append(detail)
 		raise AssertionError(detail)
 	return res
