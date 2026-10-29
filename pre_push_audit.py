@@ -41,6 +41,7 @@ import io
 import os
 import re
 import string
+import subprocess
 import sys
 
 SELF = 'pre_push_audit.py'
@@ -691,8 +692,11 @@ ENV_PATTERNS = [
     # 具体账号下的家目录；/home/<user>/ 与 /home/$HOME/ 这类占位写法放过
     ('服务器家目录', re.compile(r'/home/(?!<|\$)[a-z_][a-z0-9_-]*/')),
 ]
-# 这两个文件天然写着地址样例或空值：本文件是规则本身，模板是给人看的占位符
-ENV_EXEMPT = {SELF, os.path.join('common', 'env_local.example.py')}
+# 这三个文件天然写着地址：本文件是规则本身，模板是占位符，env_local.py 就是存这些值的地方
+# 分隔符写死成 /：scanned 的 key 是统一用 / 拼的相对路径，用 os.path.join 在 Windows
+# 上会得到 common\env_local.py，豁免永远命中不上（而模板本身没内容，所以一直没暴露）
+LOCAL_ENV = 'common/env_local.py'
+ENV_EXEMPT = {SELF, 'common/env_local.example.py', LOCAL_ENV}
 env_hits = []
 for path, text in scanned.items():
     if path in ENV_EXEMPT:
@@ -705,6 +709,12 @@ print('    扫描 {} 个文件，疑似内网地址/环境标识 {} 处'.format(
     len(scanned) - len(ENV_EXEMPT & set(scanned)), len(env_hits)))
 if env_hits:
     fail('内网地址与环境标识不进仓库（走环境变量或 common/env_local.py）: {}'.format(env_hits))
+
+# 放行 env_local.py 的前提是它真的没被跟踪：一旦被 add 过，值就进了历史，
+# 之后删掉文件也回收不了——这类漏网比直接写死在源码里更难发现，所以单独查一次
+if subprocess.run(['git', 'ls-files', '--error-unmatch', LOCAL_ENV],
+                  capture_output=True).returncode == 0:
+    fail('{} 已被 git 跟踪，必须移出版本库：git rm --cached {}'.format(LOCAL_ENV, LOCAL_ENV))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)
