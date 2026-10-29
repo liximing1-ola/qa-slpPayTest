@@ -17,10 +17,10 @@ ASSERT_SLEEP = float(os.environ.get('ASSERT_SLEEP') or '0.3')
 WAIT_TIMEOUT = float(os.environ.get('WAIT_TIMEOUT') or '3')
 WAIT_INTERVAL = float(os.environ.get('WAIT_INTERVAL') or '0.2')
 # 同机房机器清单取 config.linux_node 里登记的所有测试机。
-# 原实现只比 linux_node['ali']（iZbp1fveowr7j693hrwb48Z），而实际执行机是 slp-dev（登记在
-# ali-slp/ali-xsg 下），于是「同机房免等待」这条分支从来没生效过：每轮白等约 50 秒，且没有任何
-# 输出会暴露这件事。判据是配置里已经写明的声明，不是猜的；机器名不认识时仍然等待（宁可慢，
-# 也不要在陌生环境里因为读得太早而红）。
+# 原实现只比 linux_node['ali'] 一个值，而实际执行机登记在 ali-slp/ali-xsg 下，于是
+# 「同机房免等待」这条分支从来没生效过：每轮白等约 50 秒，且没有任何输出会暴露这件事。
+# 判据是配置里已经写明的声明，不是猜的；机器名不认识时仍然等待（宁可慢，也不要在
+# 陌生环境里因为读得太早而红）。
 _SAME_IDC_NODES = set(node for node in config.linux_node.values() if node)
 _ON_SAME_IDC_NODE = platform.node() in _SAME_IDC_NODES
 # 兜底开关：去掉等待后若出现抖动，ASSERT_SETTLE=1 强制恢复补偿，不必改代码再回滚

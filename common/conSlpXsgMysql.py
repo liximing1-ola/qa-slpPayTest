@@ -1,6 +1,5 @@
 # coding=utf-8
 import ast
-import os
 import re
 import threading
 import time
@@ -8,6 +7,7 @@ import time
 import pymysql
 
 from common import Request
+from common.envLocal import get
 
 # 写库语句的起始关键字：先剥掉前导注释再判首 token，避免 "-- 清数据\nupdate ..." 这类写法漏判
 _WRITE_KEYWORDS = ('insert', 'update', 'delete', 'replace', 'truncate', 'alter', 'drop', 'create', 'set', 'call')
@@ -248,11 +248,12 @@ _ACCOUNT_CLEANUP_SQL = {
 
 class conMysql:
     db_config = {
-        # 测试库连接信息可用环境变量覆盖（DB_HOST / DB_USER / DB_PASS），换环境无需改代码
-        # "ali_db": '127.0.0.1',
-        "ali_db": os.environ.get('DB_HOST') or '192.168.1.24',
-        "ali_user": os.environ.get('DB_USER') or 'root',
-        "ali_pas": os.environ.get('DB_PASS') or 'root'
+        # 连接信息不进仓库：取环境变量 DB_HOST / DB_USER / DB_PASS，其次 common/env_local.py
+        # 都没配时落到 127.0.0.1 + 空账号，preflight 会直接报「未配置环境」，
+        # 而不是拿去连一个不存在的库、再吐一屏超时
+        "ali_db": get('DB_HOST') or '127.0.0.1',
+        "ali_user": get('DB_USER') or '',
+        "ali_pas": get('DB_PASS') or '',
     }
     _dbUrl = db_config['ali_db']
     _user = db_config['ali_user']

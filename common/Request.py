@@ -278,13 +278,3 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
             # 业务失败不入缓存：重试轮要重新发一次请求，而不是回放这份失败响应
             print('[重试] 下单未成功，本轮不缓存、重试时重新请求: {}'.format(body))
     return result
-
-
-if __name__ == '__main__':
-    header = {
-        'user-agent': 'Mozilla/5.0 (Linux; Android 11; CPH1969 Build/RP1A.200720.011; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/115.0.5790.138 Mobile Safari/537.36 / Xs android V5.0.31.0 / Js V1.0.0.0 / Login V1691131402',
-        'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8', 'Connection': 'close',
-        'user-token': 'a4d3klcO2pbZg0__2BvGlU7jGTRCAPyfVdQ7nySzDPs0PZEi7rbX8VC__2BZ0QoEz2auiTnhYEWu1kYG7s7F7G__2BinZ7ZIT9QxfQ2MFc0LrVe12GOBdiICefxz82aloSw'}
-    url = 'https://192.168.1.23/pay/create?package=com.yhl.sleepless.android'
-    data = 'platform=available&type=chat-gift&money=1000&params=%7B%22notify_group_id%22%3A0%2C%22to%22%3A%22105002312%22%2C%22giftId%22%3A5%2C%22giftNum%22%3A10%2C%22cid%22%3A0%2C%22ctype%22%3A%22%22%2C%22duction_money%22%3A0%2C%22version%22%3A2%2C%22num%22%3A10%2C%22gift_type%22%3A%22normal%22%2C%22star%22%3A0%2C%22show_pac_man_guide%22%3A1%2C%22all_mic%22%3A0%2C%22useCoin%22%3A-1%7D'
-    print(requests.post(url=url, data=data, headers=header, verify=False).json())

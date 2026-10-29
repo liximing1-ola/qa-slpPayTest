@@ -79,7 +79,7 @@ qa-slpPayTest/
 
 ### 本机只做静态检查（默认）
 
-本机不在测试环境内网（`192.168.1.0/24`），跑真实用例只会得到一屏「连不上库」的假失败——那既不是回归信号，也会把「真的全挂了」这个信号提前用掉。两个入口开跑前都会先探 MySQL / Redis / 支付接口，任一项不通就不执行任何用例、退出码 `3`，并把原因写进 `log/runCode.log`。
+本机不在测试环境内网，跑真实用例只会得到一屏「连不上库」的假失败——那既不是回归信号，也会把「真的全挂了」这个信号提前用掉。两个入口开跑前都会先探 MySQL / Redis / 支付接口，任一项不通就不执行任何用例、退出码 `3`，并把原因写进 `log/runCode.log`。
 
 所以本机的固定动作是这三条，全都不连服务端、不连库：
 
@@ -249,13 +249,31 @@ CASE=test_check python3 run_crontab_case.py slp
 
 ## 测试环境
 
-| 用途 | 地址 |
+| 用途 | 取哪个配置项 |
 |------|------|
-| API | `https://<api-host>/`（`common/Config.py` 的 `appInfo`） |
-| MySQL | `<db-host>:3306`，账号密码见 `common/Config.py`，可用 `DB_HOST` 等环境变量覆盖 |
-| Redis | `<db-host>:6379`，无密码，可用 `REDIS_HOST` / `REDIS_PORT` 覆盖 |
+| API | `APP_HOST`（`common/Config.py` 的 `appInfo` 由它派生） |
+| MySQL | `DB_HOST` / `DB_USER` / `DB_PASS` |
+| Redis | `REDIS_HOST` / `REDIS_PORT`（无密码） |
+| 同机房判定 | `NODE_ALI` / `NODE_ALI_SLP` / `NODE_ALI_XSG` |
 
-具体地址不写进文档，统一配在 `common/Config.py` 或上面那几个环境变量里（本文出现的 `<api-host>` / `<db-host>` 均为占位符）。
+**这些值一律不进仓库**，两条途径任选（环境变量优先级更高）：
+
+```bash
+# 1) 环境变量（适合 crontab 里 . /path/.slp_env 的方式）
+export DB_HOST=<db-host> DB_USER=<user> DB_PASS=<pass> \
+       REDIS_HOST=<redis-host> APP_HOST=https://<api-host> \
+       NODE_ALI_SLP=<执行机标识>
+
+# 2) 本机配置文件（建一次，之后自动读取）
+cp common/env_local.example.py common/env_local.py   # 然后填真实值
+```
+
+`common/env_local.py` 已在 `.gitignore` 里，不进提交、也不在 git 历史中。四项缺任何一项，
+`preflight` 直接报「配置 缺少 XXX」并给出上面两条途径，不会拿 `127.0.0.1` 去连、再吐一屏超时。
+
+> 以前这些值是硬编码在 `common/Config.py` / `conSlpXsgMysql.py` / `conRedis.py` 里的，
+> 测试库的 `root` 口令、内网地址、执行机实例 ID 都跟着进了 git 历史。现在代码里只剩
+> 读取逻辑，`pre_push_audit.py` 第 13 类会拦住重新写回硬编码地址的改动。
 
 slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（两个 App 各自的包名，见 `caseSlp/config.py` / `caseXsg/config.py`）。
 
@@ -280,10 +298,10 @@ slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（
 现在多探一项「数据」，查的是种子表里那批账号/房间/礼物/工会还在不在：
 
 ```
-[环境] OK    MySQL   192.168.1.24:3306 可读
+[环境] OK    MySQL   <db-host>:3306 可读
 [环境] OK    数据    账号/房间/礼物/工会 种子齐全
-[环境] OK    Redis   192.168.1.192:6379 可 ping
-[环境] OK    接口    https://192.168.1.23/ 可达（HTTP 200）
+[环境] OK    Redis   <redis-host>:6379 可 ping
+[环境] OK    接口    https://<api-host>/ 可达（HTTP 200）
 ```
 
 缺了就点名到具体 id，并直接指路，退出码 3（与用例失败 1、没跑完 2 区分）：

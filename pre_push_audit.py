@@ -376,10 +376,11 @@ SECRET_PATTERNS = [
     ('URL 内嵌凭据', re.compile(r'://[^/\s:@<>]+:[^@\s<>]{6,}@')),
     ('app_secret', re.compile(r'app_secret=(?!<)[A-Za-z0-9]{12,}')),
 ]
-# 扫 .py 之外也要扫 .md：写进文档的 key 同样泄露；但跳过本文件，它自己就写着这些规则
+# 扫 .py 之外也要扫 .md/.sh/.yml：写进文档、部署脚本或配置里的 key 同样泄露；
+# 但跳过本文件，它自己就写着这些规则
 scanned = {path: text for path, text in sources.items() if path != SELF}
 for name in sorted(os.listdir('.')):
-    if name.endswith('.md') and os.path.isfile(name):
+    if name.endswith(('.md', '.sh', '.yml', '.yaml')) and os.path.isfile(name):
         with io.open(name, encoding='utf-8', errors='replace') as handle:
             scanned[name] = handle.read()
 leaks = []
@@ -388,7 +389,7 @@ for path, text in scanned.items():
         for label, pattern in SECRET_PATTERNS:
             if pattern.search(line):
                 leaks.append('{}:{} {}'.format(path, lineno, label))
-print('    扫描 {} 个文件（.py + .md），疑似密钥 {} 处'.format(len(scanned), len(leaks)))
+print('    扫描 {} 个文件（.py + .md + .sh + .yml），疑似密钥 {} 处'.format(len(scanned), len(leaks)))
 if leaks:
     fail('发现疑似密钥（凭据只能走环境变量或本地凭据存储，不要写进仓库）: {}'.format(leaks))
 
@@ -672,6 +673,38 @@ for path, tree in trees.items():
 print('    占位符与实参不符: {} 处'.format(len(format_bad)))
 if format_bad:
     fail('format 占位符与实参个数不匹配（编译不报错，运行到直接 IndexError/KeyError）: {}'.format(format_bad))
+
+# ---------- 13. 内网地址与环境标识 ----------
+# 这些不是「秘密」意义上的凭据，但会直接画出内网拓扑和云资源归属：一个地址段够拼出网络图，
+# 一个实例 ID 能定位云主机，一个具体账号的家目录连执行身份都给了。和密钥一样，提交之后
+# 删文件也回收不了——历史里一直在。已清过一轮：Config 里的实例 ID、Mysql 里的 root 口令、
+# deploy.sh 里的部署路径与仓库地址，全部改成环境变量或 common/env_local.py。
+print('\n[13] 内网地址与环境标识（不进仓库）')
+ENV_PATTERNS = [
+    # 127.0.0.1 是公认占位（本仓库到处拿它当未配置时的兜底），不算内网泄露；只拦真正指向内网的段
+    ('内网 IPv4', re.compile(
+        r'\b192\.168\.\d{1,3}\.\d{1,3}\b'
+        r'|\b172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}\b'
+        r'|\b10\.(?:\d{1,3}\.){2}\d{1,3}\b')),
+    # 阿里云 ECS 实例 ID：iZ 开头接一长串，正常英文单词撞不上
+    ('云主机实例 ID', re.compile(r'\biZ[A-Za-z0-9]{12,}\b')),
+    # 具体账号下的家目录；/home/<user>/ 与 /home/$HOME/ 这类占位写法放过
+    ('服务器家目录', re.compile(r'/home/(?!<|\$)[a-z_][a-z0-9_-]*/')),
+]
+# 这两个文件天然写着地址样例或空值：本文件是规则本身，模板是给人看的占位符
+ENV_EXEMPT = {SELF, os.path.join('common', 'env_local.example.py')}
+env_hits = []
+for path, text in scanned.items():
+    if path in ENV_EXEMPT:
+        continue
+    for lineno, line in enumerate(text.splitlines(), 1):
+        for label, pattern in ENV_PATTERNS:
+            if pattern.search(line):
+                env_hits.append('{}:{} {}'.format(path, lineno, label))
+print('    扫描 {} 个文件，疑似内网地址/环境标识 {} 处'.format(
+    len(scanned) - len(ENV_EXEMPT & set(scanned)), len(env_hits)))
+if env_hits:
+    fail('内网地址与环境标识不进仓库（走环境变量或 common/env_local.py）: {}'.format(env_hits))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)

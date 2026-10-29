@@ -68,7 +68,7 @@ def get_test_token(*uids):
         raise ValueError("至少传入一个uid")
 
     token_map = {}
-    # 域名跟 common.Config 走，换测试环境不用改代码（这里原本写死了 192.168.1.23）
+    # 域名跟 common.Config 走，换测试环境不用改代码（这里原本写死了一个固定地址）
     url_template = config.appInfo['slp'] + 'test/userToken?uid={}'
     for uid in uids:
         url = url_template.format(uid)

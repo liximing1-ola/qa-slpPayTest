@@ -6,11 +6,14 @@
 
 set -e
 
-# ===== 配置区域（根据实际情况修改）=====
-PROJECT_DIR="/home/ecs-user/qa-slpPayTest"
-REPO_URL="https://github.com/liximing1-ola/qa-slpPayTest.git"
-BRANCH="master"
-# =======================================
+# ===== 配置区域（按实际环境用环境变量覆盖，不写进仓库）=====
+# 项目目录默认取脚本所在目录，换位置就设 PROJECT_DIR
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+# 只有首次 clone 才需要仓库地址，用 REPO_URL=<地址> bash deploy.sh 传入
+REPO_URL="${REPO_URL:-}"
+# 服务器跟踪的功能分支，master 只是快照
+BRANCH="${BRANCH:-lxm}"
+# ===================================================
 
 echo "=========================================="
 echo "  qa-slpPayTest 自动化部署脚本"
@@ -28,6 +31,11 @@ if [ -d "$PROJECT_DIR/.git" ]; then
     cd "$PROJECT_DIR"
     git pull origin $BRANCH
 else
+    [ -n "$REPO_URL" ] || {
+        echo "错误: 目录不存在且未设置 REPO_URL，无法克隆"
+        echo "用法: REPO_URL=<仓库地址> bash deploy.sh"
+        exit 1
+    }
     git clone "$REPO_URL" "$PROJECT_DIR"
     cd "$PROJECT_DIR"
 fi

@@ -362,6 +362,40 @@ def check_seed_checks_shape():
         assert '{}' not in filled, '{} 格式化后仍有未填的占位符'.format(name)
 
 
+def check_env_config_shape():
+    """本机环境配置的两条一致性：模板覆盖所需项、环境变量优先级最高
+
+    模板少一项，照着填的人也配不出这一项，然后 preflight 报「缺少 XXX」，
+    而人明明按模板填过了——这种自相矛盾最难查。
+    优先级反过来同样麻烦：env_local.py 盖过环境变量，运维在 crontab 里改的值就不生效了。
+    """
+    import ast
+    import os
+
+    from common import envLocal
+
+    template = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'env_local.example.py')
+    with open(template, encoding='utf-8') as handle:
+        tree = ast.parse(handle.read())
+    written = {node.targets[0].id for node in tree.body
+               if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)}
+    absent = [name for name in envLocal.REQUIRED if name not in written]
+    assert not absent, 'env_local.example.py 缺模板项：{}'.format(absent)
+
+    # 临时改一个环境变量，确认它盖过本地文件里的值；改完要原样还原，不能污染后续检查
+    probe = '__selfcheck_probe__'
+    old = os.environ.get('APP_HOST')
+    os.environ['APP_HOST'] = probe
+    try:
+        assert envLocal.get('APP_HOST') == probe, '环境变量没能盖过其它来源'
+        assert probe not in envLocal.missing(), '缺项判断没认环境变量'
+    finally:
+        if old is None:
+            del os.environ['APP_HOST']
+        else:
+            os.environ['APP_HOST'] = old
+
+
 def main():
     print('框架自检：频控退避（common.Request）')
     _check('命中频控后退避重试并拿到成功响应', check_frequent_retry_then_success)
@@ -384,6 +418,9 @@ def main():
 
     print('框架自检：环境种子清单（common.envData）')
     _check('清单结构合法、SQL 可填、无重复项', check_seed_checks_shape)
+
+    print('框架自检：本机环境配置（common.envLocal）')
+    _check('模板覆盖所需项、环境变量优先级最高', check_env_config_shape)
 
     if _FAILED:
         print('\n自检未通过 {} 项：{}'.format(len(_FAILED), '、'.join(_FAILED)))

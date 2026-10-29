@@ -5,8 +5,8 @@
 它不是回归信号，是噪音——而且比噪音更糟，因为「137 条全红」这个信号只能用一次，
 被一场连不上库的抖动用掉之后，真出事时没人会再当回事。
 
-四项探测互相独立，必须分别报：实测存在「接口能访问 192.168.1.23，但连不上
-192.168.1.24:3306」的情况。一个通了就当全通，等于把最容易坏的那条藏起来。
+四项探测互相独立，必须分别报：实测存在「接口能访问、但连不上数据库」的情况。
+一个通了就当全通，等于把最容易坏的那条藏起来。
 
 第四项查的是「种子数据还在不在」：连得上库不等于数据还在。账号被清时一百多条用例
 会集体变红，现象和服务器改坏了完全一样——不把这两种情况分开，排查方向从一开始就是错的。
@@ -31,6 +31,7 @@ from urllib3.exceptions import InsecureRequestWarning
 
 from common import Logs
 from common.Config import config
+from common.envLocal import missing
 
 # 自签证书的测试环境会刷一屏 InsecureRequestWarning，探测只关心可达性，关掉
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -160,6 +161,14 @@ def check_all(app_key, retries=3, interval=3, timeout=3, log=print):
     :param retries: 每项最多试几次；偶发抖动不该让当天整轮不跑
     :param interval: 重试间隔（秒）
     """
+    absent = missing()
+    if absent:
+        # 连接信息不在仓库里，缺了就先说缺什么：直接拿占位地址去连只会得到一屏超时，
+        # 让人误以为是环境坏了，而实际是没人建 common/env_local.py
+        return False, [{'name': '配置', 'ok': False,
+                        'detail': '缺少 {}；复制 common/env_local.example.py 为 '
+                                  'common/env_local.py 后填值，或直接设同名环境变量'.format(
+                                      '、'.join(absent))}]
     targets = [
         ('MySQL', lambda: check_mysql(timeout), retries),
         # 数据缺失不会靠重试长回来，只探一次，免得闸门平白多耗十几秒

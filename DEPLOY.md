@@ -10,11 +10,12 @@
 | 测试应用 | SLP / XSG |
 
 > 本文所有地址、路径、账号均为占位符（`<api-host>` / `<db-host>` / `<user>` 等），
-> 真实环境信息只配在 `common/Config.py` 与环境变量里，不写进文档。
+> 真实环境信息只配在 `common/env_local.py`（已在 .gitignore 里）或环境变量里，
+> 不写进文档、也不硬编码进代码。
 
 ---
 
-## 快速开始（3 步完成部署）
+## 快速开始（4 步完成部署）
 
 ### 第 1 步：登录服务器，拉取代码
 
@@ -31,7 +32,37 @@ pip3 install -r requirements.txt
 mkdir -p log
 ```
 
-### 第 3 步：执行测试
+### 第 3 步：配置环境信息（不做这步连不上任何服务）
+
+数据库地址、账号、接口域名、执行机标识都**不在仓库里**，两条途径任选一条：
+
+```bash
+# 方式 A：本机配置文件（建一次，手工执行也能用）
+cp common/env_local.example.py common/env_local.py
+vi common/env_local.py     # 填 DB_* / REDIS_HOST / APP_HOST / NODE_*
+
+# 方式 B：环境变量（crontab 走 . ~/.slp_env 时最省事，见下方定时任务一节）
+export DB_HOST=<db-host> DB_USER=<user> DB_PASS=<pass> \
+       REDIS_HOST=<redis-host> APP_HOST=https://<api-host> \
+       NODE_ALI_SLP=$(hostname)
+```
+
+验证是否配齐：
+
+```bash
+python3 -m common.preflight slp
+```
+
+四项全 `OK` 才能开跑。缺项会直接点名，不会拿 `127.0.0.1` 去连、再吐一屏超时：
+
+```
+[环境] FAIL  配置    缺少 DB_PASS；复制 common/env_local.example.py 为 common/env_local.py 后填值，或直接设同名环境变量
+```
+
+> `NODE_ALI_SLP` 填 `$(hostname)` 即可：它只用来判断「执行机是否与被测服务同机房」，
+> 同机房则状态码断言前免等待。不配也能跑，只是每轮白等约 50 秒。
+
+### 第 4 步：执行测试
 
 ```bash
 # 执行 SLP 测试
@@ -220,14 +251,20 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
    0 10 * * * . /home/<user>/.slp_env; cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
    ```
 
-   `~/.slp_env` 里只放一行 webhook（`chmod 600`）：
+   `~/.slp_env` 里放 webhook 和环境信息（`chmod 600`）：
 
    ```bash
    cat > /home/<user>/.slp_env <<'EOF'
    export WX_BOT_SLP='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>'
+   export DB_HOST=<db-host> DB_USER=<user> DB_PASS=<pass>
+   export REDIS_HOST=<redis-host> APP_HOST=https://<api-host>
+   export NODE_ALI_SLP=$(hostname)
    EOF
    chmod 600 /home/<user>/.slp_env
    ```
+
+   > 数据库与接口地址也放这里，cron 行开头 `. ~/.slp_env` 一引，连 `common/env_local.py`
+   > 都不用建。手工执行时没有这一行，所以两者至少配一处（见第 3 步）。
 
    几处不是随手写的：
 
@@ -249,6 +286,7 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
    - **`mkdir -p log` 必须在重定向之前**：`>> log/cron_x.log` 是 shell 在开始执行前打开的文件，目录不存在就直接报错，整条命令连 python 都不会起动
    - **`PUSH_WX=1` 写在 cron 行里，不写进代码默认值**：定时任务要推送，本地手工跑一轮不该往群里发测试消息；群里一个上午出现三四条「总数137，通过137」会让人很快就不看它了
    - **webhook key 放 `~/.slp_env` 而不是写进 cron 行**：crontab 是明文，能登这台机器的人 `crontab -l` 就看得见；key 拿到就能往群里发任意消息。600 权限的文件至少跟登录权限一个级别
+   - **数据库口令同理**：cron 的 shell 不带登录环境，`export` 在别处的变量它看不见；写进 crontab 行又等于把库口令贴在 `crontab -l` 里。两者都是把 `.slp_env` 引进来就解决了
    - **`. 文件;` 后面用分号不用 `&&`**：文件不在时 `&&` 会短路整条命令，连用例都不跑且不报错；分号则照常跑用例，只是不推送，日志里会写「未设置 WX_BOT_SLP」。宁可少一条推送，不能少跑一轮用例
    - **时间选 10:00**：全量约 5 分钟、会造数扣费，这个点有人在场，推出来的失败当天就能跟进；凌晨跑则等于把问题压到第二天
    - **服务器上不要手工改代码**：`git pull --ff-only` 遇到本地修改会直接拒绝，日志里会一直报 pull 失败，而用例跑的还是旧代码
