@@ -309,7 +309,10 @@ class TestConcurrentPay(unittest.TestCase):
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, price)
 
-        base = {name: self.wait_stable(lambda u=uid: read_sum_money(u)) for name, uid in parties}
+        # 三方基线逐个等静默：静默轮询在本次迭代内就跑完，闭包晚绑定不会串到下一方
+        base = {}
+        for name, uid in parties:
+            base[name] = self.wait_stable(lambda: read_sum_money(uid))
         probe_res = post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe)
         probe_kind = classify(probe_res)
         if probe_kind != 'success':
@@ -320,7 +323,7 @@ class TestConcurrentPay(unittest.TestCase):
 
         unit = {}
         for name, uid in parties:
-            unit[name] = self.wait_stable(lambda u=uid: read_sum_money(u)) - base[name]
+            unit[name] = self.wait_stable(lambda: read_sum_money(uid)) - base[name]
         if unit['主播'] <= 0:
             # 成交了却一直没到账：可能是结算慢于超时，也可能是真丢了。两者在读数上
             # 长得一样，不在这一层替服务端定罪，但必须说清本轮没测到
@@ -351,8 +354,9 @@ class TestConcurrentPay(unittest.TestCase):
         assert_between(success, 1, len(CONCURRENT_PAYERS))
         try:
             for name, uid in parties:
-                assert_equal_eventually(
-                    lambda u=uid, b=base[name], want=success * unit[name]: read_sum_money(u) - b, want)
+                baseline = base[name]
+                expect = success * unit[name]
+                assert_equal_eventually(lambda: read_sum_money(uid) - baseline, expect)
         finally:
             # 失败时这一行才是能定位的依据：差多少、差几笔、哪一方丢的，以及余额落在哪个渠道
             print('[并发-到账] 累计增量 {}，期望 {}；主播 uid={} 当前余额={} 全渠道={}'.format(
