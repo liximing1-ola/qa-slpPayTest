@@ -34,7 +34,8 @@ LOG_DIR = os.path.join(ROOT, 'log')
 def classify(code, output):
     """一轮的结论：红优先（有断言失败就是硬证据），其次未测到，最后才是绿
 
-    退出码 2/3 是「没跑完 / 环境不通」，不算任何一种业务结论，单列成无效。
+    退出码 2/3 是「没跑完 / 环境不通」，-1 是「本轮超时或被系统打断」，都不算业务
+    结论，单列成无效。
     """
     if code == 1:
         return 'red'
@@ -58,9 +59,15 @@ def run_round(case, stagger, timeout):
     env = dict(os.environ, PUSH_WX='0')
     if stagger is not None:
         env['STAGGER'] = str(stagger)
-    done = subprocess.run([sys.executable, '-m', 'unittest', case], cwd=ROOT, env=env,
-                          capture_output=True, text=True, encoding='utf-8',
-                          errors='ignore', timeout=timeout)
+    try:
+        done = subprocess.run([sys.executable, '-m', 'unittest', case], cwd=ROOT, env=env,
+                              capture_output=True, text=True, encoding='utf-8',
+                              errors='ignore', timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # 单轮卡死不能带走整批：前面几轮的结论已经到手，记一笔无效继续往下跑
+        return -1, '本轮超过 {} 秒未结束'.format(timeout)
+    except OSError as error:
+        return -1, '起不来子进程（{}）'.format(error)
     return done.returncode, (done.stdout or '') + (done.stderr or '')
 
 
