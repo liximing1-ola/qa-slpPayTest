@@ -29,6 +29,11 @@
 11. 调用点实参与签名：实参个数、关键字名是否还对得上函数定义
    —— 第 3 类只管「方法还在不在」，改了参数名却漏改调用点，方法还在、编译也过，
    要等跑到才 TypeError（重构公共助手时最常见）
+12. format 占位符与实参：`'{} {}'.format(a)` 少传一个，运行时 IndexError
+   —— 它如果发生在断言之前，用例报的是 ERROR 而不是真正的验证结果
+13. 内网地址与环境标识：内网 IP、云实例 ID、服务器家目录
+14. 「未测到」必须中止：打了 [未测到] 的函数必须在同一函数里抛 SkipTest
+   —— 只打印或直接 return，报告里仍然是一条「通过」
 
 用法：python pre_push_audit.py
 退出码：0 全部通过；1 有问题，逐条列在最后
@@ -596,17 +601,19 @@ for path in sorted(trees):
     for node in ast.walk(trees[path]):
         if not isinstance(node, ast.Call):
             continue
+        # 不能叫 target：那会把模块级的 target() 覆盖成最后一个函数对象，
+        # 后面任何一类再调 target(path) 就会去执行那个函数（第 14 类刚踩到）
         if isinstance(node.func, ast.Name) and node.func.id not in rebound:
-            target = repo_function(namespace.get(node.func.id))
+            resolved = repo_function(namespace.get(node.func.id))
             label = node.func.id
         elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) \
                 and node.func.value.id in ('mysql', 'conMysql', 'conRedis'):
             owner = namespace.get(node.func.value.id)
-            target = repo_function(getattr(owner, node.func.attr, None))
+            resolved = repo_function(getattr(owner, node.func.attr, None))
             label = '{}.{}'.format(node.func.value.id, node.func.attr)
         else:
             continue
-        if target is None:
+        if resolved is None:
             continue
         # *args / **kwargs 写法静态定不下来，交给运行期
         if any(isinstance(a, ast.Starred) for a in node.args):
@@ -617,7 +624,7 @@ for path in sorted(trees):
         args = [0] * len(node.args)
         kwargs = {kw.arg: 0 for kw in node.keywords}
         try:
-            inspect.signature(target).bind_partial(*args, **kwargs)
+            inspect.signature(resolved).bind_partial(*args, **kwargs)
         except TypeError as error:
             signature_bad.append('{}:{} {} -> {}'.format(path, node.lineno, label, error))
 print('    可校验调用 {} 处，实参与签名不符 {} 处'.format(signature_calls, len(signature_bad)))
@@ -715,6 +722,44 @@ if env_hits:
 if subprocess.run(['git', 'ls-files', '--error-unmatch', LOCAL_ENV],
                   capture_output=True).returncode == 0:
     fail('{} 已被 git 跟踪，必须移出版本库：git rm --cached {}'.format(LOCAL_ENV, LOCAL_ENV))
+
+# ---------- 14. 「未测到」必须中止 ----------
+# 同一个坑踩过三次：用例判定「本轮没测到」之后只 print 一句就继续往下跑（最早甚至是
+# 直接 return），报告里看到的是一条「通过」，cron 一路绿着而这条用例其实什么都没验。
+# 所以把「打印未测到」和「必须中止」绑成静态规则：打了 [未测到] 的函数，必须在同一个
+# 函数里抛 SkipTest。
+# 只看 print：batch_flows 的 AssertionError 文案里也有「未测到」三个字，那是在向看日志的
+# 人解释「这不是未测到」，不属于「本轮放行」。
+print('\n[14] 「未测到」必须中止（不许只打印）')
+silent_skip = []
+untested_prints = 0
+for path, tree in trees.items():
+    rel = target(path)
+    if rel.split('/')[0] not in CASE_PACKAGES or not os.path.basename(rel).startswith('test_'):
+        continue
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        # 不能只看 print 的直接实参：用例几乎都写成 print('[未测到] ...'.format(x))，
+        # 字符串藏在 .format 的接收者里，直接实参位置上是 Call 而不是 Constant
+        said = [inner.lineno for inner in ast.walk(node)
+                if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name)
+                and inner.func.id == 'print'
+                and any(isinstance(sub, ast.Constant) and isinstance(sub.value, str)
+                        and '未测到' in sub.value for sub in ast.walk(inner))]
+        if not said:
+            continue
+        untested_prints += len(said)
+        stops = [inner for inner in ast.walk(node) if isinstance(inner, ast.Raise)
+                 and isinstance(inner.exc, ast.Call)
+                 and getattr(inner.exc.func, 'attr', '') == 'SkipTest']
+        if not stops:
+            silent_skip.append('{}:{} {}（第 {} 行打了未测到）'.format(
+                rel, node.lineno, node.name, said[0]))
+print('    [未测到] 打印 {} 处，缺少 SkipTest 的函数 {} 个'.format(
+    untested_prints, len(silent_skip)))
+if silent_skip:
+    fail('打印了「未测到」却没抛 SkipTest，报告里会算成通过: {}'.format(silent_skip))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)

@@ -226,12 +226,17 @@ class TestConcurrentPay(unittest.TestCase):
         print('[并发-同账号] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
             len(broken), bodies), flush=True)
-        if kinds.count('limited') >= 1 or kinds.count('success') == 0:
-            # 被限流挡下的那一笔根本没走到余额校验，守恒式两侧一起缩小，绿得毫无意义
-            print('[并发-同账号][未测到] 有 {} 笔被限流挡下，第二笔没走到余额校验，本轮结论无效；'
-                  '可试 STAGGER=0.2 错峰重跑'.format(kinds.count('limited')), flush=True)
-
         assert_equal(broken, [])
+        if kinds.count('limited') >= 1 or kinds.count('success') == 0:
+            # 被限流挡下的那一笔根本没走到余额校验，守恒式两侧一起缩小，绿得毫无意义。
+            # 这里必须抛 SkipTest 而不是只打印：只打印在报告里仍然是一条「通过」，
+            # 看报告的人不知道这一轮其实什么都没测到。
+            print('[并发-同账号][未测到] 成功 {} 笔、频控 {} 笔：第二笔没走到余额校验，本轮结论无效；'
+                  '可试 STAGGER=0.2 错峰重跑'.format(
+                      kinds.count('success'), kinds.count('limited')), flush=True)
+            raise unittest.SkipTest('第二笔没走到余额校验（成功 {} 笔、频控 {} 笔），本轮没验并发窗口'.format(
+                kinds.count('success'), kinds.count('limited')))
+
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
@@ -304,11 +309,15 @@ class TestConcurrentPay(unittest.TestCase):
         print('[并发-自刷] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
             len(broken), bodies), flush=True)
-        if kinds.count('limited') >= 1 or kinds.count('success') == 0:
-            print('[并发-自刷][未测到] 有 {} 笔被限流挡下，第二笔没走到余额校验，本轮结论无效；'
-                  '可试 STAGGER=0.2 错峰重跑'.format(kinds.count('limited')), flush=True)
-
         assert_equal(broken, [])
+        if kinds.count('limited') >= 1 or kinds.count('success') == 0:
+            # 同 test_002：只打印等于「通过」，必须让报告里能看见这一条没验到
+            print('[并发-自刷][未测到] 成功 {} 笔、频控 {} 笔：第二笔没走到余额校验，本轮结论无效；'
+                  '可试 STAGGER=0.2 错峰重跑'.format(
+                      kinds.count('success'), kinds.count('limited')), flush=True)
+            raise unittest.SkipTest('第二笔没走到余额校验（成功 {} 笔、频控 {} 笔），本轮没验自刷分支'.format(
+                kinds.count('success'), kinds.count('limited')))
+
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
     def test_005(self, des='四账号并发打赏同一主播: 分成流水按成功笔数放大, 收款人由单笔探针实测'):
@@ -341,13 +350,15 @@ class TestConcurrentPay(unittest.TestCase):
         probe_kind = classify(
             post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe))
         if probe_kind != 'success':
+            # SkipTest 而不是 return：return 在报告里就是一条「通过」，cron 绿着但什么都没验。
+            # skip 会进计数，干净后一眼能看到本轮有几条没测到。
             print('[并发-流水][未测到] 单笔探针没成交（{}），本次结论无效；可稍后重跑'.format(
                 probe_kind), flush=True)
-            return
+            raise unittest.SkipTest('探针未成交（{}），本轮没做流水对账'.format(probe_kind))
         income_probe, pay_probe, note = self.batch_flows(mark, gid, (ANCHOR_UID, probe))
         if note:
             print('[并发-流水][未测到] {}；本轮没有对账，别当成通过'.format(note), flush=True)
-            return
+            raise unittest.SkipTest('流水筛选失效，本轮没做对账：{}'.format(note))
         if not income_probe:
             # 有付款流水、一条收款行都没有：这笔钱没人收，后面的「空 == 空」会全绿过去
             raise AssertionError(
@@ -385,16 +396,23 @@ class TestConcurrentPay(unittest.TestCase):
             # 探针那笔没有付款行就说明付款流水不带 gid，框不出本批，只能明说没验
             if pay_probe:
                 assert_equal(len(pay_batch), len(pay_probe) * success)
+                # 行数对上还得金额对上：一行 100 记成 1，行数一模一样，钱却漏了。
+                # 期望值按探针实测放大，不写死单价（厅配置变了单价也会变）
+                assert_equal(sum(int(row['money'] or 0) for row in pay_batch),
+                             sum(int(row['money'] or 0) for row in pay_probe) * success)
             else:
                 print('[并发-流水][注意] 探针那笔查不到付款流水（可能不带 gid），'
                       '本轮只验了收款侧', flush=True)
         finally:
             # 失败时这一行才是能定位的依据：哪条写路径少了、少了多少
-            print('[并发-流水] 并发流水 {}，期望 {}；付款行 {}（期望 {}）；响应 {}'.format(
+            print('[并发-流水] 并发流水 {}，期望 {}；付款行 {}（期望 {}，金额 {} 元，期望 {} 元）；响应 {}'.format(
                 flow_text(income_batch),
                 flow_text({key: (count * success, amount * success)
                            for key, (count, amount) in income_probe.items()}),
-                len(pay_batch), len(pay_probe) * success if pay_probe else '未测', kinds), flush=True)
+                len(pay_batch), len(pay_probe) * success if pay_probe else '未测',
+                sum(int(row['money'] or 0) for row in pay_batch),
+                sum(int(row['money'] or 0) for row in pay_probe) * success if pay_probe else '未测',
+                kinds), flush=True)
 
         # 余额粗校验：主播不是付款方，流水记多少钱包就该涨多少
         anchor_income = sum(amount for (uid, _), (_, amount) in income_probe.items()
@@ -455,5 +473,8 @@ class TestConcurrentPay(unittest.TestCase):
             print('[并发-零余额][注意] {}；本轮只验了扣款侧'.format(note), flush=True)
         else:
             assert_equal(len(pay_batch), success)
-            print('[并发-零余额] 付款流水 {} 行（成交 {} 笔），收款流水 {}；被拒账号={}'.format(
-                len(pay_batch), success, flow_text(income_batch), broke), flush=True)
+            # 行数对了金额还得对：拒单那一笔若留下了「0 元付款行」，行数看不出来、钱却动了
+            assert_equal(sum(int(row['money'] or 0) for row in pay_batch), price * success)
+            print('[并发-零余额] 付款流水 {} 行共 {} 元（成交 {} 笔，期望 {} 元），收款流水 {}；被拒账号={}'.format(
+                len(pay_batch), sum(int(row['money'] or 0) for row in pay_batch), success,
+                price * success, flow_text(income_batch), broke), flush=True)

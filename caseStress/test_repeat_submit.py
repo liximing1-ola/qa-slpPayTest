@@ -56,6 +56,14 @@ class TestRepeatSubmit(unittest.TestCase):
         # 余额不得为负：扣的钱比单笔多又不报错，就是超扣
         assert_between(left, 0, before)
 
+        if kinds.count('success') == 0:
+            # 三次全被拒时「扣款 0 == 期望 0」是自己和自己对账，重发这条路根本没跑过。
+            # 只打印或直接 return 在报告里都是一条「通过」，所以抛 SkipTest 让它进计数。
+            print('[重复提交][未测到] {} 次提交无一成交（频控 {} 笔，拒绝 {} 笔），'
+                  '重发路径没走到，本轮结论无效'.format(
+                      REPEAT_TIMES, kinds.count('limited'), kinds.count('rejected')), flush=True)
+            raise unittest.SkipTest('{} 次提交无一成交，本轮没验到重发行为'.format(REPEAT_TIMES))
+
         # 接口没有幂等键（请求体只有 sign + 业务字段），「重复提交几次算正常」属产品口径。
         # 口径确定前只显著记录现状、不判红——但成交笔数 > 1 时必须让它可见：
         # 客户端只要存在超时重发，这就是重复扣费。
