@@ -40,7 +40,7 @@ qa-slpPayTest/
 ├── run_stress_case.py     # 并发与幂等入口：上线前跑一轮，不进日常回归
 ├── Robot.py               # 结果通知：企业微信群机器人 webhook
 ├── autoGitPull.py         # 分支检查 + 记录上次执行时间
-├── pre_push_audit.py      # 推送前全仓审查（十一类）
+├── pre_push_audit.py      # 推送前全仓审查（十二类）
 ├── deploy.sh              # 云服务器一键部署
 ├── caseSlp/               # SLP 用例
 │   ├── config.py          # 账号、房间、礼物、倍数等测试数据
@@ -83,7 +83,7 @@ qa-slpPayTest/
 ```bash
 python -m compileall -q caseSlp caseXsg caseStress common   # 语法能否解析
 python -m common.selfcheck                       # 框架守卫逻辑（频控退避 / 失败现场 / 轮询读值）
-python pre_push_audit.py                         # 全仓审查（十一类）
+python pre_push_audit.py                         # 全仓审查（十二类）
 ```
 
 真实执行在服务器上：`git pull --ff-only` 之后跑 `run_all_case.py` 或 `run_crontab_case.py`。只想看体检结果：`python -m common.preflight slp`（不可用时退出码同为 `3`）。
@@ -433,7 +433,7 @@ class TestPayCreate(unittest.TestCase):
 
 - 提交信息用中文写清「为什么改」，一次提交一件事
 - 用 `git add -u`（只暂存已跟踪文件）而不是 `git add -A`，别把临时脚本、日志、`.commit_msg.txt` 带进提交
-- 推送前跑一遍 `python pre_push_audit.py`（十一类检查）：解析与 import、重构函数的分支覆盖、悬空调用、未用 import、零引用定义、账户读值写法、**验证强度**、**密钥泄露**、**场景族登记**、**未定义名字**、**调用点实参与签名**。退出码非 0 就不要推
+- 推送前跑一遍 `python pre_push_audit.py`（十二类检查）：解析与 import、重构函数的分支覆盖、悬空调用、未用 import、零引用定义、账户读值写法、**验证强度**、**密钥泄露**、**场景族登记**、**未定义名字**、**调用点实参与签名**、**format 占位符与实参**。退出码非 0 就不要推
 - `compileall` 只查语法：删掉 `import time` 后留着 `time.sleep(...)` 依然编译通过，要等服务器真跑到那行才 NameError；若那行在 skip 用例或异常分支里，可能好几轮都碰不到。审计第 10 类用作用域分析拦住这类名字（包含推导式变量、闭包、解包、`from X import *`）
 - 改了公共助手（`common/tools.py` / `common/Assert.py` / `conMysql` 方法）的参数名或位置，漏改调用点不会报错，只在跑到那行时 TypeError。审计第 11 类拿真实函数签名的 `bind_partial` 校验全仓 case 里的 2700+ 处调用（只查 `*args`/`**kwargs` 下定不下来的除外）
 - 新增用例文件时在 `common/case_groups.py` 里登记场景族：漏登记不会报错，只会让这一类悄悄归到「未分组」、从按场景族的统计里消失——比没有统计更糟，因为看的人会以为「这类没问题」。审计第 9 类会拦住

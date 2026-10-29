@@ -25,15 +25,20 @@ def is_success(res):
 
 
 def classify(res):
-    """响应分成 成功 / 频控 / 其它异常
+    """响应分成 成功 / 频控 / 业务拒绝 / 服务端异常
 
-    只有「其它异常」才是服务端 bug。频控是并发压在同一个 App 或同一个 IP 上的
-    正常反馈，必须单独计数——它既不能混进失败被当成支付 bug，也不能被悄悄忽略，
-    因为限流笔数决定了这一轮结果可不可信。
+    并发场景下必须把「业务拒绝」与「服务端异常」分开：余额不足、防重、频控都会返回
+    code=200 + success=False，它们是正常反馈，不能算 bug；真正能证明有问题的是
+    「钱与响应对不上」（由守恒断言抓）和「服务端异常」（HTTP 非 200、空 body、没有 msg）。
+    统一个「失败」只会把两者混在一起，要么放过真异常，要么把正常拒绝报成 bug。
+    服务端拒绝时 msg 可能为空（实测同账号并发第二笔就是空 msg），不能靠 msg 判有无。
     """
     if is_success(res):
         return 'success'
-    msg = str((res.get('body') or {}).get('msg', ''))
+    body = res.get('body')
+    msg = str(body.get('msg', '')) if isinstance(body, dict) else ''
     if any(keyword in msg for keyword in FREQUENT_MSG_KEYWORDS):
         return 'limited'
-    return 'broken'
+    if res.get('code') != 200 or not isinstance(body, dict) or res.get('error'):
+        return 'broken'
+    return 'rejected'

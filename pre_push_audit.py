@@ -40,6 +40,7 @@ import inspect
 import io
 import os
 import re
+import string
 import sys
 
 SELF = 'pre_push_audit.py'
@@ -620,6 +621,57 @@ for path in sorted(trees):
 print('    可校验调用 {} 处，实参与签名不符 {} 处'.format(signature_calls, len(signature_bad)))
 if signature_bad:
     fail('调用点实参与函数签名不符（编译不报错，运行到才 TypeError）: {}'.format(signature_bad))
+
+# ---------- 12. format 占位符与实参 ----------
+# 编译不报错、前十一类也抓不到：写 print('{} {}'.format(a)) 就是运行时 IndexError。
+# 它发生在断言之前时，那条用例报的是 ERROR 而不是真正的验证结果（并发用例就这么翻过车），
+# 所以这里按字面量占位符个数静态对一遍。
+print('\n[12] format 占位符与实参')
+format_bad = []
+for path, tree in trees.items():
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == 'format'):
+            continue
+        literal = node.func.value
+        if not (isinstance(literal, ast.Constant) and isinstance(literal.value, str)):
+            continue
+        # *args / **kwargs 静态定不下来，交给运行期
+        if any(isinstance(arg, ast.Starred) for arg in node.args):
+            continue
+        if any(keyword.arg is None for keyword in node.keywords):
+            continue
+        try:
+            slots = list(string.Formatter().parse(literal.value))
+        except ValueError as error:
+            format_bad.append('{}:{} 占位符写法非法: {}'.format(path, node.lineno, error))
+            continue
+        auto, indexes, names = 0, set(), set()
+        for _, field, _, _ in slots:
+            if field is None:
+                continue
+            base = field.split('[')[0].split('.')[0]
+            if base == '':
+                auto += 1
+            elif base.isdigit():
+                indexes.add(int(base))
+            else:
+                names.add(base)
+        where = '{}:{}'.format(path, node.lineno)
+        if auto and (indexes or names):
+            format_bad.append('{} 自动编号与手动编号混用'.format(where))
+        elif auto and len(node.args) < auto:
+            format_bad.append('{} 占位符 {} 个，位置实参只有 {} 个'.format(where, auto, len(node.args)))
+        elif not auto and indexes and max(indexes) >= len(node.args):
+            format_bad.append('{} 用到第 {} 个位置实参，但只有 {} 个'.format(
+                where, max(indexes), len(node.args)))
+        elif not auto:
+            missing = names - {keyword.arg for keyword in node.keywords}
+            if missing:
+                format_bad.append('{} 缺少关键字实参 {}'.format(where, sorted(missing)))
+print('    占位符与实参不符: {} 处'.format(len(format_bad)))
+if format_bad:
+    fail('format 占位符与实参个数不匹配（编译不报错，运行到直接 IndexError/KeyError）: {}'.format(format_bad))
 
 # ---------- 结论 ----------
 print('\n' + '=' * 60)

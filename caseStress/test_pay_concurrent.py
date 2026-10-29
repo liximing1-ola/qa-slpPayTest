@@ -93,15 +93,17 @@ class TestConcurrentPay(unittest.TestCase):
         outcome = {uid: (classify(res), res) for uid, res in results}
         success = [uid for uid in CONCURRENT_PAYERS if outcome[uid][0] == 'success']
         limited = [uid for uid in CONCURRENT_PAYERS if outcome[uid][0] == 'limited']
+        rejected = [(uid, outcome[uid][1].get('body')) for uid in CONCURRENT_PAYERS
+                    if outcome[uid][0] == 'rejected']
         broken = [(uid, outcome[uid][1]) for uid in CONCURRENT_PAYERS if outcome[uid][0] == 'broken']
-        print('[并发] 成功 {} 笔 {}，频控 {} 笔 {}，异常 {} 笔'.format(
-            len(success), success, len(limited), limited), flush=True)
+        print('[并发] 成功 {} 笔 {}，频控 {} 笔 {}，业务拒绝 {} 笔 {}，服务端异常 {} 笔'.format(
+            len(success), success, len(limited), limited, len(rejected), rejected, len(broken)), flush=True)
         for uid, res in broken:
             print('[并发][服务端异常] uid={} 响应={}'.format(uid, res), flush=True)
 
-        # 非频控类的失败一律不接受：那是服务端问题，不能算成「并发正常拒绝」
+        # 服务端异常不接受：HTTP 非 200 / 空 body / 请求层抛错，那是真问题
         assert_equal(broken, [])
-        # 全被频控等于什么都没测到，必须有实际成交；上界就是并发人数
+        # 全部被拒等于什么都没测到，至少得有一笔成交；上界就是并发人数
         assert_between(len(success), 1, len(CONCURRENT_PAYERS))
         for uid in CONCURRENT_PAYERS:
             self.assert_conserved(uid, before[uid], 1 if uid in success else 0, price,
@@ -117,8 +119,9 @@ class TestConcurrentPay(unittest.TestCase):
         kinds = [classify(res) for _, res in results]
         bodies = [res.get('body') for _, res in results]
         broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
-        print('[并发-同账号] 成功 {} 笔，频控 {} 笔，异常 {} 笔，响应 {}'.format(
-            kinds.count('success'), kinds.count('limited'), len(broken), bodies), flush=True)
+        print('[并发-同账号] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
+            kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
+            len(broken), bodies), flush=True)
 
         assert_equal(broken, [])
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
