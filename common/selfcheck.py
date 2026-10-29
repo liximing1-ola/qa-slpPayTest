@@ -510,6 +510,15 @@ def check_flow_wait_stable():
         assert len(rows) == 3, '等不到时应把已有结果交回，实际 {}'.format(rows)
         assert waited >= 0.4, '等不到时应到超时才返回，实际 {:.2f}s'.format(waited)
 
+        # 自刷分支只看自己那个账号的行：上一条用例跳过时没等流水落库，别人晚到的
+        # 两行会被当成「自己这一笔写了两条写路径」，期望值凭空变大（2026-10-29 真机踩过）
+        mixed = [{'uid': 1}, {'uid': 9}, {'uid': 9}]
+        rounds[:] = [mixed] * 10
+        tools.read_gift_flows = staged
+        rows = tools.wait_flows_stable(0, 69, least=1, quiet=2, keep_uid=1)
+        assert [row['uid'] for row in rows] == [1], \
+            'keep_uid 要滤掉别的账号晚到的行，实际 {}'.format(rows)
+
         tools.read_gift_flows = lambda after_id, gid: []
         started = time.time()
         rows = tools.wait_flows_stable(0, 69, least=1)
@@ -518,6 +527,52 @@ def check_flow_wait_stable():
         assert waited >= 0.4, '应在超时后才返回，实际 {:.2f}s'.format(waited)
     finally:
         tools.read_gift_flows = old_read
+        tools.WAIT_TIMEOUT = old_timeout
+        tools.WAIT_INTERVAL = old_interval
+
+
+def check_flow_quiet():
+    """取水位线之前要先等流水表安静：上一条用例跳过时不会等自己那批落库
+
+    代价实例：test_003 因频控未测到直接 SkipTest，紧接着 test_004 的探针一取水位线，
+    就把上一条还在异步写的两行 consume 算成了自己的写路径，期望值凭空多两条——
+    一条本该绿的用例红了，红的还是自己的量法。
+    """
+    from caseStress import tools
+
+    old_max = tools.max_pay_change_id
+    old_timeout = tools.WAIT_TIMEOUT
+    old_interval = tools.WAIT_INTERVAL
+    try:
+        tools.WAIT_TIMEOUT = 0.5
+        tools.WAIT_INTERVAL = 0.01
+
+        # 安静之后又来了一行：不能在第一段安静时就收手，否则水位线定在旧值上，
+        # 跑起来最后还是会把那一行算到自己头上
+        ids = [5, 5, 9, 9, 9, 9]
+
+        def staged():
+            return ids.pop(0) if ids else 9
+
+        tools.max_pay_change_id = staged
+        got = tools.wait_flow_quiet(quiet=3)
+        assert got == 9, '安静之后又有新行时不能就此收手，实际停在 {}'.format(got)
+
+        # 结算一直不落：不能在这里死等，超时就把当前值交回，该红的事交给断言
+        counter = [0]
+
+        def growing():
+            counter[0] += 1
+            return counter[0]
+
+        tools.max_pay_change_id = growing
+        started = time.time()
+        got = tools.wait_flow_quiet(quiet=3)
+        waited = time.time() - started
+        assert got > 0, '超时后应把当前最大 id 交回'
+        assert waited >= 0.4, '一直不安静时应到超时才返回，实际 {:.2f}s'.format(waited)
+    finally:
+        tools.max_pay_change_id = old_max
         tools.WAIT_TIMEOUT = old_timeout
         tools.WAIT_INTERVAL = old_interval
 
@@ -810,6 +865,7 @@ def main():
     print('框架自检：并发用例工具（caseStress.tools）')
     _check('流水聚合：付款与收款分开、同人同 op 合并', check_flow_split)
     _check('等流水：条数稳定才返回、没流水时超时带回空', check_flow_wait_stable)
+    _check('取水位线前先等流水安静：别人的行不算自己的', check_flow_quiet)
     _check('分成放大：多写一行、少一条写路径都能比出来', check_income_scaled)
     _check('同账号重复提交：全被频控挡下要认成未测到', check_window_tested)
     _check('自刷分桶：付款方就是收款人，分成多发一份也比得出来', check_self_pay_buckets)

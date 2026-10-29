@@ -83,7 +83,7 @@ def read_flows_by_uid(after_id, uid):
     return mysql.selectRawDict(sql)
 
 
-def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=()):
+def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=(), keep_uid=None):
     """等这批流水写完：至少读到 least 行，且连续 quiet 次读到的条数不再变化
 
     不用「读到 least 行就返回」：一笔订单写几行取决于分成配置（只给主播是 1 行，
@@ -98,6 +98,12 @@ def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=()):
     「4 笔分成都到了、付款行只到 3 行」，然后行数静默了整整 0.6 秒，读的人以为
     写完了。传了它多个下界：这些账号各自至少一行，否则继续等（到超时为止）。
     只延长等待，不放宽断言：超时仍未覆盖，就是调用方那些断言要红的事。
+
+    keep_uid：只看某一个账号的行（自刷分支）。自刷时这一批里只有这一个账号下单，
+    别的账号的行只可能是**别的批次晚到**的：2026-10-29 真机撞上——test_003 频控未测到
+    直接 SkipTest、没等自己那 8 笔落库，紧接着 test_004 的探针一取水位线，就把
+    200250759 / 200252072 的 consume 行当成了自己这一笔的写路径，期望值凭空多两条。
+    行数下界（least）也应按过滤后的行算，否则别人晚到的行会让它提前返回。
     """
     deadline = time.time() + WAIT_TIMEOUT
     last = -1
@@ -105,6 +111,8 @@ def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=()):
     expected = set(int(uid) for uid in await_uids)
     while True:
         rows = read_gift_flows(after_id, gid)
+        if keep_uid is not None:
+            rows = [row for row in rows if int(row['uid']) == int(keep_uid)]
         covered = set(int(row['uid']) for row in rows)
         # 覆盖度变化必然带来行数变化，所以只靠行数判静默就够；
         # 覆盖度单独作为「还不能返回」的条件
@@ -114,6 +122,28 @@ def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=()):
             return rows
         if time.time() >= deadline:
             return rows
+        time.sleep(WAIT_INTERVAL)
+
+
+def wait_flow_quiet(quiet=5):
+    """等流水表安静下来（最大 id 连续 quiet 次不变）再取水位线
+
+    为什么需要：因「未测到」而 SkipTest 的用例**不等自己那批流水落库**。紧接着跑的下一条
+    一取水位线，就会把上一条还在异步写的行当成自己的：2026-10-29 真机撞上——test_003
+    频控未测到直接跳，test_004 的探针凭空多出 200250759 / 200252072 两条 consume，
+    期望值多两条，红得毫无道理。这一步不宽不放任何断言，只是不把别人的行当自己的。
+
+    超时也返回：结算真卡住时不能在这里无限等，该红的事交给调用方的断言。
+    """
+    deadline = time.time() + WAIT_TIMEOUT
+    last = -1
+    same = 0
+    while True:
+        now = max_pay_change_id()
+        same = same + 1 if now == last else 0
+        last = now
+        if same >= quiet or time.time() >= deadline:
+            return now
         time.sleep(WAIT_INTERVAL)
 
 

@@ -17,7 +17,8 @@ from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWN
                                ROOM_RID, pay_url)
 from caseStress.tools import (classify, concurrent_window_tested, expected_rows, flows_by_key,
                               max_pay_change_id, read_flows_by_uid, read_money, read_total_money,
-                              read_wallets, reset_payer, scale_income, split_flows, wait_flows_stable)
+                              read_wallets, reset_payer, scale_income, split_flows, wait_flow_quiet,
+                              wait_flows_stable)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
@@ -196,6 +197,9 @@ class TestConcurrentPay(unittest.TestCase):
         kind 不是 'success' 时 income/pay 都是空的：调用方要先决定这一轮算未测到、
         还是根本不能算未测到（成交了却没留痕是真的缺陷）。
         """
+        # 先等流水表安静：上一条用例若是 SkipTest 走的，它那批还在异步落库，
+        # 这一取水位线就会把别人的行当成这一笔的写路径
+        wait_flow_quiet()
         mark = max_pay_change_id()
         kind = classify(
             post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=payer))
@@ -215,8 +219,13 @@ class TestConcurrentPay(unittest.TestCase):
 
         note 非空 = 流水写了但不带 gid（筛选口径失效），由调用方打印并跳过；
         按 gid、按 uid 都查不到则是「扣了钱没留痕」，直接失败。
+
+        只看自己那个账号的行（keep_uid）：自刷这一批里只有它在下单，别的账号的行
+        只可能是别的批次晚到的。2026-10-29 真机就这样红过一次——上一条用例频控
+        未测到直接跳、没等流水落库，探针就把 200250759 / 200252072 的 consume 行
+        算成了自己这一笔的写路径。
         """
-        rows = wait_flows_stable(mark, gid, least=least, await_uids=(uid,))
+        rows = wait_flows_stable(mark, gid, least=least, await_uids=(uid,), keep_uid=uid)
         if rows:
             return flows_by_key(rows), rows, ''
         looked = read_flows_by_uid(mark, uid)
@@ -440,6 +449,8 @@ class TestConcurrentPay(unittest.TestCase):
         # 探针：自刷一笔写下哪些（账号, op）桶、各几行几元，全部实测。它花掉的那一笔
         # 随后被 reset 覆盖，不影响下面「余额只够一笔」的设置
         reset_payer(uid, price)
+        # 先等上一条用例那批流水落完，再取水位线（同 probe_flows）
+        wait_flow_quiet()
         probe_mark = max_pay_change_id()
         probe_kind = classify(call())
         if probe_kind == 'success':
