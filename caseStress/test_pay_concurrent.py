@@ -126,3 +126,42 @@ class TestConcurrentPay(unittest.TestCase):
         assert_equal(broken, [])
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
+
+    def test_003(self, des='四账号各连发两笔相同请求: 每个账号扣款=自己成功笔数*单价, 且不得透支'):
+        """一次并发 8 个请求，但判定按账号拆开算
+
+        上一轮实测服务端对相同请求没有幂等，两笔都可能成交；这里不预设「第几笔该被拒」
+        （口径还在产品那边确认），只钉死一件事：每个账号的扣款必须等于它自己成功了几笔。
+        余额留两笔的量，所以「响应说一笔、实际扣两笔」不会因为余额不足被掩成拒绝，
+        真扣了就能看见。
+        """
+        price = PAY_AMOUNT
+        before = {}
+        for uid in CONCURRENT_PAYERS:
+            reset_payer(uid, price * 2)
+            before[uid] = read_money(uid)
+
+        tasks = []
+        for uid in CONCURRENT_PAYERS:
+            tasks.append((uid, self.pay_call(uid)))
+            tasks.append((uid, self.pay_call(uid)))
+
+        results = self.run_concurrently(tasks)
+        kinds, bodies = {}, {}
+        for uid, res in results:
+            kinds.setdefault(uid, []).append(classify(res))
+            bodies.setdefault(uid, []).append(res.get('body'))
+
+        broken = [(uid, body) for uid in CONCURRENT_PAYERS
+                  for body, kind in zip(bodies[uid], kinds[uid]) if kind == 'broken']
+        for uid in CONCURRENT_PAYERS:
+            print('[并发-重发] uid={} 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，响应 {}'.format(
+                uid, kinds[uid].count('success'), kinds[uid].count('limited'),
+                kinds[uid].count('rejected'), bodies[uid]), flush=True)
+
+        assert_equal(broken, [])
+        # 一个账号都没成交等于什么都没测到
+        assert_between(sum(kinds[uid].count('success') for uid in CONCURRENT_PAYERS),
+                       1, len(CONCURRENT_PAYERS) * 2)
+        for uid in CONCURRENT_PAYERS:
+            self.assert_conserved(uid, before[uid], kinds[uid].count('success'), price, bodies[uid])
