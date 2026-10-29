@@ -701,6 +701,41 @@ def check_self_pay_buckets():
     assert expected_rows(buckets, [], 2) == 4, '探针两行 × 两笔应是 4 行'
 
 
+def check_stagger_default():
+    """同账号两笔必须默认错峰：默认退回 0，三条用例会静默变成「未测到」
+
+    2026-10-29 实测：完全同时发时 4 个账号的第二笔全被频控挡在请求层，test_003
+    只能 SkipTest——报告里它是「跳过」，但那一轮「同账号连发两笔」这个场景一下都没验到。
+    所以这里钉的是「默认值必须大于 0」，不是「必须 0.2」：将来限流更严、要调到 0.4，
+    这条自检照样通过；只有退回「完全同时」才红。
+    """
+    import os
+
+    keys = ('STAGGER', 'REQUEST_INTERVAL', 'FREQUENT_RETRY')
+    saved = {key: os.environ.get(key) for key in keys}
+    try:
+        # 导入这个用例模块会 setdefault 两个入口参数（让它单独跑时也是并发），
+        # 一并还原，别把后面的自检带进「频控不重试」的现场
+        from caseStress.test_pay_concurrent import TestConcurrentPay
+
+        os.environ.pop('STAGGER', None)
+        default = TestConcurrentPay.stagger(None)
+        assert default > 0, \
+            '默认错峰必须大于 0（否则同账号两笔整对被频控挡下），实际 {}'.format(default)
+
+        # 环境变量仍能覆盖：STAGGER=0 就是老口径「完全同时」
+        for value in ('0', '0.4'):
+            os.environ['STAGGER'] = value
+            assert TestConcurrentPay.stagger(None) == float(value), \
+                'STAGGER={} 应原样生效，实际 {}'.format(value, TestConcurrentPay.stagger(None))
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def check_classify_responses():
     """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
 
@@ -869,6 +904,7 @@ def main():
     _check('分成放大：多写一行、少一条写路径都能比出来', check_income_scaled)
     _check('同账号重复提交：全被频控挡下要认成未测到', check_window_tested)
     _check('自刷分桶：付款方就是收款人，分成多发一份也比得出来', check_self_pay_buckets)
+    _check('同账号两笔默认错峰大于 0：退回完全同时会整对被频控挡下', check_stagger_default)
     _check('响应四分类、非 dict body 不崩', check_classify_responses)
 
     print('框架自检：本机环境配置（common.envLocal）')

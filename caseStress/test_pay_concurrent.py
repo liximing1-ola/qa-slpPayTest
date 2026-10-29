@@ -75,7 +75,8 @@ class TestConcurrentPay(unittest.TestCase):
         stagger：第 n 个任务再加 n*stagger 秒。服务端对同一账号有限流，毫秒级完全
         同时发会被「请求太快」直接挡回去，根本走不到余额校验——用例虽然绿，却什么
         都没测到。错峰一点反而能落进「两次读余额都发生在第一次写之前」的窗口，
-        那才是这条用例真正要打的地方。默认 0，保持完全同时。
+        那才是这条用例真正要打的地方。参数默认 0；三条「同账号两笔」的用例通过
+        stagger() 传 0.2（见下面），不同账号各一笔的不传，保持完全同时。
         """
         results = []
         lock = threading.Lock()
@@ -117,8 +118,18 @@ class TestConcurrentPay(unittest.TestCase):
         return results
 
     def stagger(self):
-        """同账号两笔之间的错峰秒数：STAGGER=0.2 环境变量控制，默认 0（完全同时）"""
-        return float(os.environ.get('STAGGER') or 0)
+        """同账号两笔之间的错峰秒数：STAGGER 环境变量控制，默认 0.2
+
+        默认值从 0 改到 0.2 是量出来的，不是拍的：2026-10-29 同一版代码两轮对比——
+        STAGGER=0 时 4 个账号的第二笔全被频控挡在请求层（4 次频控），test_003 只能转成
+        「未测到」；STAGGER=0.2 时只剩 1 次频控，三个账号的两笔都真的走到了校验
+        （各扣 200、分成 7 行 560 元）。在这一版服务端上，完全同时发等于不测。
+
+        默认值只影响三条「同账号两笔」的用例：test_002 / test_003 / test_004。
+
+        要复现「完全同时」的老口径就传 STAGGER=0，行为一模一样。
+        """
+        return float(os.environ.get('STAGGER') or 0.2)
 
     def pay_call(self, uid):
         """uid 是收礼方，pay_uid 是扣款方：四个账号都打赏给同一个主播
@@ -304,8 +315,8 @@ class TestConcurrentPay(unittest.TestCase):
             # 这里必须抛 SkipTest 而不是只打印：只打印在报告里仍然是一条「通过」，
             # 看报告的人不知道这一轮其实什么都没测到。
             print('[并发-同账号][未测到] 成功 {} 笔、频控 {} 笔：第二笔没走到余额校验，本轮结论无效；'
-                  '可试 STAGGER=0.2 错峰重跑'.format(
-                      kinds.count('success'), kinds.count('limited')), flush=True)
+                  '默认已错峰 {}s，仍被挡就再调大（STAGGER=0.4）'.format(
+                      kinds.count('success'), kinds.count('limited'), self.stagger()), flush=True)
             raise unittest.SkipTest('第二笔没走到余额校验（成功 {} 笔、频控 {} 笔），本轮没验并发窗口'.format(
                 kinds.count('success'), kinds.count('limited')))
 
@@ -326,8 +337,8 @@ class TestConcurrentPay(unittest.TestCase):
         完全不体现，只有流水能看出来。
 
         错峰（STAGGER）必须一起传：任务表按账号成对排，同账号那两笔正好相差一个错峰量。
-        不传时 8 个请求完全同时，第二笔全被频控挡在请求层，这条用例就只剩「未测到」
-        （2026-10-29 真机就是如此：4 次频控、每个账号各挡一笔）。
+        完全同时（STAGGER=0）时第二笔全被频控挡在请求层，这条用例就只剩「未测到」
+        （2026-10-29 真机就是如此：4 次频控、每个账号各挡一笔），所以默认错峰 0.2 秒。
         """
         price = PAY_AMOUNT
         gid = GIFT['gid']
@@ -370,8 +381,9 @@ class TestConcurrentPay(unittest.TestCase):
         clean = concurrent_window_tested(kinds)
         if not clean:
             print('[并发-重发][未测到] 第二笔全被频控挡下（本轮频控 {} 次）：没有一对送到校验，'
-                  '本轮没验同账号重复提交；可试 STAGGER=0.2'.format(
-                      sum(kinds[uid].count('limited') for uid in CONCURRENT_PAYERS)), flush=True)
+                  '本轮没验同账号重复提交；默认已错峰 {}s，仍被挡就再调大'.format(
+                      sum(kinds[uid].count('limited') for uid in CONCURRENT_PAYERS),
+                      self.stagger()), flush=True)
             raise unittest.SkipTest('第二笔全被频控挡下，本轮没验同账号重复提交')
         if len(clean) < len(CONCURRENT_PAYERS):
             print('[并发-重发] 频控挡下的账号 {} 这一对没验到（扣款侧仍已验）'.format(
