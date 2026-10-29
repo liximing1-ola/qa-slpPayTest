@@ -817,6 +817,111 @@ def check_settle_window():
                 os.environ[key] = value
 
 
+def check_pair_retry():
+    """一对请求被频控污染时要重放：频控发生在余额校验之前，那一轮本来就不算数
+
+    2026-10-29 两轮整跑各撞到一次（test_002、test_003 的 200255209），账号与位置都不固定，
+    0.2 秒错峰也挡不住。重放不是放宽断言——每一轮都照原样对账，被污染的那轮只是不算数；
+    这里钉四件事：干净的第一轮不重放、被污染要重放、重放到上限仍污染就交回给调用方跳过、
+    flows=True 时返回的水位线必须属于最后一轮（否则两轮流水混在一起）。
+    """
+    import os
+
+    from caseStress import test_pay_concurrent as mod
+
+    class _Clock(object):
+        def __init__(self):
+            self.now = 1000.0
+            self.slept = []
+
+        def time(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.slept.append(seconds)
+            self.now += seconds
+
+    limited = ('u', {'code': 200, 'body': {'success': False, 'msg': '请求太快了，请稍后重试'}})
+    ok = ('u', {'code': 200, 'body': {'success': True}})
+    denied = ('u', {'code': 200, 'body': {'success': False, 'msg': ''}})
+
+    clock = _Clock()
+    scripted = []
+    resets = []
+    marks = []
+    keys = ('SETTLE', 'PAIR_TRIES')
+    saved = {key: os.environ.get(key) for key in keys}
+    real = dict(time=mod.time, reset=mod.reset_payer, money=mod.read_money,
+                quiet=mod.wait_flow_quiet, mark=mod.max_pay_change_id)
+
+    class _Fake(object):
+        """只给 paid_pair 用的最小替身：它只碰 run_concurrently 与 stagger"""
+
+        def run_concurrently(me, tasks, stagger=0):
+            assert len(tasks) == 2, '一对就是两个任务，实际 {}'.format(tasks)
+            return scripted.pop(0)
+
+        def stagger(me):
+            return 0.2
+
+    try:
+        mod.time = clock
+        mod.reset_payer = lambda uid, price: resets.append((uid, price))
+        mod.read_money = lambda uid: 100
+        mod.wait_flow_quiet = lambda *args, **kwargs: None
+        mod.max_pay_change_id = lambda: marks.pop(0)
+        os.environ.pop('PAIR_TRIES', None)
+
+        # 一、被污染就重放，拿到干净的一对才返回；重置与冷却各发生一次
+        scripted[:] = [[limited, ok], [ok, denied]]
+        before, kinds, bodies, attempts, mark = mod.TestConcurrentPay.paid_pair(
+            _Fake(), 7, 100, '自检', lambda: ('a', 'b'))
+        assert (attempts, kinds.count('success'), kinds.count('rejected')) == (2, 1, 1), \
+            '被频控污染的那轮不算数，第二轮才该定结论，实际 {} / {}'.format(attempts, kinds)
+        assert len(resets) == 2 and len(clock.slept) == 1, \
+            '重放前要重置余额并冷却一次，实际 {} / {}'.format(resets, clock.slept)
+        assert before == 100 and mark is None, 'flows=False 时不该取水位线，实际 {}'.format(mark)
+
+        # 二、干净的第一轮直接返回：不重放、不冷却
+        scripted[:] = [[ok, denied]]
+        resets[:] = []
+        clock.slept[:] = []
+        _, kinds, _, attempts, _ = mod.TestConcurrentPay.paid_pair(
+            _Fake(), 7, 100, '自检', lambda: ('a', 'b'))
+        assert attempts == 1 and clock.slept == [] and len(resets) == 1, \
+            '第一轮就干净时不该重放，实际 {} / {}'.format(attempts, clock.slept)
+
+        # 三、重放到上限仍被污染：把最后一轮交回去，由调用方 SkipTest
+        os.environ['PAIR_TRIES'] = '2'
+        scripted[:] = [[limited, ok], [ok, limited]]
+        resets[:] = []
+        clock.slept[:] = []
+        _, kinds, _, attempts, _ = mod.TestConcurrentPay.paid_pair(
+            _Fake(), 7, 100, '自检', lambda: ('a', 'b'))
+        assert attempts == 2 and kinds.count('limited') == 1 and len(resets) == 2, \
+            '到上限就停，实际 {} 次 / {}'.format(attempts, kinds)
+
+        # 四、flows=True 时水位线要取最后一次尝试的：污染那一轮的流水不归这一轮
+        os.environ.pop('PAIR_TRIES', None)
+        marks[:] = [101, 202]
+        scripted[:] = [[limited, ok], [ok, ok]]
+        _, _, _, attempts, mark = mod.TestConcurrentPay.paid_pair(
+            _Fake(), 7, 100, '自检', lambda: ('a', 'b'), flows=True)
+        assert (attempts, mark) == (2, 202), \
+            '水位线必须属于最后那一轮，实际第 {} 次 / {}'.format(attempts, mark)
+    finally:
+        mod.time = real['time']
+        mod.reset_payer = real['reset']
+        mod.read_money = real['money']
+        mod.wait_flow_quiet = real['quiet']
+        mod.max_pay_change_id = real['mark']
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def check_classify_responses():
     """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
 
@@ -987,6 +1092,7 @@ def main():
     _check('自刷分桶：付款方就是收款人，分成多发一份也比得出来', check_self_pay_buckets)
     _check('同账号两笔默认错峰大于 0：退回完全同时会整对被频控挡下', check_stagger_default)
     _check('跨用例限流窗口：上一条刚打过同一账号时要等够 SETTLE 秒', check_settle_window)
+    _check('成对被频控污染要重放：重放到上限就交回去跳过', check_pair_retry)
     _check('响应四分类、非 dict body 不崩', check_classify_responses)
 
     print('框架自检：本机环境配置（common.envLocal）')

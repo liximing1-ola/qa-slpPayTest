@@ -159,6 +159,47 @@ class TestConcurrentPay(unittest.TestCase):
                   '（跨用例的限流窗口不算这一条的结论）'.format(tag, wait), flush=True)
             time.sleep(wait)
 
+    def paid_pair(self, uid, price, tag, pair_calls, tries=None, flows=False):
+        """余额重置到单笔，跑一对同账号并发请求；被频控污染就冷却后重放
+
+        返回 (before, kinds, bodies, attempts, mark)；mark 只在 flows=True 时有值。
+        pair_calls 是「造两个调用」的零参函数：重放时重新拼一次报文，别拿上一轮的
+        sign/时间戳去重发（那会因为过期被拒，把频控换成另一种假的未测到）。
+
+        频控是在余额校验**之前**被挡下的：那一轮根本没走到这条用例要验的地方，所以重放
+        不算放宽断言——每一轮都照原样对账，被挡下的那一轮只是不算数，而且会打印出来。
+        2026-10-29 两轮整跑各撞到一次，位置和账号都毫无规律（round1 是 test_002，
+        round2 是 test_002 与 test_003 的 200255209），0.2 秒错峰也挡不住；规则没弄清
+        之前，这里只保证「要么拿到一对真的走到校验的请求，要么明确跳过」。
+
+        flows=True 时每次尝试前重新取一次流水水位线：被污染的那轮也会写流水，沿用它的
+        水位线会把两轮的行走廊混在一起。
+        """
+        tries = tries or int(os.environ.get('PAIR_TRIES') or 3)
+        # 少于一次就没有「拿到一对才算数」可言，而且循环一次都不跑会让 attempt 没定义
+        tries = max(1, tries)
+        gap = float(os.environ.get('SETTLE') or 1.0)
+        mark = None
+        for attempt in range(1, tries + 1):
+            if attempt > 1:
+                print('[并发] {}：上一轮被频控污染，等 {:.1f}s 重放第 {}/{} 次'.format(
+                    tag, gap, attempt, tries), flush=True)
+                time.sleep(gap)
+            reset_payer(uid, price)
+            before = read_money(uid)
+            if flows:
+                wait_flow_quiet()
+                mark = max_pay_change_id()
+            results = self.run_concurrently([(uid, call) for call in pair_calls()],
+                                            stagger=self.stagger())
+            kinds = [classify(res) for _, res in results]
+            bodies = [res.get('body') for _, res in results]
+            broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
+            assert_equal(broken, [])
+            if 'limited' not in kinds:
+                break
+        return before, kinds, bodies, attempt, mark
+
     def pay_call(self, uid):
         """uid 是收礼方，pay_uid 是扣款方：四个账号都打赏给同一个主播
 
@@ -328,27 +369,20 @@ class TestConcurrentPay(unittest.TestCase):
         uid = CONCURRENT_PAYERS[0]
         price = PAY_AMOUNT
         self.settle((uid,), 'test_002')
-        reset_payer(uid, price)
-        before = read_money(uid)
 
-        results = self.run_concurrently([(uid, self.pay_call(uid)), (uid, self.pay_call(uid))],
-                                        stagger=self.stagger())
-        kinds = [classify(res) for _, res in results]
-        bodies = [res.get('body') for _, res in results]
-        broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
-        print('[并发-同账号] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
+        before, kinds, bodies, attempts, _ = self.paid_pair(
+            uid, price, 'test_002', lambda: (self.pay_call(uid), self.pay_call(uid)))
+        print('[并发-同账号] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，响应 {}（第 {} 次尝试）'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
-            len(broken), bodies), flush=True)
-        assert_equal(broken, [])
+            bodies, attempts), flush=True)
         if kinds.count('limited') >= 1 or kinds.count('success') == 0:
             # 被限流挡下的那一笔根本没走到余额校验，守恒式两侧一起缩小，绿得毫无意义。
             # 这里必须抛 SkipTest 而不是只打印：只打印在报告里仍然是一条「通过」，
             # 看报告的人不知道这一轮其实什么都没测到。
-            print('[并发-同账号][未测到] 成功 {} 笔、频控 {} 笔：第二笔没走到余额校验，本轮结论无效；'
-                  '默认已错峰 {}s、发前也等掉了上一条的限流窗口，仍被挡就调大 SETTLE'.format(
-                      kinds.count('success'), kinds.count('limited'), self.stagger()), flush=True)
-            raise unittest.SkipTest('第二笔没走到余额校验（成功 {} 笔、频控 {} 笔），本轮没验并发窗口'.format(
-                kinds.count('success'), kinds.count('limited')))
+            print('[并发-同账号][未测到] 连续 {} 次尝试都有请求被频控挡下（成功 {} 笔、频控 {} 笔）：'
+                  '一笔都没走到余额校验，本轮结论无效'.format(
+                      attempts, kinds.count('success'), kinds.count('limited')), flush=True)
+            raise unittest.SkipTest('连续 {} 次尝试都被频控挡下，本轮没验并发窗口'.format(attempts))
 
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
@@ -417,6 +451,12 @@ class TestConcurrentPay(unittest.TestCase):
                       sum(kinds[uid].count('limited') for uid in CONCURRENT_PAYERS),
                       self.stagger()), flush=True)
             raise unittest.SkipTest('第二笔全被频控挡下，本轮没验同账号重复提交')
+        if len(clean) < 2:
+            # 只剩一个账号的这一对真的走到校验时，「四账号各连发两笔」已经名不副实，
+            # 拿一对去下整条用例的结论太薄
+            print('[并发-重发][未测到] 只有 {} 个账号的这一对走到了校验（{}）：样本太薄，本轮不当结论'.format(
+                len(clean), clean), flush=True)
+            raise unittest.SkipTest('只有 {} 个账号的两笔都走到校验，样本太薄'.format(len(clean)))
         if len(clean) < len(CONCURRENT_PAYERS):
             print('[并发-重发] 频控挡下的账号 {} 这一对没验到（扣款侧仍已验）'.format(
                 [uid for uid in CONCURRENT_PAYERS if uid not in clean]), flush=True)
@@ -507,25 +547,17 @@ class TestConcurrentPay(unittest.TestCase):
         else:
             probe_buckets, note_probe = {}, '探针未成交（{}）'.format(probe_kind)
 
-        reset_payer(uid, price)
-        before = read_money(uid)
-        mark = max_pay_change_id()
-
-        results = self.run_concurrently([(uid, call), (uid, call)], stagger=self.stagger())
-        kinds = [classify(res) for _, res in results]
-        bodies = [res.get('body') for _, res in results]
-        broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
-        print('[并发-自刷] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
+        before, kinds, bodies, attempts, mark = self.paid_pair(
+            uid, price, 'test_004', lambda: (call, call), flows=True)
+        print('[并发-自刷] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，响应 {}（第 {} 次尝试）'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
-            len(broken), bodies), flush=True)
-        assert_equal(broken, [])
+            bodies, attempts), flush=True)
         if kinds.count('limited') >= 1 or kinds.count('success') == 0:
             # 同 test_002：只打印等于「通过」，必须让报告里能看见这一条没验到
-            print('[并发-自刷][未测到] 成功 {} 笔、频控 {} 笔：第二笔没走到余额校验，本轮结论无效；'
-                  '默认已错峰 {}s、发前也等掉了上一条的限流窗口，仍被挡就调大 SETTLE'.format(
-                      kinds.count('success'), kinds.count('limited'), self.stagger()), flush=True)
-            raise unittest.SkipTest('第二笔没走到余额校验（成功 {} 笔、频控 {} 笔），本轮没验自刷分支'.format(
-                kinds.count('success'), kinds.count('limited')))
+            print('[并发-自刷][未测到] 连续 {} 次尝试都有请求被频控挡下（成功 {} 笔、频控 {} 笔）：'
+                  '一笔都没走到余额校验，本轮结论无效'.format(
+                      attempts, kinds.count('success'), kinds.count('limited')), flush=True)
+            raise unittest.SkipTest('连续 {} 次尝试都被频控挡下，本轮没验自刷分支'.format(attempts))
 
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
