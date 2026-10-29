@@ -176,3 +176,37 @@ class TestConcurrentPay(unittest.TestCase):
                        1, len(CONCURRENT_PAYERS) * 2)
         for uid in CONCURRENT_PAYERS:
             self.assert_conserved(uid, before[uid], kinds[uid].count('success'), price, bodies[uid])
+
+    def test_004(self, des='同账号并发两笔自刷(余额只够一笔): 钱与响应必须一致, 不得透支'):
+        """打赏给自己走的是另一条分支，余额校验与「打赏他人」不同
+
+        2026-10-29 实测：余额 100、并发两笔自刷，两笔都返回 success=True，money 却只
+        扣了 100（期望 200），同时两笔都产生了分成到账——收一份钱、发两份货。
+        同一张卡同样的余额去打赏主播时，第二笔会被「余额不足」正确拒掉，
+        可见问题只出在自刷分支的余额校验上。
+
+        test_001~003 改成打赏主播后，这条路就没人覆盖了，单独留一条钉住，
+        避免缺陷重新隐身。本用例转绿即代表服务端已修好，不要调断言去它变绿。
+        """
+        uid = CONCURRENT_PAYERS[0]
+        price = PAY_AMOUNT
+        reset_payer(uid, price)
+        before = read_money(uid)
+
+        # 自刷：收礼方就是付款人自己，不能复用 pay_call（那个固定打给主播）
+        data = encodeData(rid=ROOM_RID, payType='package', uid=uid, giftId=GIFT['gid'],
+                          display_page=1)
+
+        def call():
+            return post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
+
+        results = self.run_concurrently([(uid, call), (uid, call)])
+        kinds = [classify(res) for _, res in results]
+        bodies = [res.get('body') for _, res in results]
+        broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
+        print('[并发-自刷] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
+            kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
+            len(broken), bodies), flush=True)
+
+        assert_equal(broken, [])
+        self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
