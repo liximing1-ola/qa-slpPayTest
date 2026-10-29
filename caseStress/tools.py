@@ -176,6 +176,20 @@ def expected_rows(income_probe, pay_probe, success):
     return probe_rows * success
 
 
+def concurrent_window_tested(kinds_by_uid):
+    """同账号连发多笔时，哪些账号是真的把每一笔都送到了业务校验
+
+    频控（「请求太快了，请稍后重试」）在请求层就被挡下，那一笔根本没走到余额与幂等
+    校验。四个账号的第二笔全被挡下时，「同账号重复提交」这个场景本轮一次都没验到
+    ——而扣款侧仍然「各扣一笔、全对」，报告上是一条通过。这就是绿得毫无意义，
+    必须让调用方转成未测到。实测 2026-10-29 的 test_003 就是这样绿的（4 次频控，
+    每个账号各挡一笔）。
+
+    返回没被限流的账号（顺序与传入一致）。空列表表示一对都没验到。
+    """
+    return [uid for uid, kinds in kinds_by_uid.items() if 'limited' not in kinds]
+
+
 def is_success(res):
     """成功 = HTTP 200 且 body.success 为真
 

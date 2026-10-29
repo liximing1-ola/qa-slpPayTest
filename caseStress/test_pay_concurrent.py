@@ -15,9 +15,9 @@ import unittest
 
 from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWNER_UID, PAY_AMOUNT,
                                ROOM_RID, pay_url)
-from caseStress.tools import (classify, expected_rows, max_pay_change_id, read_flows_by_uid, read_money,
-                              read_total_money, read_wallets, reset_payer, scale_income, split_flows,
-                              wait_flows_stable)
+from caseStress.tools import (classify, concurrent_window_tested, expected_rows, max_pay_change_id,
+                              read_flows_by_uid, read_money, read_total_money, read_wallets, reset_payer,
+                              scale_income, split_flows, wait_flows_stable)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
@@ -329,6 +329,19 @@ class TestConcurrentPay(unittest.TestCase):
                 kinds[uid].count('rejected'), bodies[uid]), flush=True)
 
         assert_equal(broken, [])
+        # 频控那一笔在请求层就被挡下，根本没走到余额与幂等校验。四个账号的第二笔全被
+        # 挡下时，「同账号连发两笔」这个场景本轮一次都没验到——而扣款侧依然各扣一笔、
+        # 全对，绿得毫无意义。2026-10-29 真机跑就撞上了：4 次频控、每账号各挡一笔
+        clean = concurrent_window_tested(kinds)
+        if not clean:
+            print('[并发-重发][未测到] 第二笔全被频控挡下（本轮频控 {} 次）：没有一对送到校验，'
+                  '本轮没验同账号重复提交；可试 STAGGER=0.2'.format(
+                      sum(kinds[uid].count('limited') for uid in CONCURRENT_PAYERS)), flush=True)
+            raise unittest.SkipTest('第二笔全被频控挡下，本轮没验同账号重复提交')
+        if len(clean) < len(CONCURRENT_PAYERS):
+            print('[并发-重发] 频控挡下的账号 {} 这一对没验到（扣款侧仍已验）'.format(
+                [uid for uid in CONCURRENT_PAYERS if uid not in clean]), flush=True)
+
         # 一个账号都没成交等于什么都没测到
         total_success = sum(kinds[uid].count('success') for uid in CONCURRENT_PAYERS)
         assert_between(total_success, 1, len(CONCURRENT_PAYERS) * 2)

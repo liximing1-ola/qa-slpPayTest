@@ -576,6 +576,28 @@ def check_income_scaled():
     assert expected_rows(probe, [{'uid': 1}], 0) == 0, '一笔都没成交时期望 0 行'
 
 
+def check_window_tested():
+    """同账号连发多笔：全被频控挡下必须认成「没验到」，不能算绿
+
+    频控在请求层就被挡下，那一笔没走到余额与幂等校验。四个账号各挡一笔时，扣款侧
+    仍然「各扣一笔、全对」，报告上是一条通过——但「同账号重复提交」这个场景一次
+    都没验到。2026-10-29 的 test_003 就是这样绿的（4 次频控）。
+    """
+    from caseStress.tools import concurrent_window_tested
+
+    assert concurrent_window_tested({'a': ['limited', 'success']}) == [], \
+        '两笔里有一笔被频控挡下，这一对不算验到'
+    assert concurrent_window_tested({'a': ['success', 'limited']}) == [], '两笔顺序无关'
+    assert concurrent_window_tested({'a': ['success', 'rejected']}) == ['a'], \
+        '没被限流的账号才算真的走到业务校验'
+    assert concurrent_window_tested({'a': ['limited', 'limited'],
+                                     'b': ['rejected', 'success']}) == ['b'], \
+        '只要有一对真的送到校验，本轮就不是「什么都没验到」'
+    assert concurrent_window_tested({'a': ['limited', 'limited']}) == [], \
+        '全被挡下时必须返回空，否则调用方不会跳'
+    assert concurrent_window_tested({}) == [], '没有账号时返回空'
+
+
 def check_classify_responses():
     """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
 
@@ -741,6 +763,7 @@ def main():
     _check('流水聚合：付款与收款分开、同人同 op 合并', check_flow_split)
     _check('等流水：条数稳定才返回、没流水时超时带回空', check_flow_wait_stable)
     _check('分成放大：多写一行、少一条写路径都能比出来', check_income_scaled)
+    _check('同账号重复提交：全被频控挡下要认成未测到', check_window_tested)
     _check('响应四分类、非 dict body 不崩', check_classify_responses)
 
     print('框架自检：本机环境配置（common.envLocal）')
