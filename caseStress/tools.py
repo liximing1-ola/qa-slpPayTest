@@ -13,6 +13,17 @@ def read_money(uid):
     return mysql.selectUserInfoSql('single_money', uid, money_type='money')
 
 
+# 除主渠道外的其他钱包：余额不足时服务端可能回退到别的渠道扣款，
+# 只读 money 会把「从别处扣了」看成「压根没扣」，对账就失去意义
+WALLET_CHANNELS = ('money', 'money_b', 'money_cash', 'money_cash_b', 'gold_coin')
+
+
+def read_wallets(uid):
+    """读全部钱包渠道，只在失败现场打印用：轮询断言仍只看 money，避免多读 5 倍"""
+    return {channel: mysql.selectUserInfoSql('single_money', uid, money_type=channel)
+            for channel in WALLET_CHANNELS}
+
+
 def reset_payer(uid, amount):
     """余额只留 amount，其余渠道清零；背包也清空——渠道一多，扣款落在哪个字段就不确定了"""
     mysql.updateMoneySql(uid, money=amount)

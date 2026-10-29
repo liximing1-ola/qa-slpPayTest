@@ -11,7 +11,7 @@ import threading
 import unittest
 
 from caseStress.config import CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
-from caseStress.tools import classify, read_money, reset_payer
+from caseStress.tools import classify, read_money, read_wallets, reset_payer
 from common.Assert import assert_between, assert_equal, assert_equal_eventually
 from common.Request import post_request_session
 from common.Session import Session
@@ -74,10 +74,12 @@ class TestConcurrentPay(unittest.TestCase):
             # 下单后余额可能异步落库，直接读一次会把「还没写库」当成没扣钱
             assert_equal_eventually(lambda: before - read_money(uid), expect_deducted)
         finally:
-            # 无论轮询到达还是超时，都把现场打出来：失败时这一行才是能定位账号的依据
+            # 无论轮询到达还是超时，都把现场打出来：失败时这一行才是能定位账号的依据。
+            # 全渠道一起打：只打 money 时，「钱从别的渠遁扣走了」和「少扣一笔」长得一模一样
             left = read_money(uid)
-            print('[并发] uid={} 下单前={} 现在={} 扣款={} 期望扣款={} 成功响应={} 笔 响应={}'.format(
-                uid, before, left, before - left, expect_deducted, success_count, body_text), flush=True)
+            print('[并发] uid={} 下单前={} 现在={} 扣款={} 期望扣款={} 成功响应={} 笔 全渠道={} 响应={}'.format(
+                uid, before, left, before - left, expect_deducted, success_count,
+                read_wallets(uid), body_text), flush=True)
         # 余额不得为负：「成功两笔却只扣一笔」会被上面抓到，「只成功一笔却扣两笔」在这里露出来
         assert_between(left, 0, before)
 
