@@ -10,7 +10,7 @@ os.environ.setdefault('REQUEST_INTERVAL', '0')
 import threading
 import unittest
 
-from caseStress.config import CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
+from caseStress.config import ANCHOR_UID, CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
 from caseStress.tools import classify, read_money, read_wallets, reset_payer
 from common.Assert import assert_between, assert_equal, assert_equal_eventually
 from common.Request import post_request_session
@@ -60,7 +60,16 @@ class TestConcurrentPay(unittest.TestCase):
         return results
 
     def pay_call(self, uid):
-        data = encodeData(rid=ROOM_RID, payType='package', uid=uid, giftId=GIFT['gid'], display_page=1)
+        """uid 是收礼方，pay_uid 是扣款方：四个账号都打赏给同一个主播
+
+        这里早先写的是 uid=uid（各自打赏自己），与 config 的 ANCHOR_UID、用例描述
+        和 README 的「四账号并发打同一主播」三处都对不上，代码这一处是错的。
+        自刷会把钱再返还到打赏方自己的 money_cash / money_cash_b（实测四个账号
+        各累积 120~320），对账时「扣了多少」与「又收回来多少」糊在一起，
+        失败现场根本分不清少扣的那一笔是没扣、还是被返还抵消了。
+        """
+        data = encodeData(rid=ROOM_RID, payType='package', uid=ANCHOR_UID, giftId=GIFT['gid'],
+                          display_page=1)
         return lambda: post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
 
     def assert_conserved(self, uid, before, success_count, price, body_text):
