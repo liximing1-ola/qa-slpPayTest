@@ -25,7 +25,7 @@ from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_se
 from common.Session import Session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
-from common.tools import get_test_token
+from common.tools import get_test_token, reset_room_acs
 
 # 日志里带名字：流水只给 uid，光看数字对不上人
 PARTY_NAMES = {ANCHOR_UID: '主播', OWNER_UID: '厅长', CEO_UID: '公会长'}
@@ -77,6 +77,21 @@ class TestConcurrentPay(unittest.TestCase):
         token_map = get_test_token(*CONCURRENT_PAYERS)
         for uid, token in token_map.items():
             Session.checkUserToken('write', app_name='slp', uid=uid, token=token)
+
+        # 分成落几条写路径，取决于「主播上周在哪个厅」：xsst_roomacs_sum 里没有这一行时，
+        # 服务端不吃本厅配置（config.bbs_room_gift_rate 里 170000211 是 71:6:3），而是
+        # 回落到默认比例（80 全给主播）。2026-10-29 两轮整跑分别跑出这两种口径，差别就在
+        # 这张表：并发用例自己从不准备它，表里有什么完全取决于之前跑过哪些用例。
+        # 固定成「主播上周就在本厅」，口径才跨轮可比；这不是绕开问题——反而把「本厅配置
+        # 到底发几份」从「看运气」变成稳定可验，之前两轮里有一轮只验了 1 条写路径。
+        reset_room_acs(ANCHOR_UID, ROOM_RID)
+        # 口径还取决于另外两个状态，而它们同样由别的用例准备（caseSlp 里 prepare_test_data
+        # 会把主播的 agreement_version 设成 1）：不主动改，但要打出来——不然下一轮又跑出
+        # 80:0:0 时，分不清是上周厅、大神状态还是工会身份。
+        print('[并发] 分成口径的前置状态：主播 {} 上周厅已固定为 {}，签大神={}，工会成员={}；'
+              '本厅（{}）配置只在三者都满足时生效，否则回落默认比例'.format(
+                  ANCHOR_UID, ROOM_RID, mysql.checkUserAgreement(ANCHOR_UID),
+                  mysql.checkUserBroker(ANCHOR_UID), ROOM_RID), flush=True)
 
     def run_concurrently(self, tasks, stagger=0.0):
         """tasks = [(uid, callable)]，Barrier 对齐后同时出发，返回 [(uid, 响应)]
