@@ -324,6 +324,10 @@ class TestConcurrentPay(unittest.TestCase):
         同账号连发两笔最该防的恰恰是「收一份钱、发两份货」——test_004 撞到的那次
         缺陷就是两笔都返回成功、钱只扣一笔、分成却发了两份。多写一行分成在余额上
         完全不体现，只有流水能看出来。
+
+        错峰（STAGGER）必须一起传：任务表按账号成对排，同账号那两笔正好相差一个错峰量。
+        不传时 8 个请求完全同时，第二笔全被频控挡在请求层，这条用例就只剩「未测到」
+        （2026-10-29 真机就是如此：4 次频控、每个账号各挡一笔）。
         """
         price = PAY_AMOUNT
         gid = GIFT['gid']
@@ -346,7 +350,7 @@ class TestConcurrentPay(unittest.TestCase):
             tasks.append((uid, self.pay_call(uid)))
             tasks.append((uid, self.pay_call(uid)))
 
-        results = self.run_concurrently(tasks)
+        results = self.run_concurrently(tasks, stagger=self.stagger())
         kinds, bodies = {}, {}
         for uid, res in results:
             kinds.setdefault(uid, []).append(classify(res))
