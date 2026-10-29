@@ -537,6 +537,33 @@ def push_fail_lines(result, max_items=PUSH_FAIL_MAX):
     return lines
 
 
+# 推送里最多列几条跳过：跳过的理由基本一句话，5 条够看清趋势；再多就看日志
+PUSH_SKIP_MAX = 5
+
+
+def push_skip_lines(result, max_items=PUSH_SKIP_MAX):
+    """推送用的「本轮没验」清单：跳过必须带理由，不能只留一个数字
+
+    跳过 = 这条用例一条断言都没验。只报「跳过 3」的话，群里既看不到是哪三条、
+    更看不到为什么：「探针没成交」「流水不带 gid 导致筛选失效」这类理由会天天一样，
+    某条用例就这样安静地跳一整月，而报告一直是绿的。
+    """
+    items = list(result.skipped)
+    if not items:
+        return []
+    lines = ['', '<font color="comment">**跳过 {} 条（不算通过，本轮这几条没验）**</font>'.format(
+        len(items))]
+    for case, reason in items[:max_items]:
+        detail = ' '.join(str(reason).split()) or '无原因'
+        if len(detail) > 80:
+            detail = detail[:80] + '…'
+        lines.append('　· {}　<font color="comment">{}</font>'.format(push_case_label(case), detail))
+    if len(items) > max_items:
+        lines.append('<font color="comment">　另有 {} 条未列出，完整清单 log/notPassCase.log</font>'.format(
+            len(items) - max_items))
+    return lines
+
+
 def retry_digits(result):
     """推送尾部用的重试计数：只报条数，没有重试时明确写 0
 

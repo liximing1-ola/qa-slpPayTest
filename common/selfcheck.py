@@ -498,6 +498,55 @@ def check_classify_responses():
         assert got == expect, '{} 应判为 {}，实际 {}'.format(label, expect, got)
 
 
+def check_push_skip_lines():
+    """跳过的用例必须带理由进推送：只留一个数字等于没报
+
+    跳过 = 这条用例一条断言都没验。只在尾部报「跳过 3」，群里看不到是哪三条、
+    更看不到为什么；而「探针没成交」「流水不带 gid」这类理由是长期稳定的，
+    某条用例会就这样安静地跳一整月，报告一直是绿的。
+    """
+    from common import report
+
+    class _Case(object):
+        # case_name 靠它区分「普通用例」与「类级钩子报错」，没有它日期拼出来的名字是错的
+        _testMethodName = True
+
+        def __init__(self, method):
+            self._method = method
+
+        def id(self):
+            return 'caseStress.test_pay_concurrent.TestConcurrentPay.' + self._method
+
+    class _Result(object):
+        failures = []
+        errors = []
+        skipped = []
+
+    result = _Result()
+    result.skipped = [
+        (_Case('test_005'), '探针未成交（rejected），本轮没做流水对账'),
+        (_Case('test_006'), '流水筛选失效，本轮没做对账：按 uid 查到 2 行但不带 gid'),
+    ]
+    text = '\n'.join(report.push_skip_lines(result))
+    assert '跳过 2 条' in text and '不算通过' in text, '标题必须说清「跳过不算通过」: ' + text
+    assert 'test_pay_concurrent.py · test_005' in text, '要点到文件名·方法，不能只给类名: ' + text
+    assert '探针未成交（rejected），本轮没做流水对账' in text, '理由必须原样带出来: ' + text
+
+    assert report.push_skip_lines(_Result()) == [], '没有跳过时不能凭空多出一行'
+
+    # 超过上限只列前 N 条，但必须说明还有多少、完整清单在哪
+    result.skipped = [(_Case('test_%03d' % index), '原因 {}'.format(index))
+                      for index in range(1, 9)]
+    text = '\n'.join(report.push_skip_lines(result, max_items=3))
+    assert '跳过 8 条' in text, '标题要报总数而不是只列出来的条数: ' + text
+    assert '原因 1' in text and '原因 3' in text and '原因 4' not in text, '超限时应只列前 3 条: ' + text
+    assert '另有 5 条未列出' in text, '截断后必须交代还有多少条: ' + text
+
+    # 空理由不能变成一个空白块：报告里得看得出「没写原因」，否则会被当成格式丢了
+    result.skipped = [(_Case('test_001'), '   ')]
+    assert '无原因' in '\n'.join(report.push_skip_lines(result)), '空理由要显式写成无原因'
+
+
 def main():
     print('框架自检：频控退避（common.Request）')
     _check('命中频控后退避重试并拿到成功响应', check_frequent_retry_then_success)
@@ -528,6 +577,9 @@ def main():
 
     print('框架自检：本机环境配置（common.envLocal）')
     _check('模板覆盖所需项、环境变量优先级最高', check_env_config_shape)
+
+    print('框架自检：报告推送（common.report）')
+    _check('跳过的用例带理由进推送、超限交代还剩几条', check_push_skip_lines)
 
     if _FAILED:
         print('\n自检未通过 {} / {} 项：{}'.format(len(_FAILED), len(_TOTAL), '、'.join(_FAILED)))

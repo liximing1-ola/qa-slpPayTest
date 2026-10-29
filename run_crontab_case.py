@@ -26,7 +26,7 @@ import traceback
 from common import Logs, preflight, runflow
 from common.Config import config
 from common.report import (AllTestRunner, build_suite, duration_text, fail_kind_line, group_lines,
-                           parse_app, push_fail_lines, retry_digits)
+                           parse_app, push_fail_lines, push_skip_lines, retry_digits)
 
 APP_SUPPORTED = (config.appName['SLP'], config.appName['XSG'])
 # 是否推送到企业微信群：默认关闭，cron 命令里显式写 PUSH_WX=1 打开。
@@ -94,8 +94,12 @@ def push_message(counts, test_result, app_info, elapsed):
 
     if not (counts['fail'] or counts['error']):
         # 不写「137 条全部通过」：137 里含 12 条跳过，写成全部通过就不准了
-        return ['<font color="info">**通过 {} / {}**</font>'.format(counts['pass'], counts['total']),
-                tail]
+        lines = ['<font color="info">**通过 {} / {}**</font>'.format(counts['pass'], counts['total']),
+                 tail]
+        # 全绿时更要列跳过：这类消息最容易被当成「今天没事」划过去，
+        # 而跳过的那几条正是本轮一条断言都没验的
+        lines.extend(push_skip_lines(test_result))
+        return lines
 
     # 只列非零的那几项：写「0 失败　2 异常」既占位又没信息量
     bad = '　'.join([item for item in (
@@ -109,6 +113,7 @@ def push_message(counts, test_result, app_info, elapsed):
     lines.extend(fail_kind_line(test_result))
     lines.extend(group_lines(test_result))
     lines.extend(push_fail_lines(test_result))
+    lines.extend(push_skip_lines(test_result))
     return lines
 
 
