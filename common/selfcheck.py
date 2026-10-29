@@ -80,15 +80,26 @@ class _FakeTime(object):
 
 
 _FAILED = []
+_TOTAL = []
 
 
 def _check(name, func):
+    """跑一项自检，打印结果，不在中间抛
+
+    除了 AssertionError 还要接其它异常：检查函数自己写崩（KeyError / AttributeError /
+    连库超时）同样是一条要报的结果。只接 AssertionError 的话，一项崩了会中断整轮，
+    后面那些项看上去就像「没报错」。
+    """
+    _TOTAL.append(name)
     try:
         func()
         print('  OK   {}'.format(name))
     except AssertionError as error:
         _FAILED.append(name)
         print('  FAIL {} -> {}'.format(name, error))
+    except Exception as error:
+        _FAILED.append(name)
+        print('  FAIL {} -> {}: {}'.format(name, type(error).__name__, error))
 
 
 def _with_scripted(bodies, interval=2.0, frequent_retry=2, backoff=2.0):
@@ -396,6 +407,97 @@ def check_env_config_shape():
             os.environ['APP_HOST'] = old
 
 
+def check_flow_split():
+    """流水聚合：付款行单独拎出来，收款行按（uid, op）合并成条数与金额
+
+    这里算错，「少写一笔」会被另一个收款人的行抵掉，付款行还会和收款行互相抵消，
+    红和绿都会失去意义。
+    """
+    from caseStress.tools import split_flows
+
+    rows = [
+        {'id': 1, 'uid': 200254777, 'money': 100, 'op': 'pay'},
+        {'id': 2, 'uid': 200255399, 'money': 71, 'op': 'income'},
+        {'id': 3, 'uid': 200258475, 'money': 6, 'op': 'income'},
+        {'id': 4, 'uid': 200255399, 'money': 71, 'op': 'income'},
+        {'id': 5, 'uid': 200255209, 'money': 3, 'op': 'tax'},
+        {'id': 6, 'uid': 200255399, 'money': 1, 'op': 'income'},
+    ]
+    income, pay = split_flows(rows)
+    assert len(pay) == 1, '付款行应只有 1 行，实际 {}'.format(len(pay))
+    assert income[(200255399, 'income')] == [3, 143], \
+        '同一收款人的多行应合并成 3 行 143，实际 {}'.format(income.get((200255399, 'income')))
+    assert income[(200258475, 'income')] == [1, 6], '厅长的 income 行应单独成一条写路径'
+    # 同一个 uid 换个 op 就是另一条写路径：把 tax 并进 income 会隐藏「税多写一行」
+    assert income[(200255209, 'tax')] == [1, 3], 'op 不同不能合并'
+    assert (200254777, 'pay') not in income, '付款行不能进收款聚合'
+    assert split_flows([]) == ({}, []), '没有流水时应返回 ({}, [])'
+
+
+def check_flow_wait_stable():
+    """等流水：条数不再增长才返回；一直没有流水时要把空结果交回，不能抛也不能死等
+
+    只看「至少 1 行」会漏掉后半段：一笔订单先写主播那行、再写厅和公会长，
+    读到 1 行就收工，后面两条写路径就不会被验——而报告上看不出来。
+    """
+    from caseStress import tools
+
+    old_read = tools.read_gift_flows
+    old_timeout = tools.WAIT_TIMEOUT
+    old_interval = tools.WAIT_INTERVAL
+    try:
+        tools.WAIT_TIMEOUT = 0.5
+        tools.WAIT_INTERVAL = 0.01
+
+        # 分两段写：前两次只读到 1 行，之后才补齐 3 行
+        rounds = [[1], [1], [1, 2, 3], [1, 2, 3], [1, 2, 3]]
+        calls = []
+
+        def staged(after_id, gid):
+            calls.append(1)
+            return rounds.pop(0) if rounds else [1, 2, 3]
+
+        tools.read_gift_flows = staged
+        rows = tools.wait_flows_stable(0, 69, least=1, quiet=3)
+        assert len(rows) == 3, '应等到 3 行落完再返回，实际 {}'.format(rows)
+        assert len(calls) >= 5, '分两段写时不能读到第一段就返回，实际只读了 {} 次'.format(len(calls))
+
+        tools.read_gift_flows = lambda after_id, gid: []
+        started = time.time()
+        rows = tools.wait_flows_stable(0, 69, least=1)
+        waited = time.time() - started
+        assert rows == [], '没有流水时应返回空列表'
+        assert waited >= 0.4, '应在超时后才返回，实际 {:.2f}s'.format(waited)
+    finally:
+        tools.read_gift_flows = old_read
+        tools.WAIT_TIMEOUT = old_timeout
+        tools.WAIT_INTERVAL = old_interval
+
+
+def check_classify_responses():
+    """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
+
+    并发用例的「绿」全靠这个判断：把频控当成功会假绿，把业务拒绝当异常会假红。
+    网关返回 HTML 时 body 是字符串（common.Request 会原样带回），直接 .get 会抛
+    AttributeError，用例就变成 ERROR——报告里看不出是服务端丢了个 502。
+    """
+    from caseStress.tools import classify
+
+    cases = [
+        ({'code': 200, 'body': {'success': True}}, 'success', '布尔真'),
+        ({'code': 200, 'body': {'success': '1'}}, 'success', '字符串 1'),
+        ({'code': 200, 'body': {'success': False, 'msg': '请勿频繁操作'}}, 'limited', '频控文案'),
+        ({'code': 200, 'body': {'success': False, 'msg': ''}}, 'rejected', '实测出现的空 msg 拒绝'),
+        ({'code': 200, 'body': {'success': 0, 'msg': '余额不足'}}, 'rejected', '余额不足'),
+        ({'code': 500, 'body': {'msg': '内部错误'}}, 'broken', 'HTTP 500'),
+        ({'code': 200, 'body': '<html>502 Bad Gateway</html>'}, 'broken', '网关返回 HTML'),
+        ({'code': -1, 'body': {'msg': 'timeout'}, 'error': True}, 'broken', '请求层抛错'),
+    ]
+    for res, expect, label in cases:
+        got = classify(res)
+        assert got == expect, '{} 应判为 {}，实际 {}'.format(label, expect, got)
+
+
 def main():
     print('框架自检：频控退避（common.Request）')
     _check('命中频控后退避重试并拿到成功响应', check_frequent_retry_then_success)
@@ -419,13 +521,18 @@ def main():
     print('框架自检：环境种子清单（common.envData）')
     _check('清单结构合法、SQL 可填、无重复项', check_seed_checks_shape)
 
+    print('框架自检：并发用例工具（caseStress.tools）')
+    _check('流水聚合：付款与收款分开、同人同 op 合并', check_flow_split)
+    _check('等流水：条数稳定才返回、没流水时超时带回空', check_flow_wait_stable)
+    _check('响应四分类、非 dict body 不崩', check_classify_responses)
+
     print('框架自检：本机环境配置（common.envLocal）')
     _check('模板覆盖所需项、环境变量优先级最高', check_env_config_shape)
 
     if _FAILED:
-        print('\n自检未通过 {} 项：{}'.format(len(_FAILED), '、'.join(_FAILED)))
+        print('\n自检未通过 {} / {} 项：{}'.format(len(_FAILED), len(_TOTAL), '、'.join(_FAILED)))
         return 1
-    print('\n自检全部通过')
+    print('\n自检全部通过（{} 项）'.format(len(_TOTAL)))
     return 0
 
 

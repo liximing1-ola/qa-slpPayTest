@@ -71,16 +71,37 @@ def read_gift_flows(after_id, gid):
     return mysql.selectRawDict(sql)
 
 
-def wait_gift_flows(after_id, gid, least=1):
-    """等流水落库：至少读到 least 行或超时，返回最后一次读到的全部行
+def read_flows_by_uid(after_id, uid):
+    """水位线之后某个账号的全部流水，不按 gid 过滤
 
-    和余额一样，结算流水是异步写的：发完请求立刻查会读到空，或者只读到前几笔。
-    超时也把已有结果返回，由调用方的断言去判断差多少。
+    用途只有一个：探针成交却按 gid 一行都查不到时，把两种可能分开——结算压根没写
+    流水（真缺陷），还是写了但 reason 里没有 gid（我们的筛选口径失效）。只看前者
+    会把后者报成假红，只看后者会放过真缺陷。
+    """
+    sql = ("select id, uid, money, op, reason from xs_pay_change "
+           "where id > {} and uid={} order by id".format(int(after_id), int(uid)))
+    return mysql.selectRawDict(sql)
+
+
+def wait_flows_stable(after_id, gid, least=1, quiet=3):
+    """等这批流水写完：至少读到 least 行，且连续 quiet 次读到的条数不再变化
+
+    不用「读到 least 行就返回」：一笔订单写几行取决于分成配置（只给主播是 1 行，
+    配了厅和公会长是 3 行），只要 1 行就返回会把探针的另外两条写路径漏掉，
+    后面整条用例就只验了主播那一行，还看不出来。而「条数不再增长」与配置无关。
+
+    least 是下界：它拦的是「结算分两段写、中间停了 0.3 秒就被当成写完了」；
+    一笔都没读到时不谈稳定，会一直等到超时，把已有结果（可能为空）返回，
+    由调用方的断言去判差多少。
     """
     deadline = time.time() + WAIT_TIMEOUT
+    last = -1
+    same = 0
     while True:
         rows = read_gift_flows(after_id, gid)
-        if len(rows) >= least or time.time() >= deadline:
+        same = same + 1 if len(rows) == last and len(rows) >= least else 0
+        last = len(rows)
+        if same >= quiet or time.time() >= deadline:
             return rows
         time.sleep(WAIT_INTERVAL)
 
@@ -104,7 +125,16 @@ def split_flows(rows):
 
 
 def is_success(res):
-    body = res.get('body') or {}
+    """成功 = HTTP 200 且 body.success 为真
+
+    body 不一定是 dict：网关拦截或后端 500 时 post_request_session 会把响应原文
+    原样带回来，字符串上没有 .get，直接取会抛 AttributeError——用例会变成 ERROR，
+    报告里成了一条「跑不起来」，而不是一条「服务端返回了异常响应」的失败。
+    自检里的「非 dict body」场景就是钉这一条。
+    """
+    body = res.get('body')
+    if not isinstance(body, dict):
+        return False
     return res.get('code') == 200 and str(body.get('success')) in ('1', 'True')
 
 
