@@ -38,6 +38,7 @@ qa-slpPayTest/
 ├── run_all_case.py        # 全量入口：逐条播报 + 未通过清单（日常主入口）
 ├── run_crontab_case.py    # 定时任务入口：只汇总与播报失败/异常，不拉分支、不列通过用例，结果推企微
 ├── run_stress_case.py     # 并发与幂等入口：上线前跑一轮，不进日常回归
+├── run_reproduce.py       # 复现率统计：连跑 N 轮，红/绿/未测到分开数，红的输出落 log
 ├── Robot.py               # 结果通知：企业微信群机器人 webhook
 ├── autoGitPull.py         # 分支检查 + 记录上次执行时间
 ├── pre_push_audit.py      # 推送前全仓审查（十二类）
@@ -122,6 +123,16 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 ```bash
 python3 run_stress_case.py slp
 CASE=test_pay_concurrent python3 run_stress_case.py slp    # 只跑并发那四条
+python3 run_reproduce.py                                   # test_004 连跑 10 轮，出复现率
+```
+
+`run_reproduce.py` 把「红 / 绿 / 未测到」分开数：**复现率 = 红 / (红 + 绿)**，
+未测到（被限流挡下、根本没走到校验）与无效轮次都不进分母。每轮起独立进程，与人工
+反复执行完全一致；红的那轮完整输出会落到 `log/reproduce-*.log`，可直接拿去提单。
+
+```bash
+python3 run_reproduce.py --rounds 20 --stagger 0.2
+python3 run_reproduce.py --case caseStress.test_pay_concurrent.TestConcurrentPay.test_002
 ```
 
 这部分用例回答的是「服务端会不会超扣、会不会重复扣费」，不跟着每天的 cron 跑：用例会改账号数据，混进日常回归就没法把一次「红」归因到某一类。

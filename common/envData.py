@@ -41,7 +41,10 @@ def seed_checks():
     return [
         ('账号', 'select uid from xianshi.xs_user_index where uid in ({})', SEED_USERS,
          '恢复 xs_user_index / xs_user_profile / xs_user_mobile 快照', True),
-        ('房间', 'select rid from xianshi.xs_chatroom where rid in ({}) and deleted=0', SEED_ROOMS,
+        # 房间不加 deleted=0 过滤：gs_A_ceo_rid 实测 deleted 非 0，但 test_gs_room.test_011
+        # 拿它跑得通（服务端按 rid 取 room_factory_type，不看 deleted）。加上这个条件会把
+        # 一条正常用例判成环境缺失——体检误拦比不体检更糟
+        ('房间', 'select rid from xianshi.xs_chatroom where rid in ({})', SEED_ROOMS,
          '恢复 xs_chatroom 快照（房间与 uid 绑定，只补 rid 不够）', True),
         ('礼物', 'select id from xianshi.xs_gift where id in ({})', SEED_GIFTS,
          '恢复 xs_gift 快照，主流程与并发用例都靠 69 号礼物下单', True),
