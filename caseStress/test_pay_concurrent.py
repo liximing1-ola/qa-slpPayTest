@@ -13,13 +13,16 @@ import threading
 import time
 import unittest
 
-from caseStress.config import ANCHOR_UID, CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
-from caseStress.tools import classify, read_income, read_money, read_wallets, reset_payer
+from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWNER_UID, PAY_AMOUNT,
+                               ROOM_RID, pay_url)
+from caseStress.tools import (classify, read_income, read_money, read_sum_money, read_wallets,
+                              reset_payer)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
 from common.Session import Session
 from common.basicSlpXsgData import encodeData
+from common.conSlpXsgMysql import conMysql as mysql
 from common.tools import get_test_token
 
 
@@ -105,23 +108,26 @@ class TestConcurrentPay(unittest.TestCase):
         return encodeData(rid=ROOM_RID, payType='package', uid=ANCHOR_UID, giftId=GIFT['gid'],
                           display_page=1)
 
-    def wait_income_stable(self, uid, quiet=5):
-        """等到账读数静默后返回该值：连续 quiet 次间隔读到同一个数才算稳定
+    def wait_stable(self, reader, quiet=5):
+        """等到 reader() 的读数静默后返回该值：连续 quiet 次间隔读到同一个数才算稳定
 
-        前置用例的打赏分成是异步结算的，跑到 test_005 时上一轮的到账可能还在灌进来。
-        基线只取一次瞬时快照，探针的增量就会把「别人的钱」一起算上：实测 unit 报 142，
+        前置用例的打赏分成是异步结算的，跑到这条用例时上一轮的到账可能还在灌进来。
+        基线只取一次瞬时快照，增量的差值就会把「别人的钱」一起算上：实测 unit 报 142，
         而单笔到账实际是 71——翻了一倍，后面 N * unit 跟着全错，于是在完全正确的
         服务端上报「到账不守恒」。
+
+        reader 传无参可调用而不是 uid：要同时盯主播、厅长、公会长三个账户，而且
+        余额与累计是两个字段，写死成某一个就没法复用。
 
         超时返回最后一次读数，不抛：结算比 WAIT_TIMEOUT 还慢的情况下，静默与否分不清，
         这个判断应该交给调用方的断言，而不是在这里猜。
         """
-        last = read_income(uid)
+        last = reader()
         same = 0
         deadline = time.time() + WAIT_TIMEOUT
         while time.time() < deadline:
             time.sleep(WAIT_INTERVAL)
-            now = read_income(uid)
+            now = reader()
             same = same + 1 if now == last else 0
             last = now
             if same >= quiet:
@@ -275,26 +281,35 @@ class TestConcurrentPay(unittest.TestCase):
         assert_equal(broken, [])
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
-    def test_005(self, des='四账号并发打赏同一主播: 收礼方到账总额=成功笔数*单笔到账'):
+    def test_005(self, des='四账号并发打赏同一主播: 主播/厅长/公会长三方分成各自守恒'):
         """扣款守恒归 test_001，这条只验收款侧——两条不同的链路
 
         扣款在支付服务里做余额扣减，分成在结算服务里「按厅取比例 + 累加」。前者错了
         打赏用户立刻投诉；后者错了要等主播对账才发现，而且到账是异步的——丢失更新会
         表现成「总额少一笔」，很容易被当成「还在结算中」糊过去，所以必须等到达标或超时。
 
-        比例不写死：先单笔测出 unit，再要求并发 N 笔的增量严格等于 N * unit。单笔到账
-        多少是业务规则（跟厅、工会、是否签署大神都有关），写死比例会把配置变更变成红灯，
-        也会掩盖真正的守恒问题；多笔是否守恒才是并发正确性。
+        三方各验一次：厅配置 71:6:3 对应主播、厅长、公会长，是三条不同记录、各自写入。
+        主播那行对了不代表另外两行也对——如果三者是三条相互独立的「读-加-写」，
+        其中一条丢了在主播身上根本看不见。
+
+        用 sum_money 对账而不是当前余额：它是只增不减的累计字段（test_gs_pay_self 里也
+        拿它当分成上界），不会被消费、转账、再打赏改掉。公会长本人也在并发打赏名单里，
+        但他打赏只扣 money、不碰 sum_money，所以不会和自己花出去的钱糊在一起。
+
+        比例不写死：先单笔测出各方 unit，再要求并发 N 笔的增量严格等于 N * unit。单笔
+        到账多少是业务规则（跟厅、工会、是否签署大神都有关），写死比例会把配置变更
+        变成红灯，也会掩盖真正的守恒问题；多笔是否守恒才是并发正确性。
 
         基线必须等静默：前一条用例的到账是异步的，底还没落完就开始探，测出的 unit 会
         把别人的钱算进来（实测报过 142 = 71 x 2）。
         """
         price = PAY_AMOUNT
         probe = CONCURRENT_PAYERS[0]
+        parties = (('主播', ANCHOR_UID), ('厅长', OWNER_UID), ('公会长', CEO_UID))
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, price)
 
-        base = self.wait_income_stable(ANCHOR_UID)
+        base = {name: self.wait_stable(lambda u=uid: read_sum_money(u)) for name, uid in parties}
         probe_res = post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe)
         probe_kind = classify(probe_res)
         if probe_kind != 'success':
@@ -302,38 +317,84 @@ class TestConcurrentPay(unittest.TestCase):
             print('[并发-到账][未测到] 单笔探针没成交（{}），测不出单笔到账额，本轮结论无效；'
                   '可稍后重跑'.format(probe_kind), flush=True)
             return
-        after = self.wait_income_stable(ANCHOR_UID)
-        unit = after - base
-        if unit <= 0:
+
+        unit = {}
+        for name, uid in parties:
+            unit[name] = self.wait_stable(lambda u=uid: read_sum_money(u)) - base[name]
+        if unit['主播'] <= 0:
             # 成交了却一直没到账：可能是结算慢于超时，也可能是真丢了。两者在读数上
             # 长得一样，不在这一层替服务端定罪，但必须说清本轮没测到
-            print('[并发-到账][未测到] 单笔探针成交但 {} 秒内没有到账（增量 {}），'
-                  '测不出单笔到账额，本轮结论无效；可稍后重跑'.format(int(WAIT_TIMEOUT), unit), flush=True)
+            print('[并发-到账][未测到] 单笔探针成交但 {} 秒内主播没到账（增量 {}），'
+                  '测不出单笔到账额，本轮结论无效；可稍后重跑'.format(
+                      int(WAIT_TIMEOUT), unit['主播']), flush=True)
             return
-        assert_between(unit, 1, price)
+        # 单笔到账不可能超过礼物单价：这条上界最早抓住「基线取错」这类错
+        assert_between(unit['主播'], 1, price)
+        for name in ('厅长', '公会长'):
+            # 该厅可能没给这一方配分成，0 是合法的；但不可能为负
+            assert_between(unit[name], 0, price)
 
         # 探针花掉的那一笔补回来，否则这个账号余额少一份，并发时会因余额不足被拒
         reset_payer(probe, price)
 
-        # 上面已等到静默，探针的 71 早落定了，after 就是并发前的基线
-        before = after
         results = self.run_concurrently([(uid, self.pay_call(uid)) for uid in CONCURRENT_PAYERS])
         kinds = [classify(res) for _, res in results]
         bodies = [res.get('body') for _, res in results]
         broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
         success = kinds.count('success')
         print('[并发-到账] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔；'
-              '单笔到账={}，期望到账={}'.format(
+              '单笔分别为 {}'.format(
                   success, kinds.count('limited'), kinds.count('rejected'), len(broken),
-                  unit, success * unit), flush=True)
+                  '，'.join('{}={}'.format(name, unit[name]) for name, _ in parties)), flush=True)
 
         assert_equal(broken, [])
         assert_between(success, 1, len(CONCURRENT_PAYERS))
         try:
-            assert_equal_eventually(lambda: read_income(ANCHOR_UID) - before, success * unit)
+            for name, uid in parties:
+                assert_equal_eventually(
+                    lambda u=uid, b=base[name], want=success * unit[name]: read_sum_money(u) - b, want)
         finally:
-            # 失败时这一行才是能定位的依据：差多少、差几笔的钱、钱落在哪个渠道
-            now = read_income(ANCHOR_UID)
-            print('[并发-到账] 收礼方 uid={} 打赏前={} 现在={} 到账={} 期望={} 全渠道={}'.format(
-                ANCHOR_UID, before, now, now - before, success * unit,
-                read_wallets(ANCHOR_UID)), flush=True)
+            # 失败时这一行才是能定位的依据：差多少、差几笔、哪一方丢的，以及余额落在哪个渠道
+            print('[并发-到账] 累计增量 {}，期望 {}；主播 uid={} 当前余额={} 全渠道={}'.format(
+                '，'.join('{}={}'.format(name, read_sum_money(uid) - base[name])
+                         for name, uid in parties),
+                '，'.join('{}={}'.format(name, success * unit[name]) for name, _ in parties),
+                ANCHOR_UID, read_income(ANCHOR_UID), read_wallets(ANCHOR_UID)), flush=True)
+
+    def test_006(self, des='四账号并发, 其中一人零余额: 该笔必须被拒且不牵连其余三笔'):
+        """部分失败不能拖垮整批，也不能被整批抹平
+
+        两种常见错法：一是「一人余额不足、整批都失败」，说明校验被做成了批次级；
+        二是更糟的「零余额那个也返回成功」，钱要么没扣就发了货，要么从别人的账上抹平。
+        四个账号各自独立，所以这里严格按「每人一刀」验：成功的必须扣钱，被拒的一分不少。
+
+        reset_payer 只设 money，所以零余额那个账号还要把其他渠道一起清零——
+        只清 money 时，服务端若回退到别的渠道扣款，这条用例就白测了。
+        """
+        price = PAY_AMOUNT
+        broke = CONCURRENT_PAYERS[-1]
+        for uid in CONCURRENT_PAYERS:
+            reset_payer(uid, 0 if uid == broke else price)
+        mysql.updateMoneySql(broke)  # 默认实参全 0：五个渠道一起清
+        before = {uid: read_money(uid) for uid in CONCURRENT_PAYERS}
+        assert_equal(before[broke], 0)
+
+        results = self.run_concurrently([(uid, self.pay_call(uid)) for uid in CONCURRENT_PAYERS])
+        kinds = {uid: classify(res) for uid, res in results}
+        bodies = {uid: res.get('body') for uid, res in results}
+        broken = [body for uid, body in bodies.items() if kinds[uid] == 'broken']
+        others = [uid for uid in CONCURRENT_PAYERS if uid != broke]
+        print('[并发-零余额] 零余额账号={} 结果={}；其余三人 成功 {} 笔，频控 {} 笔，'
+              '业务拒绝 {} 笔，服务端异常 {} 笔'.format(
+                  broke, kinds[broke], [kinds[uid] for uid in others].count('success'),
+                  [kinds[uid] for uid in others].count('limited'),
+                  [kinds[uid] for uid in others].count('rejected'), len(broken)), flush=True)
+
+        assert_equal(broken, [])
+        # 零余额那个必须被拒：返回 success 就是「没扣钱却发了货」
+        assert_equal(kinds[broke], 'rejected')
+        # 其余三人不该被牵连：一个人没钱，不能让整批都失败
+        assert_between([kinds[uid] for uid in others].count('success'), 1, len(others))
+        for uid in CONCURRENT_PAYERS:
+            self.assert_conserved(uid, before[uid], 1 if kinds[uid] == 'success' else 0, price,
+                                  bodies[uid])

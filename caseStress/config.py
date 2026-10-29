@@ -7,8 +7,8 @@
 账号直接复用 caseSlp 的真实数据，不另造一套：这样余额重置、礼物价格、房间号
 与主流程用例的口径完全一致，出问题时能拿主流程的结论对照。
 """
-from caseSlp.config import (default_num, giftId, gs_A_ceo_uid, gs_A_rid_1, gs_A_uid, gs_B_uid,
-                            normal_uid, payUid)
+from caseSlp.config import (default_num, giftId, gs_A_ceo_uid, gs_A_rid_1, gs_A_room_owner_1_uid,
+                            gs_A_uid, gs_B_uid, normal_uid, payUid)
 # pay_url 本文件不用，只给用例从这里取（与 caseSlp/tools.py 的转发同一意图），标 noqa 免得被当残留
 from caseSlp.config import pay_url  # noqa:F401
 
@@ -17,6 +17,10 @@ CONCURRENT_PAYERS = (payUid, gs_B_uid, gs_A_ceo_uid, normal_uid)
 # 收礼方与房间：歌手身份 + 商业房，与主流程 test_gs_room 同一套
 ANCHOR_UID = gs_A_uid
 ROOM_RID = gs_A_rid_1
+# 分成的另外两方：厅配置 71:6:3 对应主播 / 厅长 / 公会长，三行不同记录各自写入。
+# 只验主播等于漏掉另外两行——若它们是相互独立的「读-加-写」，其中一条丢了在主播身上看不见
+OWNER_UID = gs_A_room_owner_1_uid
+CEO_UID = gs_A_ceo_uid
 # 单笔订单的礼物与金额：礼物 69 单价最低、无优惠券，扣款渠道只有 money，便于守恒对账
 GIFT = giftId['69']
 PAY_AMOUNT = giftId['69']['price'] * default_num

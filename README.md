@@ -122,7 +122,7 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 
 ```bash
 python3 run_stress_case.py slp
-CASE=test_pay_concurrent python3 run_stress_case.py slp    # 只跑 test_pay_concurrent 那 5 条
+CASE=test_pay_concurrent python3 run_stress_case.py slp    # 只跑 test_pay_concurrent 那 6 条
 python3 run_reproduce.py                                   # test_004 连跑 10 轮，出复现率
 ```
 
@@ -139,7 +139,7 @@ python3 run_reproduce.py --case caseStress.test_pay_concurrent.TestConcurrentPay
 
 但它们和日常用例**不冲突，不靠执行顺序兜底**——双方各自在前置里清理自己依赖的数据：
 余额 `prepare_test_data`、上周厅统计 `reset_room_acs`、VIP 经验值与个人人气 `prepare_vip_pop_data`、
-背包 `reset_payer`。实测（2026-10-29）：先跑完 5 条并发，紧接着跑最容易被污染的 5 个场景族
+背包 `reset_payer`。实测（2026-10-29）：先跑完 6 条并发，紧接着跑最容易被污染的 5 个场景族
 41 条，39 条执行 0 未通过（2 条既定 skip），所以「先并发后全量」「先全量后并发」都可以自由编排。
 
 为什么必须是独立目录 + 独立进程：
@@ -153,7 +153,8 @@ python3 run_reproduce.py --case caseStress.test_pay_concurrent.TestConcurrentPay
 | 同账号并发两笔（余额只够一笔） | 钱与成功响应严格对应，不得透支 |
 | 四账号各连发两笔相同请求 | 每个账号扣款 = 自己成功笔数 × 单价，不得透支 |
 | 同账号并发两笔自刷（余额只够一笔） | 同上口径；历史红过一次但 45 轮未复现，留作回归钉 |
-| 四账号并发打同一主播（收款侧） | 收礼方到账总额 = 成功笔数 × 单笔到账；单笔到账先用探针实测，不写死比例 |
+| 四账号并发打同一主播（收款侧） | 主播/厅长/公会长三方分成各自守恒（用 `sum_money` 累计字段对账）；各方单笔收益先用探针实测，不写死比例 |
+| 四账号并发、其中一人零余额 | 零余额那笔必须被拒，且不牵连其余三笔；四人各自按自己成功笔数扣款 |
 | 同一请求连发 3 次 | 账与响应自洽；成交多于 1 笔时显著打印「待确认」 |
 
 第一到四条把「少扣」和「超扣」都当失败：余额只留单笔（或两笔）的量，多扣一次就变负，被区间断言挡住。
@@ -165,7 +166,14 @@ python3 run_reproduce.py --case caseStress.test_pay_concurrent.TestConcurrentPay
 再要求并发 N 笔的增量严格等于 `N × unit`。单笔到账多少是业务规则（跟厅、工会、是否签大神都有关），
 **多笔是否守恒才是并发正确性**；写死比例会把配置变更变成红灯，也会掩盖真正的守恒问题。
 
-实测（2026-10-29）：单笔到账 **71**，并发 4 笔到账 **284 = 4 × 71**，完全守恒。
+**三方各验一次**：厅配置 71:6:3 对应主播、厅长、公会长，是三条不同记录、各自写入。
+主播那行对了不代表另外两行也对——如果三者是三条相互独立的「读-加-写」，其中一条丢了
+在主播身上根本看不见。对账用 `sum_money`（只增不减的累计字段）而不是当前余额：
+余额会被消费、转账、再打赏改掉，公会长本人又在并发打赏名单里，用余额对账会和他自己
+花出去的钱糊在一起。
+
+实测（2026-10-29，余额口径）：单笔到账 **71**，并发 4 笔到账 **284 = 4 × 71**，完全守恒。
+改用 `sum_money` 对账后，同一笔分成的单笔增量应当同为 71（口径核对项，下次实跑确认）。
 这两个数字正好印证了上面那两个设计取舍：
 
 - **71 既不是 `rates['gs']['default']` 的 0.7，也不是 `as_normal` 的 0.8**。写死任何一个，

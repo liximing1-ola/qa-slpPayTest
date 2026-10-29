@@ -36,6 +36,19 @@ def read_income(uid):
                if channel.startswith('money'))
 
 
+def read_sum_money(uid):
+    """历史累计收益：只增不减的字段，用它做守恒对账比当前余额干净
+
+    single_money 是当前余额，会被消费、转账、再打赏改掉；sum_money 是累计，
+    只随分成增加。并发的「读-加-写」丢一次，余额可能被后一笔盖住看不出来，
+    累计字段则永远少一部分——所以守恒断言优先压在它上面。
+
+    另：公会长也在并发打赏名单里，但打赏只扣 money、不碰 sum_money，
+    所以用这个字段对账时，不会和他自己花出去的钱糊在一起。
+    """
+    return mysql.selectUserInfoSql('sum_money', uid)
+
+
 def reset_payer(uid, amount):
     """余额只留 amount，其余渠道清零；背包也清空——渠道一多，扣款落在哪个字段就不确定了"""
     mysql.updateMoneySql(uid, money=amount)
