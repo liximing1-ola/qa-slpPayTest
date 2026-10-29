@@ -24,6 +24,18 @@ def read_wallets(uid):
             for channel in WALLET_CHANNELS}
 
 
+def read_income(uid):
+    """收款方到账总额：money 系列全部累加，gold_coin 不算
+
+    分成落在 money_cash 还是 money_cash_b，由「是否在工会、是否签署大神」决定，
+    写死单个渠道会在配置变动时把「到账落别处」判成「没到账」；而总额守恒与落在
+    哪个渠道无关。轮询时多读三个渠道的代价，远小于把一个渠道判断错。
+    gold_coin 不计入：那是金币，不是人民币收入。
+    """
+    return sum(value for channel, value in read_wallets(uid).items()
+               if channel.startswith('money'))
+
+
 def reset_payer(uid, amount):
     """余额只留 amount，其余渠道清零；背包也清空——渠道一多，扣款落在哪个字段就不确定了"""
     mysql.updateMoneySql(uid, money=amount)

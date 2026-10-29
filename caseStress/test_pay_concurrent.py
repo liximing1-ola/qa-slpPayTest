@@ -14,8 +14,9 @@ import time
 import unittest
 
 from caseStress.config import ANCHOR_UID, CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
-from caseStress.tools import classify, read_money, read_wallets, reset_payer
-from common.Assert import assert_between, assert_equal, assert_equal_eventually
+from caseStress.tools import classify, read_income, read_money, read_wallets, reset_payer
+from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
+                           assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
 from common.Session import Session
 from common.basicSlpXsgData import encodeData
@@ -96,9 +97,26 @@ class TestConcurrentPay(unittest.TestCase):
         各累积 120~320），对账时「扣了多少」与「又收回来多少」糊在一起，
         失败现场根本分不清少扣的那一笔是没扣、还是被返还抵消了。
         """
-        data = encodeData(rid=ROOM_RID, payType='package', uid=ANCHOR_UID, giftId=GIFT['gid'],
-                          display_page=1)
+        data = self.pay_data()
         return lambda: post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
+
+    def pay_data(self):
+        """打赏给主播的请求体：探针与并发共用一份，避免两处参数漂移"""
+        return encodeData(rid=ROOM_RID, payType='package', uid=ANCHOR_UID, giftId=GIFT['gid'],
+                          display_page=1)
+
+    def wait_income_gain(self, uid, base):
+        """等到账增量出现，返回增量；超时返回 0 交给调用方判
+
+        分成是异步结算，下单成功不等于钱已到账，读一次就判会把「还没写库」当成没到账。
+        """
+        deadline = time.time() + WAIT_TIMEOUT
+        while time.time() < deadline:
+            gain = read_income(uid) - base
+            if gain > 0:
+                return gain
+            time.sleep(WAIT_INTERVAL)
+        return 0
 
     def assert_conserved(self, uid, before, success_count, price, body_text):
         """钱与响应必须严格对应：多说成功就是多扣，少说成功就是给货没扣钱
@@ -246,3 +264,55 @@ class TestConcurrentPay(unittest.TestCase):
 
         assert_equal(broken, [])
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
+
+    def test_005(self, des='四账号并发打赏同一主播: 收礼方到账总额=成功笔数*单笔到账'):
+        """扣款守恒归 test_001，这条只验收款侧——两条不同的链路
+
+        扣款在支付服务里做余额扣减，分成在结算服务里「按厅取比例 + 累加」。前者错了
+        打赏用户立刻投诉；后者错了要等主播对账才发现，而且到账是异步的——丢失更新会
+        表现成「总额少一笔」，很容易被当成「还在结算中」糊过去，所以必须等到达标或超时。
+
+        比例不写死：先单笔测出 unit，再要求并发 N 笔的增量严格等于 N * unit。单笔到账
+        多少是业务规则（跟厅、工会、是否签署大神都有关），写死比例会把配置变更变成红灯，
+        也会掩盖真正的守恒问题；多笔是否守恒才是并发正确性。
+        """
+        price = PAY_AMOUNT
+        probe = CONCURRENT_PAYERS[0]
+        for uid in CONCURRENT_PAYERS:
+            reset_payer(uid, price)
+
+        base = read_income(ANCHOR_UID)
+        probe_res = post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe)
+        probe_kind = classify(probe_res)
+        if probe_kind != 'success':
+            # 单笔都没成交，比例无从测起，守恒式两边都是 0，绿了也毫无意义
+            print('[并发-到账][未测到] 单笔探针没成交（{}），测不出单笔到账额，本轮结论无效；'
+                  '可稍后重跑'.format(probe_kind), flush=True)
+            return
+        unit = self.wait_income_gain(ANCHOR_UID, base)
+        assert_between(unit, 1, price)
+
+        # 探针花掉的那一笔补回来，否则这个账号余额少一份，并发时会因余额不足被拒
+        reset_payer(probe, price)
+
+        before = read_income(ANCHOR_UID)
+        results = self.run_concurrently([(uid, self.pay_call(uid)) for uid in CONCURRENT_PAYERS])
+        kinds = [classify(res) for _, res in results]
+        bodies = [res.get('body') for _, res in results]
+        broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
+        success = kinds.count('success')
+        print('[并发-到账] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔；'
+              '单笔到账={}，期望到账={}'.format(
+                  success, kinds.count('limited'), kinds.count('rejected'), len(broken),
+                  unit, success * unit), flush=True)
+
+        assert_equal(broken, [])
+        assert_between(success, 1, len(CONCURRENT_PAYERS))
+        try:
+            assert_equal_eventually(lambda: read_income(ANCHOR_UID) - before, success * unit)
+        finally:
+            # 失败时这一行才是能定位的依据：差多少、差几笔的钱、钱落在哪个渠道
+            now = read_income(ANCHOR_UID)
+            print('[并发-到账] 收礼方 uid={} 打赏前={} 现在={} 到账={} 期望={} 全渠道={}'.format(
+                ANCHOR_UID, before, now, now - before, success * unit,
+                read_wallets(ANCHOR_UID)), flush=True)
