@@ -78,20 +78,29 @@ class TestConcurrentPay(unittest.TestCase):
         for uid, token in token_map.items():
             Session.checkUserToken('write', app_name='slp', uid=uid, token=token)
 
-        # 分成落几条写路径，取决于「主播上周在哪个厅」：xsst_roomacs_sum 里没有这一行时，
-        # 服务端不吃本厅配置（config.bbs_room_gift_rate 里 170000211 是 71:6:3），而是
-        # 回落到默认比例（80 全给主播）。2026-10-29 两轮整跑分别跑出这两种口径，差别就在
-        # 这张表：并发用例自己从不准备它，表里有什么完全取决于之前跑过哪些用例。
-        # 固定成「主播上周就在本厅」，口径才跨轮可比；这不是绕开问题——反而把「本厅配置
-        # 到底发几份」从「看运气」变成稳定可验，之前两轮里有一轮只验了 1 条写路径。
+        # 分成落几条写路径，取决于三个前提，缺一条就回落到默认比例：**主播上周厅有行、
+        # 主播在工会、主播签了大神**。caseSlp/config.py 的 rates 注释就是这条规则——
+        # `as_normal: 0.8, # 在工会且签署大神 缺一不可,否则按照普通用户比例分成 mcb`，
+        # 回落时只有一行：主播 80、进 money_cash_b，厅长与公会长都是 0。
         reset_room_acs(ANCHOR_UID, ROOM_RID)
-        # 口径还取决于另外两个状态，而它们同样由别的用例准备（caseSlp 里 prepare_test_data
-        # 会把主播的 agreement_version 设成 1）：不主动改，但要打出来——不然下一轮又跑出
-        # 80:0:0 时，分不清是上周厅、大神状态还是工会身份。
-        print('[并发] 分成口径的前置状态：主播 {} 上周厅已固定为 {}，签大神={}，工会成员={}；'
-              '本厅（{}）配置只在三者都满足时生效，否则回落默认比例'.format(
-                  ANCHOR_UID, ROOM_RID, mysql.checkUserAgreement(ANCHOR_UID),
-                  mysql.checkUserBroker(ANCHOR_UID), ROOM_RID), flush=True)
+        # 2026-10-29 只固定上周厅，跑出来仍是 1 行 80——缺的是「签署大神」这一条：
+        # 它是 `xs_user_settings.agreement_version`，被别的用例改来改去（test_coupon 里
+        # `god_status={gs_A_uid: 0}`、test_gs_room 里 `{uid: 0}` 断言 as_normal 0.8），
+        # 并发用例自己从不设。三样都按主流程基准用例的写法固定住：
+        # test_gs_pay_self.test_002 就是 `reset_room_acs(gs_A_uid, gs_A_rid_1)` +
+        # `prepare_test_data(..., god_status={gs_A_uid: 1})`，它断言的是 71:6:3。
+        mysql.updateUserGodSql(ANCHOR_UID, 1)
+        # 前置没摆好不能静默降级：80:0:0 时用例照样绿，但只验了主播一条写路径，厅长与
+        # 公会长那两行一次都没走到。所以这里直接报错，比打印一行「签大神=False」硬。
+        broker_flag = mysql.checkUserBroker(ANCHOR_UID)
+        god_flag = mysql.checkUserAgreement(ANCHOR_UID)
+        if not (broker_flag and god_flag):
+            raise AssertionError(
+                '分成口径的前置没摆好：主播 {} 工会成员={} 签大神={}，缺一条就会回落 80:0:0，'
+                '用例仍会绿但只验到主播一条写路径'.format(ANCHOR_UID, broker_flag, god_flag))
+        print('[并发] 分成口径的前置状态：主播 {} 上周厅已固定为 {}、工会成员=是、签大神=是；'
+              '本厅（{}）配置三项齐了才生效，探针应落到 3 条写路径（主播/厅长/公会长）'.format(
+                  ANCHOR_UID, ROOM_RID, ROOM_RID), flush=True)
 
     def run_concurrently(self, tasks, stagger=0.0):
         """tasks = [(uid, callable)]，Barrier 对齐后同时出发，返回 [(uid, 响应)]
