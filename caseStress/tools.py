@@ -36,15 +36,16 @@ def read_income(uid):
                if channel.startswith('money'))
 
 
-def read_sum_money(uid):
-    """历史累计收益：只增不减的字段，用它做守恒对账比当前余额干净
+def read_total_money(uid):
+    """四个人民币渠道的余额合计：money + money_b + money_cash + money_cash_b
 
-    single_money 是当前余额，会被消费、转账、再打赏改掉；sum_money 是累计，
-    只随分成增加。并发的「读-加-写」丢一次，余额可能被后一笔盖住看不出来，
-    累计字段则永远少一部分——所以守恒断言优先压在它上面。
+    用合计而不是单个渠道：分成落到 money_cash 还是 money_cash_b，由「是否在工会、
+    是否签署大神」决定，只看 money 会把「到账落别处」当成没到账。
 
-    另：公会长也在并发打赏名单里，但打赏只扣 money、不碰 sum_money，
-    所以用这个字段对账时，不会和他自己花出去的钱糊在一起。
+    必须记住它是**可变余额**，不是累计收入（这点写错过一次）：账号自己打赏会从这里扣。
+    所以拿它做守恒对账时，付款方自己那一刀要显式从期望值里减掉，不能只写 success * unit。
+
+    gold_coin 不在内：那是金币，不是人民币收入。
     """
     return mysql.selectUserInfoSql('sum_money', uid)
 

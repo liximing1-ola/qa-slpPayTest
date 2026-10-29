@@ -15,7 +15,7 @@ import unittest
 
 from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWNER_UID, PAY_AMOUNT,
                                ROOM_RID, pay_url)
-from caseStress.tools import (classify, read_income, read_money, read_sum_money, read_wallets,
+from caseStress.tools import (classify, read_income, read_money, read_total_money, read_wallets,
                               reset_payer)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
@@ -292,9 +292,10 @@ class TestConcurrentPay(unittest.TestCase):
         主播那行对了不代表另外两行也对——如果三者是三条相互独立的「读-加-写」，
         其中一条丢了在主播身上根本看不见。
 
-        用 sum_money 对账而不是当前余额：它是只增不减的累计字段（test_gs_pay_self 里也
-        拿它当分成上界），不会被消费、转账、再打赏改掉。公会长本人也在并发打赏名单里，
-        但他打赏只扣 money、不碰 sum_money，所以不会和自己花出去的钱糊在一起。
+        对账用 read_total_money（四个人民币渠道余额之和）而不是单个渠道：分成落在
+        money_cash 还是 money_cash_b 由工会/大神身份决定，只看 money 会把「到账落别处」
+        当成没到账。但要记住它是**可变余额**：公会长本人就在并发打赏名单里，他余额里少的
+        那一刀是他自己花出去的，期望值里必须减掉（首跑就是漏了这一项：期望 0、实际 -100）。
 
         比例不写死：先单笔测出各方 unit，再要求并发 N 笔的增量严格等于 N * unit。单笔
         到账多少是业务规则（跟厅、工会、是否签署大神都有关），写死比例会把配置变更
@@ -302,6 +303,10 @@ class TestConcurrentPay(unittest.TestCase):
 
         基线必须等静默：前一条用例的到账是异步的，底还没落完就开始探，测出的 unit 会
         把别人的钱算进来（实测报过 142 = 71 x 2）。
+
+        并发前要重新取一次基线：探针那一笔的到账就落在第一个基线到并发之间，不从并发
+        基线里抹掉，它就会被算进「并发增量」（探针实测 355 = 284 + 71）。重取还能顺手
+        吃掉迟到的到账，否则它会在并发窗口里冒出来，看起来像多到账了一笔。
         """
         price = PAY_AMOUNT
         probe = CONCURRENT_PAYERS[0]
@@ -312,7 +317,7 @@ class TestConcurrentPay(unittest.TestCase):
         # 三方基线逐个等静默：静默轮询在本次迭代内就跑完，闭包晚绑定不会串到下一方
         base = {}
         for name, uid in parties:
-            base[name] = self.wait_stable(lambda: read_sum_money(uid))
+            base[name] = self.wait_stable(lambda: read_total_money(uid))
         probe_res = post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe)
         probe_kind = classify(probe_res)
         if probe_kind != 'success':
@@ -323,7 +328,7 @@ class TestConcurrentPay(unittest.TestCase):
 
         unit = {}
         for name, uid in parties:
-            unit[name] = self.wait_stable(lambda: read_sum_money(uid)) - base[name]
+            unit[name] = self.wait_stable(lambda: read_total_money(uid)) - base[name]
         if unit['主播'] <= 0:
             # 成交了却一直没到账：可能是结算慢于超时，也可能是真丢了。两者在读数上
             # 长得一样，不在这一层替服务端定罪，但必须说清本轮没测到
@@ -336,33 +341,53 @@ class TestConcurrentPay(unittest.TestCase):
         for name in ('厅长', '公会长'):
             # 该厅可能没给这一方配分成，0 是合法的；但不可能为负
             assert_between(unit[name], 0, price)
+        if unit['厅长'] == 0 and unit['公会长'] == 0:
+            # 不报错（配置属于业务决定），但必须说出来：否则这一轮的绿看着验了三方，
+            # 实际只验了主播一行，后面真丢了那两行也看不出来
+            print('[并发-到账][注意] 厅长与公会长单笔到账都是 0，该厅可能没给这两方配分成，'
+                  '本轮实际只验证了主播那一行', flush=True)
 
         # 探针花掉的那一笔补回来，否则这个账号余额少一份，并发时会因余额不足被拒
         reset_payer(probe, price)
+        # 并发前重新取基线：把探针那一笔（及迟到的到账）留在窗口外，后面只对 success * unit 负责
+        base = {}
+        for name, uid in parties:
+            base[name] = self.wait_stable(lambda: read_total_money(uid))
 
         results = self.run_concurrently([(uid, self.pay_call(uid)) for uid in CONCURRENT_PAYERS])
-        kinds = [classify(res) for _, res in results]
+        # 按 uid 留档而不是只看总数：公会长既是收款方又是付款方，算他的期望值时
+        # 要单独看他这一笔成没成交，才能决定减不减那一刀
+        kind_by_uid = {uid: classify(res) for uid, res in results}
+        kinds = list(kind_by_uid.values())
         bodies = [res.get('body') for _, res in results]
-        broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
+        broken = [res.get('body') for uid, res in results if kind_by_uid[uid] == 'broken']
         success = kinds.count('success')
         print('[并发-到账] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔；'
-              '单笔分别为 {}'.format(
+              '单笔分别为 {}；响应 {}'.format(
                   success, kinds.count('limited'), kinds.count('rejected'), len(broken),
-                  '，'.join('{}={}'.format(name, unit[name]) for name, _ in parties)), flush=True)
+                  '，'.join('{}={}'.format(name, unit[name]) for name, _ in parties), bodies),
+              flush=True)
 
         assert_equal(broken, [])
         assert_between(success, 1, len(CONCURRENT_PAYERS))
         try:
             for name, uid in parties:
                 baseline = base[name]
-                expect = success * unit[name]
-                assert_equal_eventually(lambda: read_sum_money(uid) - baseline, expect)
+                # 他若自己也是付款方，余额里会少掉成交的那一笔——那不是分成少给了，
+                # 不扣就是「期望 0、实际 -100」这种假红
+                spend = price if kind_by_uid.get(uid) == 'success' else 0
+                expect = success * unit[name] - spend
+                assert_equal_eventually(lambda: read_total_money(uid) - baseline, expect)
         finally:
             # 失败时这一行才是能定位的依据：差多少、差几笔、哪一方丢的，以及余额落在哪个渠道
-            print('[并发-到账] 累计增量 {}，期望 {}；主播 uid={} 当前余额={} 全渠道={}'.format(
-                '，'.join('{}={}'.format(name, read_sum_money(uid) - base[name])
+            print('[并发-到账] 余额增量 {}，期望 {}（已扣除各自付款 {}）；主播 uid={} 当前余额={} 全渠道={}'.format(
+                '，'.join('{}={}'.format(name, read_total_money(uid) - base[name])
                          for name, uid in parties),
-                '，'.join('{}={}'.format(name, success * unit[name]) for name, _ in parties),
+                '，'.join('{}={}'.format(name, success * unit[name]
+                                        - (price if kind_by_uid.get(uid) == 'success' else 0))
+                         for name, uid in parties),
+                '，'.join('{}={}'.format(name, price if kind_by_uid.get(uid) == 'success' else 0)
+                         for name, uid in parties),
                 ANCHOR_UID, read_income(ANCHOR_UID), read_wallets(ANCHOR_UID)), flush=True)
 
     def test_006(self, des='四账号并发, 其中一人零余额: 该笔必须被拒且不牵连其余三笔'):
