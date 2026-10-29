@@ -281,7 +281,7 @@ class TestConcurrentPay(unittest.TestCase):
         assert_equal(broken, [])
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
-    def test_005(self, des='四账号并发打赏同一主播: 主播/厅长/公会长三方分成各自守恒'):
+    def test_005(self, des='四账号并发打赏同一主播: 到账按成功笔数守恒(主播必验, 厅长/公会长有分成时一并验)'):
         """扣款守恒归 test_001，这条只验收款侧——两条不同的链路
 
         扣款在支付服务里做余额扣减，分成在结算服务里「按厅取比例 + 累加」。前者错了
@@ -291,6 +291,11 @@ class TestConcurrentPay(unittest.TestCase):
         三方各验一次：厅配置 71:6:3 对应主播、厅长、公会长，是三条不同记录、各自写入。
         主播那行对了不代表另外两行也对——如果三者是三条相互独立的「读-加-写」，
         其中一条丢了在主播身上根本看不见。
+
+        但「三方」能不能验到，取决于当时生效的是哪套口径（实测两种都碰到过）：
+        厅配置 71:6:3 生效时 → 主播 71、厅长 6、公会长 3，三行都有；
+        回落到默认 as_normal 0.8 时 → 主播 80、另外两方 0。后一种情况下这条用例实际
+        只验了主播，所以描述里写「有分成时一并验」，而不是一律声称验了三方。
 
         对账用 read_total_money（四个人民币渠道余额之和）而不是单个渠道：分成落在
         money_cash 还是 money_cash_b 由工会/大神身份决定，只看 money 会把「到账落别处」
