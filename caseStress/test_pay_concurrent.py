@@ -15,8 +15,8 @@ import unittest
 
 from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWNER_UID, PAY_AMOUNT,
                                ROOM_RID, pay_url)
-from caseStress.tools import (classify, read_income, read_money, read_total_money, read_wallets,
-                              reset_payer)
+from caseStress.tools import (classify, max_pay_change_id, read_money, read_total_money, read_wallets,
+                              reset_payer, split_flows, wait_gift_flows)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
@@ -24,6 +24,16 @@ from common.Session import Session
 from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
 from common.tools import get_test_token
+
+# 日志里带名字：流水只给 uid，光看数字对不上人
+PARTY_NAMES = {ANCHOR_UID: '主播', OWNER_UID: '厅长', CEO_UID: '公会长'}
+
+
+def flow_text(income):
+    """{(uid, op): [行数, 金额]} 转成一行可读文字，空的时候不返回空字符串"""
+    return '，'.join('{}({}) op={} {}行{}元'.format(
+        PARTY_NAMES.get(uid, 'uid'), uid, op, count, amount)
+        for (uid, op), (count, amount) in sorted(income.items())) or '无'
 
 
 class TestConcurrentPay(unittest.TestCase):
@@ -281,119 +291,94 @@ class TestConcurrentPay(unittest.TestCase):
         assert_equal(broken, [])
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
-    def test_005(self, des='四账号并发打赏同一主播: 到账按成功笔数守恒(主播必验, 厅长/公会长有分成时一并验)'):
-        """扣款守恒归 test_001，这条只验收款侧——两条不同的链路
+    def test_005(self, des='四账号并发打赏同一主播: 分成流水按成功笔数放大, 收款人由单笔探针实测'):
+        """收款侧按「流水」对账，不再按余额逐方对齐
 
-        扣款在支付服务里做余额扣减，分成在结算服务里「按厅取比例 + 累加」。前者错了
-        打赏用户立刻投诉；后者错了要等主播对账才发现，而且到账是异步的——丢失更新会
-        表现成「总额少一笔」，很容易被当成「还在结算中」糊过去，所以必须等到达标或超时。
+        为什么换到流水：余额是下游结果，里面混了自己付款、渠道差异（money_cash /
+        money_cash_b）、到账迟到。前几轮我一直在修这些量法（142、-100、355），
+        一次都没碰到被测的并发问题——方向错了，case 怎么写都别扭。
 
-        三方各验一次：厅配置 71:6:3 对应主播、厅长、公会长，是三条不同记录、各自写入。
-        主播那行对了不代表另外两行也对——如果三者是三条相互独立的「读-加-写」，
-        其中一条丢了在主播身上根本看不见。
+        流水（xs_pay_change）是结算服务真正写下的东西：一行一个收款人，reason 里带
+        from / gid / num / rate。「少一笔分成」在这里就是少一行，不会像余额那样被
+        另一笔、另一个渠道、或收款人自己花掉的钱抵消掉。
 
-        但「三方」能不能验到，取决于当时生效的是哪套口径（实测两种都碰到过）：
-        厅配置 71:6:3 生效时 → 主播 71、厅长 6、公会长 3，三行都有；
-        回落到默认 as_normal 0.8 时 → 主播 80、另外两方 0。后一种情况下这条用例实际
-        只验了主播，所以描述里写「有分成时一并验」，而不是一律声称验了三方。
+        口径全部由探针实测，不预设谁分成：探针一笔成交后，先查出「这笔打赏到底写了
+        哪些行」（收款人是谁、op 是什么、各多少钱），并发就要求这些行严格按成功笔数
+        放大。所以厅配置从 71:6:3 变成 80:0:0 也不会红——配置变了就是探针值变了，
+        只有「少写/多写一行」才红。
 
-        对账用 read_total_money（四个人民币渠道余额之和）而不是单个渠道：分成落在
-        money_cash 还是 money_cash_b 由工会/大神身份决定，只看 money 会把「到账落别处」
-        当成没到账。但要记住它是**可变余额**：公会长本人就在并发打赏名单里，他余额里少的
-        那一刀是他自己花出去的，期望值里必须减掉（首跑就是漏了这一项：期望 0、实际 -100）。
-
-        比例不写死：先单笔测出各方 unit，再要求并发 N 笔的增量严格等于 N * unit。单笔
-        到账多少是业务规则（跟厅、工会、是否签署大神都有关），写死比例会把配置变更
-        变成红灯，也会掩盖真正的守恒问题；多笔是否守恒才是并发正确性。
-
-        基线必须等静默：前一条用例的到账是异步的，底还没落完就开始探，测出的 unit 会
-        把别人的钱算进来（实测报过 142 = 71 x 2）。
-
-        并发前要重新取一次基线：探针那一笔的到账就落在第一个基线到并发之间，不从并发
-        基线里抹掉，它就会被算进「并发增量」（探针实测 355 = 284 + 71）。重取还能顺手
-        吃掉迟到的到账，否则它会在并发窗口里冒出来，看起来像多到账了一笔。
+        余额只留一条粗校验（主播不是付款方）：流水记了多少，钱包就得涨多少，
+        防的是「账记了、钱没进钱包」这种两段式失败。
         """
         price = PAY_AMOUNT
+        gid = GIFT['gid']
         probe = CONCURRENT_PAYERS[0]
-        parties = (('主播', ANCHOR_UID), ('厅长', OWNER_UID), ('公会长', CEO_UID))
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, price)
 
-        # 三方基线逐个等静默：静默轮询在本次迭代内就跑完，闭包晚绑定不会串到下一方
-        base = {}
-        for name, uid in parties:
-            base[name] = self.wait_stable(lambda: read_total_money(uid))
-        probe_res = post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe)
-        probe_kind = classify(probe_res)
+        # 探针：一笔成交写几行、给谁、各多少，全从流水实测，不按配置猜
+        mark = max_pay_change_id()
+        probe_kind = classify(
+            post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe))
         if probe_kind != 'success':
-            # 单笔都没成交，比例无从测起，守恒式两边都是 0，绿了也毫无意义
-            print('[并发-到账][未测到] 单笔探针没成交（{}），测不出单笔到账额，本轮结论无效；'
-                  '可稍后重跑'.format(probe_kind), flush=True)
+            print('[并发-流水][未测到] 单笔探针没成交（{}），本次结论无效；可稍后重跑'.format(
+                probe_kind), flush=True)
             return
-
-        unit = {}
-        for name, uid in parties:
-            unit[name] = self.wait_stable(lambda: read_total_money(uid)) - base[name]
-        if unit['主播'] <= 0:
-            # 成交了却一直没到账：可能是结算慢于超时，也可能是真丢了。两者在读数上
-            # 长得一样，不在这一层替服务端定罪，但必须说清本轮没测到
-            print('[并发-到账][未测到] 单笔探针成交但 {} 秒内主播没到账（增量 {}），'
-                  '测不出单笔到账额，本轮结论无效；可稍后重跑'.format(
-                      int(WAIT_TIMEOUT), unit['主播']), flush=True)
+        probe_rows = wait_gift_flows(mark, gid)
+        income_probe, pay_probe = split_flows(probe_rows)
+        if not income_probe:
+            print('[并发-流水][未测到] 探针成交但 {} 秒内没查到分成流水（共 {} 行），'
+                  '本次结论无效；可稍后重跑'.format(int(WAIT_TIMEOUT), len(probe_rows)), flush=True)
             return
-        # 单笔到账不可能超过礼物单价：这条上界最早抓住「基线取错」这类错
-        assert_between(unit['主播'], 1, price)
-        for name in ('厅长', '公会长'):
-            # 该厅可能没给这一方配分成，0 是合法的；但不可能为负
-            assert_between(unit[name], 0, price)
-        if unit['厅长'] == 0 and unit['公会长'] == 0:
-            # 不报错（配置属于业务决定），但必须说出来：否则这一轮的绿看着验了三方，
-            # 实际只验了主播一行，后面真丢了那两行也看不出来
-            print('[并发-到账][注意] 厅长与公会长单笔到账都是 0，该厅可能没给这两方配分成，'
-                  '本轮实际只验证了主播那一行', flush=True)
+        print('[并发-流水] 单笔探针：收款 {}；付款行 {} 行'.format(
+            flow_text(income_probe), len(pay_probe)), flush=True)
 
-        # 探针花掉的那一笔补回来，否则这个账号余额少一份，并发时会因余额不足被拒
+        # 探针花掉的那一笔补回来，再把水位线推到探针之后：并发只认这之后的流水
         reset_payer(probe, price)
-        # 并发前重新取基线：把探针那一笔（及迟到的到账）留在窗口外，后面只对 success * unit 负责
-        base = {}
-        for name, uid in parties:
-            base[name] = self.wait_stable(lambda: read_total_money(uid))
+        mark = max_pay_change_id()
+        base_anchor = self.wait_stable(lambda: read_total_money(ANCHOR_UID))
 
         results = self.run_concurrently([(uid, self.pay_call(uid)) for uid in CONCURRENT_PAYERS])
-        # 按 uid 留档而不是只看总数：公会长既是收款方又是付款方，算他的期望值时
-        # 要单独看他这一笔成没成交，才能决定减不减那一刀
         kind_by_uid = {uid: classify(res) for uid, res in results}
         kinds = list(kind_by_uid.values())
-        bodies = [res.get('body') for _, res in results]
         broken = [res.get('body') for uid, res in results if kind_by_uid[uid] == 'broken']
         success = kinds.count('success')
-        print('[并发-到账] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔；'
-              '单笔分别为 {}；响应 {}'.format(
-                  success, kinds.count('limited'), kinds.count('rejected'), len(broken),
-                  '，'.join('{}={}'.format(name, unit[name]) for name, _ in parties), bodies),
-              flush=True)
+        print('[并发-流水] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔'.format(
+            success, kinds.count('limited'), kinds.count('rejected'), len(broken)), flush=True)
 
         assert_equal(broken, [])
         assert_between(success, 1, len(CONCURRENT_PAYERS))
+
+        expect_income_rows = sum(count for count, _ in income_probe.values()) * success
+        batch_rows = wait_gift_flows(mark, gid, least=expect_income_rows + success)
+        income_batch, pay_batch = split_flows(batch_rows)
         try:
-            for name, uid in parties:
-                baseline = base[name]
-                # 他若自己也是付款方，余额里会少掉成交的那一笔——那不是分成少给了，
-                # 不扣就是「期望 0、实际 -100」这种假红
-                spend = price if kind_by_uid.get(uid) == 'success' else 0
-                expect = success * unit[name] - spend
-                assert_equal_eventually(lambda: read_total_money(uid) - baseline, expect)
+            # 收款侧：每个（收款人, op）就是一条写路径，条数与金额都按成功笔数放大
+            assert_equal(sorted(income_batch), sorted(income_probe))
+            for key, (count, amount) in income_probe.items():
+                assert_equal(income_batch[key][0], count * success)
+                assert_equal(income_batch[key][1], amount * success)
+            # 付款侧：成交几笔就该有几行扣款流水，多了是重复扣、少了是漏记。
+            # 探针那笔没有付款行就说明付款流水不带 gid，框不出本批，只能明说没验
+            if pay_probe:
+                assert_equal(len(pay_batch), len(pay_probe) * success)
+            else:
+                print('[并发-流水][注意] 探针那笔查不到付款流水（可能不带 gid），'
+                      '本轮只验了收款侧', flush=True)
         finally:
-            # 失败时这一行才是能定位的依据：差多少、差几笔、哪一方丢的，以及余额落在哪个渠道
-            print('[并发-到账] 余额增量 {}，期望 {}（已扣除各自付款 {}）；主播 uid={} 当前余额={} 全渠道={}'.format(
-                '，'.join('{}={}'.format(name, read_total_money(uid) - base[name])
-                         for name, uid in parties),
-                '，'.join('{}={}'.format(name, success * unit[name]
-                                        - (price if kind_by_uid.get(uid) == 'success' else 0))
-                         for name, uid in parties),
-                '，'.join('{}={}'.format(name, price if kind_by_uid.get(uid) == 'success' else 0)
-                         for name, uid in parties),
-                ANCHOR_UID, read_income(ANCHOR_UID), read_wallets(ANCHOR_UID)), flush=True)
+            # 失败时这一行才是能定位的依据：哪条写路径少了、少了多少
+            print('[并发-流水] 并发流水 {}，期望 {}；付款行 {}（期望 {}）；响应 {}'.format(
+                flow_text(income_batch),
+                flow_text({key: (count * success, amount * success)
+                           for key, (count, amount) in income_probe.items()}),
+                len(pay_batch), len(pay_probe) * success if pay_probe else '未测', kinds), flush=True)
+
+        # 余额粗校验：主播不是付款方，流水记多少钱包就该涨多少
+        anchor_income = sum(amount for (uid, _), (_, amount) in income_probe.items()
+                            if uid == ANCHOR_UID)
+        if anchor_income:
+            assert_equal_eventually(lambda: read_total_money(ANCHOR_UID) - base_anchor,
+                                    anchor_income * success)
 
     def test_006(self, des='四账号并发, 其中一人零余额: 该笔必须被拒且不牵连其余三笔'):
         """部分失败不能拖垮整批，也不能被整批抹平
