@@ -21,6 +21,12 @@ import os
 # 之后再改环境变量不会生效
 os.environ.setdefault('REQUEST_INTERVAL', '0')
 
+# 频控重试同样会毁掉并发：命中后请求层退避 2 秒再发，同一账号的两个请求就被拉成串行。
+# 实测 test_002 / test_004 每轮都命中 1 次，那两条「通过」都是串行之后的假绿。
+# 这里不重试：频控响应原样返回，classify 按文案计成业务拒绝，请求保持同时到达，
+# 真并发到底能不能复现缺陷才看得出来。
+os.environ.setdefault('FREQUENT_RETRY', '0')
+
 import sys
 from time import time
 

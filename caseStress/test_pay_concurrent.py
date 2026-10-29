@@ -6,6 +6,8 @@ import os
 # 必须在 import common.Request 之前：Request 在 import 阶段就把 REQUEST_INTERVAL 读成常量。
 # 入口 run_stress_case.py 也设了一次，这里兜住「单独跑这个文件」的情况。
 os.environ.setdefault('REQUEST_INTERVAL', '0')
+# 频控不重试：退避重发会把两个并发请求拉成串行，测到的就不是并发了
+os.environ.setdefault('FREQUENT_RETRY', '0')
 
 import threading
 import unittest
@@ -13,7 +15,7 @@ import unittest
 from caseStress.config import ANCHOR_UID, CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
 from caseStress.tools import classify, read_money, read_wallets, reset_payer
 from common.Assert import assert_between, assert_equal, assert_equal_eventually
-from common.Request import frequent_retry_count, post_request_session, reset_frequent_retries
+from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
 from common.Session import Session
 from common.basicSlpXsgData import encodeData
 from common.tools import get_test_token
@@ -60,14 +62,17 @@ class TestConcurrentPay(unittest.TestCase):
             assert_equal(thread.is_alive(), False)
         assert_equal(len(results), len(tasks))
 
-        # 频控会把并发拉成串行：命中后请求层会退避重发，同一账号的两个请求就不是同时
-        # 到了。这时「余额不足第二笔被拒」这类通过不能当真——必须把次数打出来，
-        # 否则一份被限流后的绿会被当成缺陷已修复
+        # 频控会把并发拉成串行（命中后请求层退避 2 秒再发，同一账号的两个请求就不
+        # 是同时到了）。入口已经把 FREQUENT_RETRY 设为 0，频控响应原样返回、由 classify
+        # 计成业务拒绝，请求保持同时到达；这里只负责把次数报出来，让绿的含金量可见
         frequent = frequent_retry_count()
-        print('[并发] 本轮命中频控 {} 次，{}'.format(
-            frequent,
-            '部分请求被串行化：余额不足场景的「通过」不可信，需重跑' if frequent else '并发度完整'),
-            flush=True)
+        if frequent and FREQUENT_RETRY > 0:
+            note = '请求被退避重发拉成串行：余额不足场景的「通过」不可信，需重跑'
+        elif frequent:
+            note = '频控响应已原样计入业务拒绝（未重试），并发度保持完整'
+        else:
+            note = '并发度完整'
+        print('[并发] 本轮命中频控 {} 次，{}'.format(frequent, note), flush=True)
         return results
 
     def pay_call(self, uid):
@@ -144,6 +149,10 @@ class TestConcurrentPay(unittest.TestCase):
         print('[并发-同账号] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
             len(broken), bodies), flush=True)
+        if kinds.count('success') == 0:
+            # 两笔都被限流挡下时守恒式退化成 0 == 0，绿得毫无意义，必须显式标出来
+            print('[并发-同账号][未测到] 两笔都被限流挡下，本轮没有任何成交，结论无效，需重跑',
+                  flush=True)
 
         assert_equal(broken, [])
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
@@ -218,6 +227,9 @@ class TestConcurrentPay(unittest.TestCase):
         print('[并发-自刷] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
             len(broken), bodies), flush=True)
+        if kinds.count('success') == 0:
+            print('[并发-自刷][未测到] 两笔都被限流挡下，本轮没有任何成交，结论无效，需重跑',
+                  flush=True)
 
         assert_equal(broken, [])
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)

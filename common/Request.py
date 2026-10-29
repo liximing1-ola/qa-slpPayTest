@@ -238,15 +238,18 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
         # 频控属于环境噪声而不是被测逻辑，退避后重试；超过次数则把原响应交给用例断言。
         # 退避按倍数递增（2 秒、4 秒…）：防重窗口多长不确定，固定间隔容易连着撞同一堵墙
         keyword = _frequent_keyword(body)
-        if attempt < FREQUENT_RETRY and keyword is not None:
-            backoff = FREQUENT_BACKOFF * (attempt + 1)
-            # 先计数再打日志：并发用例要拿到准确次数，否则无法判断本轮是否被串行化
-            _frequent_retries.append(keyword)
-            print('[频控] 命中"{}", {} 秒后重试（第 {}/{} 次）'.format(
-                keyword, backoff, attempt + 1, FREQUENT_RETRY))
-            time.sleep(backoff)
-            continue
-        break
+        if keyword is None:
+            break
+        # 不管重不重试都记一次：重试模式要判断「本轮是否被拉成串行」，
+        # 不重试模式也要知道「这几笔里有几笔是被限流挡下的」
+        _frequent_retries.append(keyword)
+        if attempt >= FREQUENT_RETRY:
+            # 重试次数用尽（或本就设为 0）：把频控响应原样交给用例判断，不在这里吞掉
+            break
+        backoff = FREQUENT_BACKOFF * (attempt + 1)
+        print('[频控] 命中"{}", {} 秒后重试（第 {}/{} 次）'.format(
+            keyword, backoff, attempt + 1, FREQUENT_RETRY))
+        time.sleep(backoff)
 
     print("#"*100)
     print(response.status_code)
