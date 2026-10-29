@@ -483,7 +483,7 @@ def check_flow_wait_stable():
         rounds += [[{'uid': 1}, {'uid': 2}, {'uid': 3}]] * 3
         calls = []
 
-        def staged(after_id, gid):
+        def staged(after_id, gid, receiver_uids=()):
             calls.append(1)
             return rounds.pop(0) if rounds else [{'uid': 1}, {'uid': 2}, {'uid': 3}]
 
@@ -519,7 +519,7 @@ def check_flow_wait_stable():
         assert [row['uid'] for row in rows] == [1], \
             'keep_uid 要滤掉别的账号晚到的行，实际 {}'.format(rows)
 
-        tools.read_gift_flows = lambda after_id, gid: []
+        tools.read_gift_flows = lambda after_id, gid, receiver_uids=(): []
         started = time.time()
         rows = tools.wait_flows_stable(0, 69, least=1)
         waited = time.time() - started
@@ -529,6 +529,64 @@ def check_flow_wait_stable():
         tools.read_gift_flows = old_read
         tools.WAIT_TIMEOUT = old_timeout
         tools.WAIT_INTERVAL = old_interval
+
+
+def check_flow_receivers():
+    """不带 gid 的分成行也要读回来：只按 gid 筛，三条写路径只验到一条
+
+    2026-10-29 实测：一笔 71:6:3 的打赏按 gid 只读到主播 71 那一行，而相邻 id 之间
+    空着 2 个号——厅长 6、公会长 3 那两行写了，只是 reason 里没有 gid。
+    只按 gid 读，这两条写路径少写了也看不出来（行数、金额都对得上）。
+
+    这里钉三件事：收款账号必须进 SQL、gid 条件不能丢、不传时保持旧行为；
+    再加一条：wait_flows_stable 得把这个参数真的传下去，漏传等于静默退回。
+    """
+    from caseStress import tools
+
+    old_mysql = tools.mysql
+    captured = []
+
+    class _Fake(object):
+        @staticmethod
+        def selectRawDict(sql):
+            captured.append(sql)
+            return []
+
+    try:
+        tools.mysql = _Fake
+        tools.read_gift_flows(0, 69, (200255399, 200258475, 200255209))
+        assert 'uid in (200255399,200258475,200255209)' in captured[-1], \
+            '收款账号没进 SQL，厅长与公会长那两行读不回来：{}'.format(captured[-1])
+        assert "'69'" in captured[-1], 'gid 条件被丢了：{}'.format(captured[-1])
+        assert captured[-1].startswith('select id, uid, money, op, reason from xs_pay_change'), \
+            '查询的列变了：{}'.format(captured[-1])
+
+        tools.read_gift_flows(0, 69)
+        assert 'uid in' not in captured[-1], \
+            '不传收款账号时应保持只按 gid 读：{}'.format(captured[-1])
+
+        old_read = tools.read_gift_flows
+        old_timeout = tools.WAIT_TIMEOUT
+        old_interval = tools.WAIT_INTERVAL
+        seen = []
+
+        def _staged(after_id, gid, receiver_uids=()):
+            seen.append(receiver_uids)
+            return [{'uid': 200255399, 'money': 71, 'op': 'income'}]
+
+        try:
+            tools.read_gift_flows = _staged
+            tools.WAIT_TIMEOUT = 0.2
+            tools.WAIT_INTERVAL = 0.01
+            tools.wait_flows_stable(0, 69, least=1, quiet=1, receiver_uids=(200258475,))
+        finally:
+            tools.read_gift_flows = old_read
+            tools.WAIT_TIMEOUT = old_timeout
+            tools.WAIT_INTERVAL = old_interval
+        assert seen and seen[0] == (200258475,), \
+            'wait_flows_stable 没把收款账号传给读取层：{}'.format(seen[:1])
+    finally:
+        tools.mysql = old_mysql
 
 
 def check_flow_quiet():
@@ -1126,6 +1184,7 @@ def main():
     print('框架自检：并发用例工具（caseStress.tools）')
     _check('流水聚合：付款与收款分开、同人同 op 合并', check_flow_split)
     _check('等流水：条数稳定才返回、没流水时超时带回空', check_flow_wait_stable)
+    _check('分成流水：不带 gid 的厅长/公会长行也读回来', check_flow_receivers)
     _check('取水位线前先等流水安静：别人的行不算自己的', check_flow_quiet)
     _check('分成放大：多写一行、少一条写路径都能比出来', check_income_scaled)
     _check('同账号重复提交：全被频控挡下要认成未测到', check_window_tested)

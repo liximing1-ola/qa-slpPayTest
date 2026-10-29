@@ -27,8 +27,13 @@ from common.basicSlpXsgData import encodeData
 from common.conSlpXsgMysql import conMysql as mysql
 from common.tools import get_test_token, reset_room_acs
 
-# 日志里带名字：流水只给 uid，光看数字对不上人
+# 日志里带名字：流水只给 uid，光数字对不上人
 PARTY_NAMES = {ANCHOR_UID: '主播', OWNER_UID: '厅长', CEO_UID: '公会长'}
+
+# 一场打赏的三个收款方：主播 / 厅长 / 公会长。厅配置生效时分成写 3 行，
+# 而且实测只有主播那一行带 gid（见 tools.read_gift_flows）——只按 gid 读，
+# 另外两条写路径丢了在行数和金额上都看不出来
+RECEIVERS = (ANCHOR_UID, OWNER_UID, CEO_UID)
 
 # 本进程最后一次对某个账号发打赏的时刻：用例之间会连着打同一个账号，
 # 服务端的「请求太快了」就有了落点，整对被挡下就只能 SkipTest（见 settle）
@@ -302,11 +307,13 @@ class TestConcurrentPay(unittest.TestCase):
                 return last
         return last
 
-    def batch_flows(self, mark, gid, payers, uids, least=1, await_uids=()):
+    def batch_flows(self, mark, gid, payers, uids, least=1, await_uids=(), receiver_uids=RECEIVERS):
         """取水位线之后的流水，拆成收款/付款两部分，返回 (income, pay, note, rows)
 
         payers 是本轮自己下单的账号：付款行按 uid 认，不靠 op 名（见 tools.split_flows）。
         uids 只用于按 gid 查不到时的兜底复查，范围要盖住收款人。
+        receiver_uids 默认就是这个厅的三个收款方：不带 gid 的分成行（厅长、公会长）
+        只能靠 uid 读回来，否则收款侧永远只验到主播那一条。
 
         按 gid 筛不到时用 uid 兜底复查，把两种可能分开：结算压根没写流水（真缺陷），
         还是写了但不带 gid（本轮的筛选口径失效）。前者直接抛失败，后者返回一句说明
@@ -315,7 +322,8 @@ class TestConcurrentPay(unittest.TestCase):
         note 为空表示口径正常、返回值可信；note 非空时 income/pay 都是空的。
         rows 一起交回：失败时要打原始行（id 分布能把「没写」和「读得太早」分开）。
         """
-        rows = wait_flows_stable(mark, gid, least=least, await_uids=await_uids)
+        rows = wait_flows_stable(mark, gid, least=least, await_uids=await_uids,
+                                 receiver_uids=receiver_uids)
         income, pay = split_flows(rows, payers)
         if income or pay:
             return income, pay, '', rows
@@ -345,7 +353,7 @@ class TestConcurrentPay(unittest.TestCase):
         if kind != 'success':
             return {}, [], '', kind
         income, pay, note, _ = self.batch_flows(
-            mark, GIFT['gid'], (payer,), (ANCHOR_UID, payer), await_uids=(payer,))
+            mark, GIFT['gid'], (payer,), RECEIVERS + (payer,), await_uids=(payer,))
         return income, pay, note, kind
 
     def batch_buckets(self, mark, gid, uid, least=1):
@@ -363,6 +371,9 @@ class TestConcurrentPay(unittest.TestCase):
         只可能是别的批次晚到的。2026-10-29 真机就这样红过一次——上一条用例频控
         未测到直接跳、没等流水落库，探针就把 200250759 / 200252072 的 consume 行
         算成了自己这一笔的写路径。
+
+        这里故意不传 receiver_uids：厅长与公会长每一条用例都在收钱，按 uid 白名单
+        读回来的行分不清是本笔还是上一条晚到的，反而会把「多发一份」算成本笔的写路径。
         """
         rows = wait_flows_stable(mark, gid, least=least, await_uids=(uid,), keep_uid=uid)
         if rows:
@@ -544,7 +555,7 @@ class TestConcurrentPay(unittest.TestCase):
 
         succeeded = [uid for uid in CONCURRENT_PAYERS for kind in kinds[uid] if kind == 'success']
         income_batch, pay_batch, note_batch, batch_rows = self.batch_flows(
-            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + (ANCHOR_UID,),
+            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + RECEIVERS,
             least=expected_rows(income_probe, pay_probe, total_success), await_uids=succeeded)
         if note_batch:
             print('[并发-重发][未测到] {}；收款侧本轮没验，扣款侧已验'.format(note_batch), flush=True)
@@ -711,7 +722,7 @@ class TestConcurrentPay(unittest.TestCase):
         # 光靠行数静默会提前返回，把晚到的当作没写
         succeeded = [uid for uid, kind in kind_by_uid.items() if kind == 'success']
         income_batch, pay_batch, note, batch_rows = self.batch_flows(
-            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + (ANCHOR_UID,),
+            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + RECEIVERS,
             least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded)
         if note:
             print('[并发-流水][未测到] {}；本轮没有对账，别当成通过'.format(note), flush=True)
@@ -819,7 +830,7 @@ class TestConcurrentPay(unittest.TestCase):
                     len(pay_probe)))
 
         income_batch, pay_batch, note, batch_rows = self.batch_flows(
-            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + (ANCHOR_UID,),
+            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + RECEIVERS,
             least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded)
         if note:
             # 扣款侧（余额）已经验完了，但「拒单还白送分成」这一半没验到。

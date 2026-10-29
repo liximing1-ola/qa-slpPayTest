@@ -54,7 +54,7 @@ def max_pay_change_id():
     return int(rows[0]['max_id'] or 0) if rows else 0
 
 
-def read_gift_flows(after_id, gid):
+def read_gift_flows(after_id, gid, receiver_uids=()):
     """取水位线之后、指定礼物的全部账户流水（不限 op、不限收款人）
 
     为什么按流水对账而不是按余额：余额是下游结果，里面混了自己付款、渠道差异
@@ -64,10 +64,19 @@ def read_gift_flows(after_id, gid):
     不限 op：分成可能落在 income，也可能落在别的 op 上——先让探针把「一笔打赏
     会写哪些行」量出来，而不是我先假设它只写 income。
     reason 里的 from / gid 有时存成整数有时存成字符串，JSON_UNQUOTE 后统一按字符串比。
+
+    receiver_uids：只按 gid 筛会漏掉不带 gid 的分成行。2026-10-29 实测：一笔
+    71:6:3 的打赏按 gid 只读到 1 行（主播 71），而相邻 id 之间空着 2 个号——
+    厅长 6、公会长 3 那两行确实写了，只是 reason 里没有 gid。
+    行号空档不会骗人，所以要显式把这三个收款账号的行一并读回来；
+    不传时退化成「只按 gid」，与旧行为一致。
     """
+    extra = ''
+    if receiver_uids:
+        extra = ' or uid in ({})'.format(','.join(str(int(uid)) for uid in receiver_uids))
     sql = ("select id, uid, money, op, reason from xs_pay_change "
-           "where id > {} and JSON_UNQUOTE(JSON_EXTRACT(reason,'$.gid'))='{}' order by id"
-           .format(int(after_id), gid))
+           "where id > {} and (JSON_UNQUOTE(JSON_EXTRACT(reason,'$.gid'))='{}'{} ) order by id"
+           .format(int(after_id), gid, extra))
     return mysql.selectRawDict(sql)
 
 
@@ -83,7 +92,8 @@ def read_flows_by_uid(after_id, uid):
     return mysql.selectRawDict(sql)
 
 
-def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=(), keep_uid=None):
+def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=(), keep_uid=None,
+                      receiver_uids=()):
     """等这批流水写完：至少读到 least 行，且连续 quiet 次读到的条数不再变化
 
     不用「读到 least 行就返回」：一笔订单写几行取决于分成配置（只给主播是 1 行，
@@ -104,13 +114,15 @@ def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=(), keep_uid=N
     直接 SkipTest、没等自己那 8 笔落库，紧接着 test_004 的探针一取水位线，就把
     200250759 / 200252072 的 consume 行当成了自己这一笔的写路径，期望值凭空多两条。
     行数下界（least）也应按过滤后的行算，否则别人晚到的行会让它提前返回。
+
+    receiver_uids：本轮该收到分成的账号，原样传给 read_gift_flows（见那里的 id 空档）。
     """
     deadline = time.time() + WAIT_TIMEOUT
     last = -1
     same = 0
     expected = set(int(uid) for uid in await_uids)
     while True:
-        rows = read_gift_flows(after_id, gid)
+        rows = read_gift_flows(after_id, gid, receiver_uids)
         if keep_uid is not None:
             rows = [row for row in rows if int(row['uid']) == int(keep_uid)]
         covered = set(int(row['uid']) for row in rows)
