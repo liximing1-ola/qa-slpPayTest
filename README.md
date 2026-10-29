@@ -37,7 +37,7 @@ python3 run_all_case.py xsg      # XSG 全量
 qa-slpPayTest/
 ├── run_all_case.py        # 全量入口：逐条播报 + 未通过清单（日常主入口）
 ├── run_crontab_case.py    # 定时任务入口：只汇总与播报失败/异常，不拉分支、不列通过用例，结果推企微
-├── run_stress_case.py     # 并发与幂等入口：上线前跑一轮，不进日常回归
+├── run_stress_case.py     # 并发与幂等入口：每天 11:00 单独跑一轮，不进全量
 ├── run_reproduce.py       # 复现率统计：连跑 N 轮，红/绿/未测到分开数，红的输出落 log
 ├── Robot.py               # 结果通知：企业微信群机器人 webhook
 ├── autoGitPull.py         # 分支检查 + 记录上次执行时间
@@ -118,7 +118,7 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 
 不设 `CASE` 就是全量。写用例名（含 `.`）时按名字加载，找不到会造一条报错用例，**不会静默跳过**。
 
-### 并发与幂等（上线前跑一轮）
+### 并发与幂等（每天一次，独立执行）
 
 ```bash
 python3 run_stress_case.py slp
@@ -135,12 +135,20 @@ python3 run_reproduce.py --rounds 20 --stagger 0.2
 python3 run_reproduce.py --case caseStress.test_pay_concurrent.TestConcurrentPay.test_002
 ```
 
-这部分用例回答的是「服务端会不会超扣、会不会重复扣费」，不跟着每天的 cron 跑：用例会改账号数据，混进日常回归就没法把一次「红」归因到某一类。
+这部分用例回答的是「服务端会不会超扣、会不会重复扣费」。它们**不进全量回归**，而是单独一条 cron、每天 11:00 跑一轮，与 10:00 的全量错开一小时：用例会改账号数据，混进日常回归就没法把一次「红」归因到某一类。
 
-但它们和日常用例**不冲突，不靠执行顺序兜底**——双方各自在前置里清理自己依赖的数据：
+两条定时任务分开还有一个实际好处：日志各归各的。`log/cron_*.log` 红 = 业务回归出问题，
+`log/cron_stress_*.log` 红 = 并发缺陷，不用翻文件判断。
+
+但它们和日常用例**当前没看到冲突，只是证据还不够硬**——双方各自在前置里清理自己依赖的数据：
 余额 `prepare_test_data`、上周厅统计 `reset_room_acs`、VIP 经验值与个人人气 `prepare_vip_pop_data`、
-背包 `reset_payer`。实测（2026-10-29）：先跑完 6 条并发，紧接着跑最容易被污染的 5 个场景族
-41 条，39 条执行 0 未通过（2 条既定 skip），所以「先并发后全量」「先全量后并发」都可以自由编排。
+背包 `reset_payer`。实测（2026-10-29）：先跑完 6 条并发，紧接着跑「最容易被污染」的 5 个场景族
+41 条，39 条执行 0 未通过（2 条既定 skip）；可这 41 条不含 `test_gs_pay_self`，而它用的账号
+`gs_A_uid`、厅 `170000211`、公会长恰好都是并发改过的对象——紧接着那一轮「并发 -> 全量」里
+它确实红了 3 条（HTTP 500），单跑该模块 7 条全过，再下一轮全量又只剩 1 次 500 且换了文件。
+
+所以「谁先谁后都行」**还没有结论**，详见下面「打赏接口 HTTP 500 偶发」。这也正是把它们拆成
+两条 cron、错开一小时的理由：不靠执行顺序来保证绿，也就不需要为顺序留任何兜底。
 
 为什么必须是独立目录 + 独立进程：
 
@@ -256,11 +264,17 @@ chmod 600 /home/<user>/.slp_env
 cat > /tmp/slp_cron <<'EOF'
 # 每天 10:00 拉最新代码后跑全量并推送到企微；日志按日期落盘，同时清理 30 天前的
 0 10 * * * . /home/<user>/.slp_env; cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+# 每天 11:00 单独跑并发/幂等，与全量错开一小时
+0 11 * * * . /home/<user>/.slp_env; cd /home/<user>/qa-slpPayTest && mkdir -p log && { git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_stress_case.py slp; } >> log/cron_stress_$(date +\%F).log 2>&1
 EOF
 
-(crontab -l 2>/dev/null | grep -v 'run_crontab_case.py slp'; cat /tmp/slp_cron) | crontab -
+(crontab -l 2>/dev/null | grep -v 'run_crontab_case.py slp' | grep -v 'run_stress_case.py slp'; cat /tmp/slp_cron) | crontab -
 rm -f /tmp/slp_cron; crontab -l
 ```
+
+两处过滤是为了可重复执行：`grep -v` 先把旧的两条都去掉，再写入新的，否则重装一次就会出现两条全量、两条并发同时跑。
+
+第二条不带 `CASE=`：会跑 `caseStress/` 下全部文件（目前是并发打赏 + 重复提交），以后新增并发用例会自动纳入，不用改 cron。日志名以 `cron_` 开头，所以第一条里的 `find log -name 'cron_*.log' -mtime +30 -delete` 会一并清理，不另写一条。
 
 为什么 key 单独放一个文件：crontab 内容是明文，能登这台机器的人 `crontab -l` 就看得见；而 webhook key 拿到就能往群里发任意消息。放 600 权限的文件里，至少跟登录权限一个级别，也不会随 crontab 内容被拷来拷去。
 

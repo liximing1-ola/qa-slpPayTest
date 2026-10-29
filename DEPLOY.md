@@ -249,7 +249,18 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
    ```cron
    # 每天 10:00 拉最新代码后跑全量并推送到企微；日志按日期落盘，同时清理 30 天前的
    0 10 * * * . /home/<user>/.slp_env; cd /home/<user>/qa-slpPayTest && mkdir -p log && { find log -name 'cron_*.log' -mtime +30 -delete; git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_crontab_case.py slp; } >> log/cron_$(date +\%F).log 2>&1
+
+   # 每天 11:00 单独跑并发/幂等用例，与全量错开一小时
+   0 11 * * * . /home/<user>/.slp_env; cd /home/<user>/qa-slpPayTest && mkdir -p log && { git pull -q --ff-only; PUSH_WX=1 /usr/bin/python3 run_stress_case.py slp; } >> log/cron_stress_$(date +\%F).log 2>&1
    ```
+
+   **为什么并发要单独一条、还要错开时间**：
+
+   - 两边共用的账号不同层面：全量验业务规则，并发验“多笔同时到达”时的守恒。两者混在一条日志里，一次红要翻文件才能分清是回归坏了还是并发出问题了。
+   - 并发会改余额、背包、厅流水，虽然双方前置都会清理自己依赖的数据（已实测不冲突），但**分开跑**能让失败归因干净：`cron_*.log` 红 = 业务回归，`cron_stress_*.log` 红 = 并发缺陷。
+   - 错开一小时而不是紧接：避免两条任务同时抢同一个库，也避免转储时互相干扰结果。
+   - 日志名以 `cron_` 开头，所以上面那条 `find log -name 'cron_*.log' -mtime +30 -delete` 会一并清理，不用再写一条。
+   - 不带 `CASE=` 环境变量就会跑 `caseStress/` 下全部文件（目前是并发打赏 + 重复提交），之后新增并发文件会自动纳入，不用再改 cron。
 
    `~/.slp_env` 里放 webhook 和环境信息（`chmod 600`）：
 
