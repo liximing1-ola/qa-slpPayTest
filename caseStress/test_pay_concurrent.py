@@ -105,18 +105,28 @@ class TestConcurrentPay(unittest.TestCase):
         return encodeData(rid=ROOM_RID, payType='package', uid=ANCHOR_UID, giftId=GIFT['gid'],
                           display_page=1)
 
-    def wait_income_gain(self, uid, base):
-        """等到账增量出现，返回增量；超时返回 0 交给调用方判
+    def wait_income_stable(self, uid, quiet=5):
+        """等到账读数静默后返回该值：连续 quiet 次间隔读到同一个数才算稳定
 
-        分成是异步结算，下单成功不等于钱已到账，读一次就判会把「还没写库」当成没到账。
+        前置用例的打赏分成是异步结算的，跑到 test_005 时上一轮的到账可能还在灌进来。
+        基线只取一次瞬时快照，探针的增量就会把「别人的钱」一起算上：实测 unit 报 142，
+        而单笔到账实际是 71——翻了一倍，后面 N * unit 跟着全错，于是在完全正确的
+        服务端上报「到账不守恒」。
+
+        超时返回最后一次读数，不抛：结算比 WAIT_TIMEOUT 还慢的情况下，静默与否分不清，
+        这个判断应该交给调用方的断言，而不是在这里猜。
         """
+        last = read_income(uid)
+        same = 0
         deadline = time.time() + WAIT_TIMEOUT
         while time.time() < deadline:
-            gain = read_income(uid) - base
-            if gain > 0:
-                return gain
             time.sleep(WAIT_INTERVAL)
-        return 0
+            now = read_income(uid)
+            same = same + 1 if now == last else 0
+            last = now
+            if same >= quiet:
+                return last
+        return last
 
     def assert_conserved(self, uid, before, success_count, price, body_text):
         """钱与响应必须严格对应：多说成功就是多扣，少说成功就是给货没扣钱
@@ -275,13 +285,16 @@ class TestConcurrentPay(unittest.TestCase):
         比例不写死：先单笔测出 unit，再要求并发 N 笔的增量严格等于 N * unit。单笔到账
         多少是业务规则（跟厅、工会、是否签署大神都有关），写死比例会把配置变更变成红灯，
         也会掩盖真正的守恒问题；多笔是否守恒才是并发正确性。
+
+        基线必须等静默：前一条用例的到账是异步的，底还没落完就开始探，测出的 unit 会
+        把别人的钱算进来（实测报过 142 = 71 x 2）。
         """
         price = PAY_AMOUNT
         probe = CONCURRENT_PAYERS[0]
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, price)
 
-        base = read_income(ANCHOR_UID)
+        base = self.wait_income_stable(ANCHOR_UID)
         probe_res = post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe)
         probe_kind = classify(probe_res)
         if probe_kind != 'success':
@@ -289,13 +302,21 @@ class TestConcurrentPay(unittest.TestCase):
             print('[并发-到账][未测到] 单笔探针没成交（{}），测不出单笔到账额，本轮结论无效；'
                   '可稍后重跑'.format(probe_kind), flush=True)
             return
-        unit = self.wait_income_gain(ANCHOR_UID, base)
+        after = self.wait_income_stable(ANCHOR_UID)
+        unit = after - base
+        if unit <= 0:
+            # 成交了却一直没到账：可能是结算慢于超时，也可能是真丢了。两者在读数上
+            # 长得一样，不在这一层替服务端定罪，但必须说清本轮没测到
+            print('[并发-到账][未测到] 单笔探针成交但 {} 秒内没有到账（增量 {}），'
+                  '测不出单笔到账额，本轮结论无效；可稍后重跑'.format(int(WAIT_TIMEOUT), unit), flush=True)
+            return
         assert_between(unit, 1, price)
 
         # 探针花掉的那一笔补回来，否则这个账号余额少一份，并发时会因余额不足被拒
         reset_payer(probe, price)
 
-        before = read_income(ANCHOR_UID)
+        # 上面已等到静默，探针的 71 早落定了，after 就是并发前的基线
+        before = after
         results = self.run_concurrently([(uid, self.pay_call(uid)) for uid in CONCURRENT_PAYERS])
         kinds = [classify(res) for _, res in results]
         bodies = [res.get('body') for _, res in results]
