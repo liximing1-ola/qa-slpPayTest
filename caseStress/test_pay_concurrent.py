@@ -13,7 +13,7 @@ import unittest
 from caseStress.config import ANCHOR_UID, CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
 from caseStress.tools import classify, read_money, read_wallets, reset_payer
 from common.Assert import assert_between, assert_equal, assert_equal_eventually
-from common.Request import post_request_session
+from common.Request import frequent_retry_count, post_request_session, reset_frequent_retries
 from common.Session import Session
 from common.basicSlpXsgData import encodeData
 from common.tools import get_test_token
@@ -39,6 +39,8 @@ class TestConcurrentPay(unittest.TestCase):
         results = []
         lock = threading.Lock()
         barrier = threading.Barrier(len(tasks))
+        # 只统计本轮：频控是全进程共享的，不清零会把前面用例的账算到这一轮头上
+        reset_frequent_retries()
 
         def worker(uid, call):
             try:
@@ -57,6 +59,15 @@ class TestConcurrentPay(unittest.TestCase):
             thread.join(60)
             assert_equal(thread.is_alive(), False)
         assert_equal(len(results), len(tasks))
+
+        # 频控会把并发拉成串行：命中后请求层会退避重发，同一账号的两个请求就不是同时
+        # 到了。这时「余额不足第二笔被拒」这类通过不能当真——必须把次数打出来，
+        # 否则一份被限流后的绿会被当成缺陷已修复
+        frequent = frequent_retry_count()
+        print('[并发] 本轮命中频控 {} 次，{}'.format(
+            frequent,
+            '部分请求被串行化：余额不足场景的「通过」不可信，需重跑' if frequent else '并发度完整'),
+            flush=True)
         return results
 
     def pay_call(self, uid):

@@ -29,6 +29,22 @@ FREQUENT_RETRY = int(os.environ.get('FREQUENT_RETRY') or 2)
 # 只认一种文案会漏判，频控响应就被当成业务失败丢给 assert_pay_success，用例白红一次
 FREQUENT_MSG_KEYWORDS = ('请勿频繁操作', '请求太慢', '请求太快', '稍后重试')
 
+# 频控重试计数。命中频控会退避后重发，两个本该同时到达的请求就被拉成串行——
+# 这时测到的根本不是并发。并发用例必须靠这个计数判断「本轮到底有没有真并发」，
+# 光看响应分类看不出来：重试后的成功/拒绝与真并发时的成功/拒绝长得一模一样。
+# list.append 在 CPython 下是原子的，多线程直接记就行。
+_frequent_retries = []
+
+
+def frequent_retry_count():
+    """本轮命中频控并重试的次数"""
+    return len(_frequent_retries)
+
+
+def reset_frequent_retries():
+    """并发用例开跑前清零，跑完读一次"""
+    del _frequent_retries[:]
+
 # 每个账号上一次请求的计划发起时间，用于补足最小间隔
 _last_request_at = {}
 _interval_lock = threading.Lock()
@@ -224,6 +240,8 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
         keyword = _frequent_keyword(body)
         if attempt < FREQUENT_RETRY and keyword is not None:
             backoff = FREQUENT_BACKOFF * (attempt + 1)
+            # 先计数再打日志：并发用例要拿到准确次数，否则无法判断本轮是否被串行化
+            _frequent_retries.append(keyword)
             print('[频控] 命中"{}", {} 秒后重试（第 {}/{} 次）'.format(
                 keyword, backoff, attempt + 1, FREQUENT_RETRY))
             time.sleep(backoff)
