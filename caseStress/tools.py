@@ -144,6 +144,25 @@ def split_flows(rows, payers=()):
     return income, pay
 
 
+def flows_by_key(rows):
+    """把一批流水按（账号, op）聚合成 {key: [行数, 金额]}，不区分付款行与收款行
+
+    给自刷分支用。自刷时付款方就是收款人，按 uid 认付款行（split_flows 的做法）会把
+    收款行一起算进付款行，收款侧一条都剩不下——「收一份钱、发两份货」在付款侧完全
+    看不出来（行数、金额都对）。按 op 分桶后不区分收付：一笔自刷写下的每个桶都要
+    严格按成功笔数放大，多一行 income 就是多发了一份分成。
+
+    金额允许为空（流水表 money 可空），按 0 算：直接相加会抛 TypeError，整条用例
+    变成 ERROR，报告里就看不出是账错了还是代码崩了。
+    """
+    bucket = {}
+    for row in rows:
+        slot = bucket.setdefault((row['uid'], row['op']), [0, 0])
+        slot[0] += 1
+        slot[1] += int(row['money'] or 0)
+    return bucket
+
+
 def scale_income(income_probe, success):
     """把探针单笔实测的写路径按成功笔数放大，用来和并发批次的聚合值整体比较
 
@@ -156,6 +175,9 @@ def scale_income(income_probe, success):
 
     success=0 时每个写路径都应放大成 [0, 0]：并发批次里若还有行，就是不相等，
     这正是「一笔都没成交却发了分成」要红的地方。
+
+    入参也能是 flows_by_key 分出来的桶（自刷分支）——只要 key 带 op，乘法就不关心
+    它到底是收款行还是付款行。
     """
     return {key: [count * success, amount * success]
             for key, (count, amount) in income_probe.items()}

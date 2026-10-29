@@ -598,6 +598,54 @@ def check_window_tested():
     assert concurrent_window_tested({}) == [], '没有账号时返回空'
 
 
+def check_self_pay_buckets():
+    """自刷：付款方就是收款人时，分成多发一份同样要比得出来
+
+    按 uid 分收付在自刷上必然失效：付款行和收款行的 uid 是同一个，split_flows 会把
+    收款行一起吞进付款行，收款侧一条不剩——「收一份钱、发两份货」就这样绿过去。
+    所以自刷改按（账号, op）分桶，一笔写下的每个桶都要按成功笔数放大。
+    """
+    from caseStress.tools import expected_rows, flows_by_key, scale_income, split_flows
+
+    rows = [
+        {'id': 1, 'uid': 200254777, 'money': 100, 'op': 'consume'},
+        {'id': 2, 'uid': 200254777, 'money': 100, 'op': 'income'},
+    ]
+    # 先钉住「为什么不能复用 split_flows」：收款行被当成付款行，收款侧一条都不剩
+    income, pay = split_flows(rows, payers=(200254777,))
+    assert income == {} and len(pay) == 2, \
+        '自刷时按 uid 分收付会把收款行吞进付款行，实际 {}'.format((income, pay))
+
+    buckets = flows_by_key(rows)
+    assert buckets == {(200254777, 'consume'): [1, 100],
+                       (200254777, 'income'): [1, 100]}, \
+        '同一账号的 consume 与 income 必须分成两个桶，实际 {}'.format(buckets)
+    assert scale_income(buckets, 2) == {(200254777, 'consume'): [2, 200],
+                                        (200254777, 'income'): [2, 200]}, \
+        '两笔应把两个桶各自放大，实际 {}'.format(scale_income(buckets, 2))
+
+    # 四种错法都必须与放大值不等：只验「乘法对」等于验一段永远绿的代码
+    cases = [
+        ({(200254777, 'consume'): [1, 100], (200254777, 'income'): [2, 200]}, 1,
+         '只成交一笔、分成却写了两份'),
+        ({(200254777, 'consume'): [2, 200], (200254777, 'income'): [3, 300]}, 2,
+         '成交两笔、分成却写了三份'),
+        ({(200254777, 'consume'): [2, 200], (200254777, 'income'): [2, 180]}, 2,
+         '条数对、金额少'),
+        ({(200254777, 'consume'): [2, 200]}, 2, '分成整条写路径丢了'),
+    ]
+    for batch, success, why in cases:
+        assert batch != scale_income(buckets, success), \
+            '{} 必须与放大值不等，否则自刷的收款侧是空的'.format(why)
+
+    assert flows_by_key([]) == {}, '没有流水时桶应为空'
+    # money 为空（流水表允许）不能把整个自检抛成 TypeError
+    assert flows_by_key([{'uid': 1, 'money': None, 'op': 'income'}]) == {(1, 'income'): [1, 0]}, \
+        'money 为空的行应按 0 累加，不能抛 TypeError'
+    # 等待下界同样按桶算：一笔写两行，两笔就该等 4 行
+    assert expected_rows(buckets, [], 2) == 4, '探针两行 × 两笔应是 4 行'
+
+
 def check_classify_responses():
     """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
 
@@ -764,6 +812,7 @@ def main():
     _check('等流水：条数稳定才返回、没流水时超时带回空', check_flow_wait_stable)
     _check('分成放大：多写一行、少一条写路径都能比出来', check_income_scaled)
     _check('同账号重复提交：全被频控挡下要认成未测到', check_window_tested)
+    _check('自刷分桶：付款方就是收款人，分成多发一份也比得出来', check_self_pay_buckets)
     _check('响应四分类、非 dict body 不崩', check_classify_responses)
 
     print('框架自检：本机环境配置（common.envLocal）')

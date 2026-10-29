@@ -15,9 +15,9 @@ import unittest
 
 from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWNER_UID, PAY_AMOUNT,
                                ROOM_RID, pay_url)
-from caseStress.tools import (classify, concurrent_window_tested, expected_rows, max_pay_change_id,
-                              read_flows_by_uid, read_money, read_total_money, read_wallets, reset_payer,
-                              scale_income, split_flows, wait_flows_stable)
+from caseStress.tools import (classify, concurrent_window_tested, expected_rows, flows_by_key,
+                              max_pay_change_id, read_flows_by_uid, read_money, read_total_money,
+                              read_wallets, reset_payer, scale_income, split_flows, wait_flows_stable)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
@@ -205,6 +205,28 @@ class TestConcurrentPay(unittest.TestCase):
             mark, GIFT['gid'], (payer,), (ANCHOR_UID, payer), await_uids=(payer,))
         return income, pay, note, kind
 
+    def batch_buckets(self, mark, gid, uid, least=1):
+        """自刷批次：按（账号, op）分桶取流水，返回 (buckets, rows, note)
+
+        为什么不复用 batch_flows：自刷时付款方就是收款人，split_flows 按 uid 认付款行，
+        会把收款行一起算成付款行，收款侧一条都不剩——「收一份钱、发两份货」在付款侧
+        完全看不出来（行数与金额都对）。分桶不区分收付，一笔自刷写下的每个桶都要严格
+        按成功笔数放大，多一行 income 就红。
+
+        note 非空 = 流水写了但不带 gid（筛选口径失效），由调用方打印并跳过；
+        按 gid、按 uid 都查不到则是「扣了钱没留痕」，直接失败。
+        """
+        rows = wait_flows_stable(mark, gid, least=least, await_uids=(uid,))
+        if rows:
+            return flows_by_key(rows), rows, ''
+        looked = read_flows_by_uid(mark, uid)
+        if looked:
+            return {}, rows, '按 uid 查到 {} 行流水，但都不带 gid={}，按 gid 框批次的筛选失效'.format(
+                len(looked), gid)
+        raise AssertionError(
+            '自刷成交后 {} 秒内按 gid 和按 uid 都查不到流水（账号 {}）：钱扣了却没留痕。'
+            '这不是「未测到」'.format(int(WAIT_TIMEOUT), uid))
+
     def assert_conserved(self, uid, before, success_count, price, body_text):
         """钱与响应必须严格对应：多说成功就是多扣，少说成功就是给货没扣钱
 
@@ -388,7 +410,7 @@ class TestConcurrentPay(unittest.TestCase):
                       if pay_probe else '未测',
                       sorted(succeeded), flow_rows_text(batch_rows)), flush=True)
 
-    def test_004(self, des='同账号并发两笔自刷(余额只够一笔): 钱与响应必须一致, 不得透支'):
+    def test_004(self, des='同账号并发两笔自刷(余额只够一笔): 钱与响应必须一致, 不得透支, 分成不得多发'):
         """打赏给自己走的是另一条分支，余额校验与「打赏他人」不同
 
         2026-10-29 实测：余额 100、并发两笔自刷，两笔都返回 success=True，money 却只
@@ -398,11 +420,15 @@ class TestConcurrentPay(unittest.TestCase):
 
         test_001~003 改成打赏主播后，这条路就没人覆盖了，单独留一条钉住，
         避免缺陷重新隐身。本用例转绿即代表服务端已修好，不要调断言去它变绿。
+
+        收款侧也要对：那次缺陷在余额上能看出来（扣 100 而不是 200），而它的另一面
+        ——只成交一笔、分成却写了两份——在余额上完全看不见。自刷付款方就是收款人，
+        按 uid 分不出收付（见 batch_buckets），所以按（账号, op）分桶：整批的每个桶
+        都必须正好是单笔探针的 success 倍。
         """
         uid = CONCURRENT_PAYERS[0]
         price = PAY_AMOUNT
-        reset_payer(uid, price)
-        before = read_money(uid)
+        gid = GIFT['gid']
 
         # 自刷：收礼方就是付款人自己，不能复用 pay_call（那个固定打给主播）
         data = encodeData(rid=ROOM_RID, payType='package', uid=uid, giftId=GIFT['gid'],
@@ -410,6 +436,20 @@ class TestConcurrentPay(unittest.TestCase):
 
         def call():
             return post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
+
+        # 探针：自刷一笔写下哪些（账号, op）桶、各几行几元，全部实测。它花掉的那一笔
+        # 随后被 reset 覆盖，不影响下面「余额只够一笔」的设置
+        reset_payer(uid, price)
+        probe_mark = max_pay_change_id()
+        probe_kind = classify(call())
+        if probe_kind == 'success':
+            probe_buckets, _, note_probe = self.batch_buckets(probe_mark, gid, uid)
+        else:
+            probe_buckets, note_probe = {}, '探针未成交（{}）'.format(probe_kind)
+
+        reset_payer(uid, price)
+        before = read_money(uid)
+        mark = max_pay_change_id()
 
         results = self.run_concurrently([(uid, call), (uid, call)], stagger=self.stagger())
         kinds = [classify(res) for _, res in results]
@@ -428,6 +468,27 @@ class TestConcurrentPay(unittest.TestCase):
                 kinds.count('success'), kinds.count('limited')))
 
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
+
+        # 收款侧：成交几笔就放几倍分成。被拒那笔若也分了成，这里会多出一整倍——
+        # 那种错在余额上完全看不出来（钱只扣了一笔、扣得也对）
+        if note_probe:
+            print('[并发-自刷][未测到] {}；收款侧本轮没验，扣款侧已验'.format(note_probe), flush=True)
+            raise unittest.SkipTest('自刷收款侧没验（{}）；扣款侧已验'.format(note_probe))
+
+        success = kinds.count('success')
+        # 等待下界：分桶后付款行也在桶里，所以第二项传空，别把付款行算两遍
+        buckets, batch_rows, note = self.batch_buckets(
+            mark, gid, uid, least=expected_rows(probe_buckets, [], success))
+        if note:
+            print('[并发-自刷][未测到] {}；收款侧本轮没验，扣款侧已验'.format(note), flush=True)
+            raise unittest.SkipTest('自刷流水筛选失效，收款侧没验：{}'.format(note))
+        try:
+            # 每个（账号, op）桶的条数与金额都要按成功笔数放大，多一条 income 就红
+            assert_equal(buckets, scale_income(probe_buckets, success))
+        finally:
+            print('[并发-自刷] 流水 {}，期望 {}（成交 {} 笔）；原始行 {}'.format(
+                flow_text(buckets), flow_text(scale_income(probe_buckets, success)), success,
+                flow_rows_text(batch_rows)), flush=True)
 
     def test_005(self, des='四账号并发打赏同一主播: 分成流水按成功笔数放大, 收款人由单笔探针实测'):
         """收款侧按「流水」对账，不再按余额逐方对齐
