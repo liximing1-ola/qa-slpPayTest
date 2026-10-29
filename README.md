@@ -116,7 +116,14 @@ CASE=test_naming_song.TestPayCreate python3 run_all_case.py slp
 CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 ```
 
-不设 `CASE` 就是全量。写用例名（含 `.`）时按名字加载，找不到会造一条报错用例，**不会静默跳过**。
+不设 `CASE` 就是全量。写用例名（含 `.`）时按名字加载，**名字写错（模块/类/方法不存在、前缀重复）当场报原因并以退出码 `2` 结束**：
+
+```
+[CASE] 用例名加载不到：ModuleNotFoundError: No module named 'caseStress.caseStress'
+[CASE] 写法：caseStress.caseStress.test_pay_concurrent…　本轮用例目录：caseStress
+```
+
+不能把它变成报告里的一条「异常」用例——那跟用例真挂了长得一模一样，写错名字的人会去翻用例代码。也不会静默跳过。全量 `discover` 时模块导入失败仍按真失败报：那是代码坏了，不是名字写错。
 
 名字带不带用例目录前缀都认：`caseSlp.test_check.TestPayCreate.test_002` 和 `test_check.TestPayCreate.test_002` 等价。`run_reproduce.py --case` 用的是全名，同一个用例名在两个入口不该有两套写法。前缀与实际跑的目录不一致（比如跑 `caseStress` 却写了 `caseSlp.`）会直接退出（退出码 `2`），而不是拼成 `caseStress.caseStress.…` 再报一条 `No module named` 的假失败。
 
@@ -538,9 +545,9 @@ python -m common.selfcheck      # 不连服务端、不连库，全部通过才�
 
 并发工具那三项是给流水对账用的：付款行与收款行会不会混、条数稳定前会不会提前返回、响应四分类（尤其网关返回 HTML 时 body 是字符串）会不会崩。它们不是照代码抄一遍——把实现换回有 bug 的版本，自检必须红，这一点每次改这三项都要用探针验一次；否则自检就只是一段永远绿的代码，比没有更糟。
 
-`CASE` 那项盯的是「同一个用例名在两个入口两套写法」：带不带目录前缀都要装出同一批用例、不能产出 `_FailedTest`、前缀与实际跑的目录不一致时要直接退出。它比用例本身更值得自检——现场踩过一次，`CASE=caseStress.…` 跑出来是一条 `No module named 'caseStress.caseStress'` 的假失败，看着像用例挂了。
+`CASE` 那项盯的是「同一个用例名在两个入口两套写法」：带不带目录前缀都要装出同一批用例、不产 `_FailedTest`、前缀与实际跑的目录不一致或名字真写错时要当场退出并说清原因。它比用例本身更值得自检——现场踩过一次，`CASE=caseStress.…` 跑出来是一条 `No module named 'caseStress.caseStress'` 的假失败，看着像用例挂了。
 
-另外一项容易被忽略的：**自检自身不能因为一项崩掉就中断整轮**。检查函数抛的不是 `AssertionError`（比如 `AttributeError`、连库超时）时，也要记成一条失败继续往下跑，否则后面那些项看上去就像「没报错」。
+另外一项容易被忽略的：**自检自身不能因为一项崩掉就中断整轮**。检查函数抛的不是 `AssertionError`（比如 `AttributeError`、连库超时），甚至被检查的代码自己 `sys.exit`（`build_suite` 拒绝加载写错的用例名就是这样），也要记成一条失败继续往下跑，否则后面那些项看上去就像「没报错」。
 
 只验证框架行为，不碰任何业务预期值——改框架代码后跑一次，别等到线上红一轮才发现。
 

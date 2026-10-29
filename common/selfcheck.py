@@ -97,6 +97,11 @@ def _check(name, func):
     except AssertionError as error:
         _FAILED.append(name)
         print('  FAIL {} -> {}'.format(name, error))
+    except SystemExit as error:
+        # 被检查的代码自己 sys.exit 了（比如 build_suite 拒绝加载写错的用例名）：
+        # 这也是一条结果，不能让整轮自检在这里就断掉
+        _FAILED.append(name)
+        print('  FAIL {} -> 检查过程中退出（SystemExit {}）'.format(name, error.code))
     except Exception as error:
         _FAILED.append(name)
         print('  FAIL {} -> {}: {}'.format(name, type(error).__name__, error))
@@ -555,9 +560,12 @@ def check_case_expr_prefix():
     其实是名字被拼了两遍。而 run_reproduce.py 的 --case 恰恰要求全名（它直接喂
     python -m unittest），同一个名字两个入口两套写法，人必然写错一次。
 
-    这里钉三件事：两种写法装出同一批用例、不产出 _FailedTest、前缀与实际用例
-    目录不一致时明确退出（而不是继续拼一个必然找不到的模块名）。
+    这里钉四件事：两种写法装出同一批用例、不产出 _FailedTest、前缀与实际用例
+    目录不一致时明确退出、名字真写错时当场报名字+原因（不能变成报告里一条「异常」，
+    否则看报告的人会去翻用例代码，而问题在命令行的 CASE 上）。
     """
+    import contextlib
+    import io
     import unittest
 
     from common import report
@@ -587,13 +595,26 @@ def check_case_expr_prefix():
     cls = 'test_pay_concurrent.TestConcurrentPay'
     assert _ids('caseStress.' + cls) == _ids(cls), '只写到类时，两种前缀装出来的用例不一致'
 
-    # 前缀写成了别的用例目录：继续拼下去只会得到 "No module named ..."，看不出是写错了名字
-    try:
-        report.build_suite('slp', 'caseSlp.test_check', 'caseStress')
-    except SystemExit as stop:
-        assert stop.code == 2, '前缀不一致应以 2 退出，实际 {}'.format(stop.code)
-    else:
-        raise AssertionError('前缀与实际用例目录不一致时必须报错退出，不能继续拼')
+    def _refused(expr, expect):
+        """应在装配阶段就退出，且提示要把问题说清楚"""
+        said = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(said):
+                report.build_suite('slp', expr, 'caseStress')
+        except SystemExit as stop:
+            assert stop.code == 2, '{} 应以 2 退出，实际 {}'.format(expr, stop.code)
+        else:
+            raise AssertionError('{} 必须报错退出，不能拼出一个必然找不到的模块名'.format(expr))
+        text = said.getvalue()
+        assert expect in text, '{} 的提示没点出问题所在：{}'.format(expr, text)
+
+    # 前缀写成了别的用例目录：继续拼下去只会得到 "No module named ..."
+    _refused('caseSlp.test_check', '不一致')
+    # 前缀重复（截图里那条）：现在要当场说清是名字写错，而不是跑出一条 _FailedTest
+    _refused('caseStress.caseStress.test_pay_concurrent', "No module named 'caseStress.caseStress'")
+    # 方法名、模块名写错：报告里的「异常」只应留给真正跑失败，名字写错属于命令行
+    _refused('test_pay_concurrent.TestConcurrentPay.test_999', "has no attribute 'test_999'")
+    _refused('test_pay_concurrent.NoSuchClass', "has no attribute 'NoSuchClass'")
 
 
 def main():

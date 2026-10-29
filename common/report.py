@@ -170,6 +170,40 @@ class AllTestRunner(unittest.TextTestRunner):
         return result
 
 
+def _flatten_suite(suite):
+    """把嵌套的 TestSuite 摊平成单条用例（loadTestsFromName 返回的总是套件）"""
+    cases = []
+    for item in suite:
+        if isinstance(item, unittest.TestSuite):
+            cases.extend(_flatten_suite(item))
+        else:
+            cases.append(item)
+    return cases
+
+
+def _load_errors(suite):
+    """用例名加载不到时，返回原因列表；正常加载返回空列表
+
+    unittest 在名字找不到时不抛异常，而是往套件里塞一条 `_FailedTest`——跑到最后
+    变成报告里的一条「异常」，看报告的人只会以为用例自己坏了。名字里带了多一层前缀
+    （caseStress.caseStress.xxx）尤其典型：报错是 "No module named 'caseStress.caseStress'"，
+    跟业务一点关系都没有，却和真失败长得一模一样。
+
+    不在这里回显名字：`_FailedTest.id()` 里的是它自己猜的模块名（就是找不到的那个），
+    拿它当「你写的名字」会给错线索，名字由调用方用原始表达式回显。
+    """
+    reasons = []
+    for case in _flatten_suite(suite):
+        if type(case).__name__ != '_FailedTest':
+            continue
+        exc = getattr(case, '_exception', None)
+        # ImportError 的文本带整段 traceback，最后一行才是真正原因（如 ModuleNotFoundError）
+        text = str(exc) if exc is not None else str(case)
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        reasons.append(lines[-1] if lines else '加载失败')
+    return reasons
+
+
 def build_suite(app_info, case_expr='', case_dir_name=''):
     """按 App 名装配用例集
 
@@ -204,9 +238,10 @@ def build_suite(app_info, case_expr='', case_dir_name=''):
     if case_expr:
         app_dir = os.path.basename(case_dir)  # caseSlp / caseXsg，拼完整用例名时要带上前缀
         for item in case_expr.split(','):
-            item = item.strip()
-            if not item:
+            raw = item.strip()
+            if not raw:
                 continue
+            item = raw
             if '.' in item:
                 # 目录前缀可带可不带：带了就用剩下的部分，免得拼成 caseStress.caseStress.xxx
                 head, rest = item.split('.', 1)
@@ -218,7 +253,17 @@ def build_suite(app_info, case_expr='', case_dir_name=''):
                         sys.exit(2)
                     item = rest
                 # 找不到时 unittest 会造一条报错用例，不会静默跳过
-                testcase.addTests(loader.loadTestsFromName('{}.{}'.format(app_dir, item)))
+                suite = loader.loadTestsFromName('{}.{}'.format(app_dir, item))
+                # 名字写错属于装配阶段的问题，不能把它变成报告里的一条「异常」：
+                # 那跟「用例真挂了」看起来一模一样，而 CASE 写错的人会去翻用例代码。
+                # 当场报名字 + 原因退出（退出码 2，同「App 参数不对」）
+                errors = _load_errors(suite)
+                if errors:
+                    for reason in errors:
+                        print('[CASE] 用例名加载不到：{}'.format(reason), flush=True)
+                    print('[CASE] 写法：{}　本轮用例目录：{}'.format(raw, app_dir), flush=True)
+                    sys.exit(2)
+                testcase.addTests(suite)
                 continue
             name = item if item.endswith('.py') else '{}.py'.format(item)
             testcase.addTests(loader.discover(case_dir,
