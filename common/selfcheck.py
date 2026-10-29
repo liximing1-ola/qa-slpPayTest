@@ -736,6 +736,87 @@ def check_stagger_default():
                 os.environ[key] = value
 
 
+def check_settle_window():
+    """跨用例的限流窗口要先等过去：否则整对被频控挡下，只能 SkipTest
+
+    2026-10-29 整跑：test_001 一次 4 连发之后紧接着 test_002 又打同一个账号，服务端的
+    「请求太快了」落在 test_002 的第一笔上（成功 1 + 频控 1 → 未测到）；同一版代码的
+    test_003（8 笔、同样错峰 0.2）一次频控都没有，差别只在它前面那条只发了 2 笔。
+
+    这里钉三件事：真的发出请求时会记下时刻、上一条刚打过同一账号时等够 SETTLE 秒、
+    早就过去了一口也不等。两件事只要有一件坏了，settle 就是个永远不等的空函数。
+    """
+    import os
+
+    from caseStress import test_pay_concurrent as mod
+
+    class _Clock(object):
+        """只替掉用例模块里那个 time 名字：真正的 time 模块不动"""
+
+        def __init__(self):
+            self.now = 1000.0
+            self.slept = []
+
+        def time(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.slept.append(seconds)
+            self.now += seconds
+
+    keys = ('SETTLE', 'STAGGER')
+    saved = {key: os.environ.get(key) for key in keys}
+    clock = _Clock()
+    real_time = mod.time
+    try:
+        mod.time = clock
+        os.environ.pop('SETTLE', None)
+        mod.LAST_CALL.clear()
+
+        # 一、真的发过请求才会记下时刻：拿真实 worker 跑一笔，别只看变量名
+        results = mod.TestConcurrentPay.run_concurrently(
+            None, [(7, lambda: {'code': 200, 'body': {'success': True}})], stagger=0)
+        assert len(results) == 1 and mod.LAST_CALL.get(7) == 1000.0, \
+            '并发发请求时要记录时刻，实际 {}'.format(mod.LAST_CALL)
+
+        # 二、上一条刚过去 0.6 秒，就要等剩下的 0.4 秒（默认 SETTLE=1）
+        clock.now = 1000.6
+        clock.slept[:] = []
+        mod.TestConcurrentPay.settle(None, (7,), '自检')
+        assert abs(clock.now - 1001.0) < 1e-6 and len(clock.slept) == 1, \
+            '上一条刚打过同一账号时要等够 SETTLE，实际睡了 {}'.format(clock.slept)
+
+        # 三、早就过去了就不等：多等一毫秒都是在拖慢整轮
+        clock.now = 1030.0
+        clock.slept[:] = []
+        mod.TestConcurrentPay.settle(None, (7,), '自检')
+        assert clock.slept == [], '早就过去了却还在等：{}'.format(clock.slept)
+
+        # 四、SETTLE 能调：调成 2 秒就只等剩下的 1.5 秒
+        os.environ['SETTLE'] = '2'
+        clock.now = 1000.5
+        clock.slept[:] = []
+        mod.TestConcurrentPay.settle(None, (7,), '自检')
+        assert abs(clock.now - 1002.0) < 1e-6, 'SETTLE=2 应按 2 秒算，实际停在 {}'.format(clock.now)
+
+        # 五、多账号取最近的那一笔（先回到默认 1 秒，别沿用上一步的 SETTLE=2）
+        os.environ.pop('SETTLE', None)
+        mod.LAST_CALL[1] = 990.0
+        mod.LAST_CALL[2] = 999.5
+        clock.now = 1000.0
+        clock.slept[:] = []
+        mod.TestConcurrentPay.settle(None, (1, 2), '自检')
+        assert abs(clock.now - 1000.5) < 1e-6, '多账号要看最近那一笔，实际停在 {}'.format(clock.now)
+    finally:
+        mod.time = real_time
+        mod.LAST_CALL.clear()
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def check_classify_responses():
     """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
 
@@ -905,6 +986,7 @@ def main():
     _check('同账号重复提交：全被频控挡下要认成未测到', check_window_tested)
     _check('自刷分桶：付款方就是收款人，分成多发一份也比得出来', check_self_pay_buckets)
     _check('同账号两笔默认错峰大于 0：退回完全同时会整对被频控挡下', check_stagger_default)
+    _check('跨用例限流窗口：上一条刚打过同一账号时要等够 SETTLE 秒', check_settle_window)
     _check('响应四分类、非 dict body 不崩', check_classify_responses)
 
     print('框架自检：本机环境配置（common.envLocal）')

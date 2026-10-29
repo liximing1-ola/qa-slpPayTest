@@ -30,6 +30,11 @@ from common.tools import get_test_token
 # 日志里带名字：流水只给 uid，光看数字对不上人
 PARTY_NAMES = {ANCHOR_UID: '主播', OWNER_UID: '厅长', CEO_UID: '公会长'}
 
+# 本进程最后一次对某个账号发打赏的时刻：用例之间会连着打同一个账号，
+# 服务端的「请求太快了」就有了落点，整对被挡下就只能 SkipTest（见 settle）
+LAST_CALL = {}
+LAST_CALL_LOCK = threading.Lock()
+
 
 def flow_text(income):
     """{(uid, op): [行数, 金额]} 转成一行可读文字，空的时候不返回空字符串"""
@@ -89,6 +94,8 @@ class TestConcurrentPay(unittest.TestCase):
                 barrier.wait(timeout=10)
                 if stagger > 0:
                     time.sleep(index * stagger)
+                with LAST_CALL_LOCK:
+                    LAST_CALL[uid] = time.time()
                 res = call()
             except Exception as error:
                 res = {'code': -1, 'body': {'msg': repr(error)}, 'error': True}
@@ -130,6 +137,27 @@ class TestConcurrentPay(unittest.TestCase):
         要复现「完全同时」的老口径就传 STAGGER=0，行为一模一样。
         """
         return float(os.environ.get('STAGGER') or 0.2)
+
+    def settle(self, uids, tag):
+        """发这一条的第一笔之前，先让上一条用例留下的限流窗口过去
+
+        test_001 一次并发 4 笔（不同账号、不传错峰），紧接着 test_002 又打同一个账号：
+        服务端的「请求太快了」就落在 test_002 的第一笔上，整对变成「成功 1 + 频控 1」，
+        只能 SkipTest。2026-10-29 整跑就是这样——同一版代码里 test_003（8 笔、同样
+        错峰 0.2 秒）一次频控都没有，差别只在它前面那条只发了 2 笔。
+
+        没有服务端日志，分不清是「按账号的滑动窗口」还是「App 级令牌桶被连发打空」，
+        所以这里不猜：按本进程最后一次对这些账号发请求的时刻，等够 SETTLE 秒（默认 1）
+        再发，并把等了多久打出来。调大 SETTLE 仍被挡，就该去要服务端日志，别动断言。
+        """
+        gap = float(os.environ.get('SETTLE') or 1.0)
+        with LAST_CALL_LOCK:
+            last = max(LAST_CALL.get(uid, 0.0) for uid in uids)
+        wait = last + gap - time.time()
+        if wait > 0:
+            print('[并发] {}：上一条用例刚打过同一账号，等 {:.2f}s 再发'
+                  '（跨用例的限流窗口不算这一条的结论）'.format(tag, wait), flush=True)
+            time.sleep(wait)
 
     def pay_call(self, uid):
         """uid 是收礼方，pay_uid 是扣款方：四个账号都打赏给同一个主播
@@ -269,6 +297,7 @@ class TestConcurrentPay(unittest.TestCase):
 
     def test_001(self, des='四账号并发打同一主播: 扣款总额=成功笔数*单价, 且不得透支'):
         price = PAY_AMOUNT
+        self.settle(CONCURRENT_PAYERS, 'test_001')
         before = {}
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, price)
@@ -298,6 +327,7 @@ class TestConcurrentPay(unittest.TestCase):
     def test_002(self, des='同账号并发两笔(余额只够一笔): 钱与成功响应严格对应且不得透支'):
         uid = CONCURRENT_PAYERS[0]
         price = PAY_AMOUNT
+        self.settle((uid,), 'test_002')
         reset_payer(uid, price)
         before = read_money(uid)
 
@@ -315,7 +345,7 @@ class TestConcurrentPay(unittest.TestCase):
             # 这里必须抛 SkipTest 而不是只打印：只打印在报告里仍然是一条「通过」，
             # 看报告的人不知道这一轮其实什么都没测到。
             print('[并发-同账号][未测到] 成功 {} 笔、频控 {} 笔：第二笔没走到余额校验，本轮结论无效；'
-                  '默认已错峰 {}s，仍被挡就再调大（STAGGER=0.4）'.format(
+                  '默认已错峰 {}s、发前也等掉了上一条的限流窗口，仍被挡就调大 SETTLE'.format(
                       kinds.count('success'), kinds.count('limited'), self.stagger()), flush=True)
             raise unittest.SkipTest('第二笔没走到余额校验（成功 {} 笔、频控 {} 笔），本轮没验并发窗口'.format(
                 kinds.count('success'), kinds.count('limited')))
@@ -343,6 +373,7 @@ class TestConcurrentPay(unittest.TestCase):
         price = PAY_AMOUNT
         gid = GIFT['gid']
         probe = CONCURRENT_PAYERS[0]
+        self.settle(CONCURRENT_PAYERS, 'test_003')
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, price * 2)
 
@@ -381,7 +412,8 @@ class TestConcurrentPay(unittest.TestCase):
         clean = concurrent_window_tested(kinds)
         if not clean:
             print('[并发-重发][未测到] 第二笔全被频控挡下（本轮频控 {} 次）：没有一对送到校验，'
-                  '本轮没验同账号重复提交；默认已错峰 {}s，仍被挡就再调大'.format(
+                  '本轮没验同账号重复提交；默认已错峰 {}s、发前也等掉了上一条的限流窗口，'
+                  '仍被挡就调大 SETTLE'.format(
                       sum(kinds[uid].count('limited') for uid in CONCURRENT_PAYERS),
                       self.stagger()), flush=True)
             raise unittest.SkipTest('第二笔全被频控挡下，本轮没验同账号重复提交')
@@ -454,6 +486,7 @@ class TestConcurrentPay(unittest.TestCase):
         uid = CONCURRENT_PAYERS[0]
         price = PAY_AMOUNT
         gid = GIFT['gid']
+        self.settle((uid,), 'test_004')
 
         # 自刷：收礼方就是付款人自己，不能复用 pay_call（那个固定打给主播）
         data = encodeData(rid=ROOM_RID, payType='package', uid=uid, giftId=GIFT['gid'],
@@ -489,8 +522,8 @@ class TestConcurrentPay(unittest.TestCase):
         if kinds.count('limited') >= 1 or kinds.count('success') == 0:
             # 同 test_002：只打印等于「通过」，必须让报告里能看见这一条没验到
             print('[并发-自刷][未测到] 成功 {} 笔、频控 {} 笔：第二笔没走到余额校验，本轮结论无效；'
-                  '可试 STAGGER=0.2 错峰重跑'.format(
-                      kinds.count('success'), kinds.count('limited')), flush=True)
+                  '默认已错峰 {}s、发前也等掉了上一条的限流窗口，仍被挡就调大 SETTLE'.format(
+                      kinds.count('success'), kinds.count('limited'), self.stagger()), flush=True)
             raise unittest.SkipTest('第二笔没走到余额校验（成功 {} 笔、频控 {} 笔），本轮没验自刷分支'.format(
                 kinds.count('success'), kinds.count('limited')))
 
