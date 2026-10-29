@@ -922,6 +922,46 @@ def check_pair_retry():
                 os.environ[key] = value
 
 
+def check_round_timeline():
+    """并发时间线：每个任务都要留下「什么时候发的、结果是什么」，而且每轮清空
+
+    频控只出现在 8 连发的 test_003 上、4 连发的都没有；要分清「按账号的滑动窗口」
+    和「App 级令牌桶被打空」，只能看频控落在时间线的哪一段。记漏一条、或者把上一轮
+    的条目留下来，都会把一次频控指到错的账号上——那比没有日志更糟。
+    """
+    from caseStress import test_pay_concurrent as mod
+
+    ok = {'code': 200, 'body': {'success': True}}
+    limited = {'code': 200, 'body': {'success': False, 'msg': '请求太快了，请稍后重试'}}
+
+    class _Case(object):
+        # run_concurrently 只碰模块级状态，不需要真的 TestCase 实例
+        run_concurrently = mod.TestConcurrentPay.run_concurrently
+
+    # 按 uid 决定响应，不靠 list.pop 的顺序：两个线程谁先跑不确定，用它会把自检做成摇奖
+    answers = {11: ok, 22: limited}
+    _Case().run_concurrently([(uid, lambda uid=uid: answers[uid]) for uid in (11, 22)])
+    assert len(mod.LAST_ROUND) == 2, '两个任务要留两条时间线，实际 {}'.format(mod.LAST_ROUND)
+    assert sorted(item[0] for item in mod.LAST_ROUND) == [0, 1], \
+        '序号必须覆盖全部任务，实际 {}'.format([item[0] for item in mod.LAST_ROUND])
+    assert {item[0]: item[3] for item in mod.LAST_ROUND} == {0: 'success', 1: 'limited'}, \
+        '分类要跟着发出去的那个请求走，实际 {}'.format(mod.LAST_ROUND)
+    assert {item[1] for item in mod.LAST_ROUND} == {11, 22}, '账号不能串'
+    assert all(item[2] > 0 for item in mod.LAST_ROUND), '发送时刻要在 barrier 之后取'
+
+    # 第二轮：上一轮的条目必须被清掉，否则两批的频控会混成一张图
+    _Case().run_concurrently([(uid, lambda uid=uid: ok) for uid in (11, 22)])
+    assert len(mod.LAST_ROUND) == 2, '每轮要清空，实际累积到 {} 条'.format(len(mod.LAST_ROUND))
+
+    # 异常那一路也要进时间线：漏掉它，后面的位置就全错一位
+    def boom():
+        raise RuntimeError('线程里没有响应')
+
+    _Case().run_concurrently([(11, lambda: ok), (22, boom)])
+    kinds = {item[1]: item[3] for item in mod.LAST_ROUND}
+    assert kinds[22] == 'broken', '请求层抛错要记成 broken，实际 {}'.format(kinds)
+
+
 def check_classify_responses():
     """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
 
@@ -1093,6 +1133,7 @@ def main():
     _check('同账号两笔默认错峰大于 0：退回完全同时会整对被频控挡下', check_stagger_default)
     _check('跨用例限流窗口：上一条刚打过同一账号时要等够 SETTLE 秒', check_settle_window)
     _check('成对被频控污染要重放：重放到上限就交回去跳过', check_pair_retry)
+    _check('并发时间线：每条请求都记下时刻与结果、每轮清空', check_round_timeline)
     _check('响应四分类、非 dict body 不崩', check_classify_responses)
 
     print('框架自检：本机环境配置（common.envLocal）')

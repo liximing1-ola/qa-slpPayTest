@@ -35,6 +35,13 @@ PARTY_NAMES = {ANCHOR_UID: '主播', OWNER_UID: '厅长', CEO_UID: '公会长'}
 LAST_CALL = {}
 LAST_CALL_LOCK = threading.Lock()
 
+# 上一轮并发请求的发送时间线：(任务序号, 账号, 发送时刻, 响应分类)
+# 频控落在时间线的哪一段，能把两种限流分开：按账号的滑动窗口挡的是「某账号的第二笔」
+# （哪怕它排在最前面），App 级令牌桶被打空只挡时间上靠后的请求。服务端日志拿不到时，
+# 这是客户端唯一能拿到的证据——所以只记不判，别把猜测写成断言
+LAST_ROUND = []
+LAST_ROUND_LOCK = threading.Lock()
+
 
 def flow_text(income):
     """{(uid, op): [行数, 金额]} 转成一行可读文字，空的时候不返回空字符串"""
@@ -88,17 +95,26 @@ class TestConcurrentPay(unittest.TestCase):
         barrier = threading.Barrier(len(tasks))
         # 只统计本轮：频控是全进程共享的，不清零会把前面用例的账算到这一轮头上
         reset_frequent_retries()
+        # 时间线同理：上一轮的条目留着，会把一次频控指到已经结束的批次上
+        del LAST_ROUND[:]
 
         def worker(index, uid, call):
+            # 发送时刻要在错峰之后取：错峰那一下正是为了让第 n 笔晚 n*stagger 到，
+            # 提前取会把整批记成同一时刻，时序图就成了一团没有信息的点
+            sent_at = 0.0
             try:
                 barrier.wait(timeout=10)
                 if stagger > 0:
                     time.sleep(index * stagger)
+                sent_at = time.time()
                 with LAST_CALL_LOCK:
-                    LAST_CALL[uid] = time.time()
+                    LAST_CALL[uid] = sent_at
                 res = call()
             except Exception as error:
                 res = {'code': -1, 'body': {'msg': repr(error)}, 'error': True}
+            # 异常那一路也要进时间线：漏一条，频控的位置就对不上了
+            with LAST_ROUND_LOCK:
+                LAST_ROUND.append((index, uid, sent_at, classify(res)))
             with lock:
                 results.append((uid, res))
 
@@ -122,7 +138,26 @@ class TestConcurrentPay(unittest.TestCase):
         else:
             note = '并发度完整'
         print('[并发] 本轮命中频控 {} 次，错峰 {}s，{}'.format(frequent, stagger, note), flush=True)
+        if frequent:
+            print('[并发-时序] {}'.format(self.timeline_text()), flush=True)
         return results
+
+    def timeline_text(self):
+        """上一轮每个请求的发送时刻与结果，按时间排开
+
+        频控落在时间线的哪一段，是两种限流的分水岭：按账号的滑动窗口挡的是「某账号的第
+        二笔」（哪怕它排在最前面），App 级令牌桶被打空只挡时间上靠后的请求。只有 8 连发
+        的 test_003 每轮都有频控、4 连发的都没有，仅凭这一点分不开两者。
+
+        只打印、不判定：没有服务端日志之前，把猜测写成断言等于自己造红灯。
+        """
+        with LAST_ROUND_LOCK:
+            items = sorted(LAST_ROUND, key=lambda item: (item[2], item[0]))
+        if not items:
+            return '（没有记到发送时刻）'
+        start = min(item[2] for item in items)
+        return '，'.join('+{:.2f}s #{} uid={} {}'.format(at - start, index, uid, kind)
+                        for index, uid, at, kind in items)
 
     def stagger(self):
         """同账号两笔之间的错峰秒数：STAGGER 环境变量控制，默认 0.2
@@ -384,6 +419,11 @@ class TestConcurrentPay(unittest.TestCase):
                       attempts, kinds.count('success'), kinds.count('limited')), flush=True)
             raise unittest.SkipTest('连续 {} 次尝试都被频控挡下，本轮没验并发窗口'.format(attempts))
 
+        # 「被拒」的响应 msg 是空的（服务端这个分支不给文案，见 tools.classify），只看这一条
+        # 分不清拒绝原因。同一版代码里 test_003 余额留两笔、同样同账号连发两笔，有账号
+        # 两笔都成交、各扣 200——余额够就能过，所以这里余额只留一笔时第二笔被拒是余额校验
+        # 真的生效，而不是另一种「按内容去重」。这条交叉验证依赖 test_003 至少有一个账号
+        # 两笔都成交；test_003 转成未测到时，这里的「被拒」就只能算半个结论。
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
