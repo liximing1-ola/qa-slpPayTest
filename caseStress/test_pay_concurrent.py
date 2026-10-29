@@ -10,6 +10,7 @@ os.environ.setdefault('REQUEST_INTERVAL', '0')
 os.environ.setdefault('FREQUENT_RETRY', '0')
 
 import threading
+import time
 import unittest
 
 from caseStress.config import ANCHOR_UID, CONCURRENT_PAYERS, GIFT, PAY_AMOUNT, ROOM_RID, pay_url
@@ -32,11 +33,16 @@ class TestConcurrentPay(unittest.TestCase):
         for uid, token in token_map.items():
             Session.checkUserToken('write', app_name='slp', uid=uid, token=token)
 
-    def run_concurrently(self, tasks):
+    def run_concurrently(self, tasks, stagger=0.0):
         """tasks = [(uid, callable)]，Barrier 对齐后同时出发，返回 [(uid, 响应)]
 
         线程里不写断言：unittest 的断言失败不会传回主线程，只会让线程静默退出，
         看起来像「少跑了一笔」。线程只负责发请求，判定全部回主线程做。
+
+        stagger：第 n 个任务再加 n*stagger 秒。服务端对同一账号有限流，毫秒级完全
+        同时发会被「请求太快」直接挡回去，根本走不到余额校验——用例虽然绿，却什么
+        都没测到。错峰一点反而能落进「两次读余额都发生在第一次写之前」的窗口，
+        那才是这条用例真正要打的地方。默认 0，保持完全同时。
         """
         results = []
         lock = threading.Lock()
@@ -44,16 +50,18 @@ class TestConcurrentPay(unittest.TestCase):
         # 只统计本轮：频控是全进程共享的，不清零会把前面用例的账算到这一轮头上
         reset_frequent_retries()
 
-        def worker(uid, call):
+        def worker(index, uid, call):
             try:
                 barrier.wait(timeout=10)
+                if stagger > 0:
+                    time.sleep(index * stagger)
                 res = call()
             except Exception as error:
                 res = {'code': -1, 'body': {'msg': repr(error)}, 'error': True}
             with lock:
                 results.append((uid, res))
 
-        threads = [threading.Thread(target=worker, args=task, name='pay-{}'.format(index))
+        threads = [threading.Thread(target=worker, args=(index,) + task, name='pay-{}'.format(index))
                    for index, task in enumerate(tasks)]
         for thread in threads:
             thread.start()
@@ -72,8 +80,12 @@ class TestConcurrentPay(unittest.TestCase):
             note = '频控响应已原样计入业务拒绝（未重试），并发度保持完整'
         else:
             note = '并发度完整'
-        print('[并发] 本轮命中频控 {} 次，{}'.format(frequent, note), flush=True)
+        print('[并发] 本轮命中频控 {} 次，错峰 {}s，{}'.format(frequent, stagger, note), flush=True)
         return results
+
+    def stagger(self):
+        """同账号两笔之间的错峰秒数：STAGGER=0.2 环境变量控制，默认 0（完全同时）"""
+        return float(os.environ.get('STAGGER') or 0)
 
     def pay_call(self, uid):
         """uid 是收礼方，pay_uid 是扣款方：四个账号都打赏给同一个主播
@@ -142,17 +154,18 @@ class TestConcurrentPay(unittest.TestCase):
         reset_payer(uid, price)
         before = read_money(uid)
 
-        results = self.run_concurrently([(uid, self.pay_call(uid)), (uid, self.pay_call(uid))])
+        results = self.run_concurrently([(uid, self.pay_call(uid)), (uid, self.pay_call(uid))],
+                                        stagger=self.stagger())
         kinds = [classify(res) for _, res in results]
         bodies = [res.get('body') for _, res in results]
         broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
         print('[并发-同账号] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
             len(broken), bodies), flush=True)
-        if kinds.count('success') == 0:
-            # 两笔都被限流挡下时守恒式退化成 0 == 0，绿得毫无意义，必须显式标出来
-            print('[并发-同账号][未测到] 两笔都被限流挡下，本轮没有任何成交，结论无效，需重跑',
-                  flush=True)
+        if kinds.count('limited') >= 1 or kinds.count('success') == 0:
+            # 被限流挡下的那一笔根本没走到余额校验，守恒式两侧一起缩小，绿得毫无意义
+            print('[并发-同账号][未测到] 有 {} 笔被限流挡下，第二笔没走到余额校验，本轮结论无效；'
+                  '可试 STAGGER=0.2 错峰重跑'.format(kinds.count('limited')), flush=True)
 
         assert_equal(broken, [])
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
@@ -220,16 +233,16 @@ class TestConcurrentPay(unittest.TestCase):
         def call():
             return post_request_session(pay_url, data, tokenName='slp', pay_uid=uid)
 
-        results = self.run_concurrently([(uid, call), (uid, call)])
+        results = self.run_concurrently([(uid, call), (uid, call)], stagger=self.stagger())
         kinds = [classify(res) for _, res in results]
         bodies = [res.get('body') for _, res in results]
         broken = [body for body, kind in zip(bodies, kinds) if kind == 'broken']
         print('[并发-自刷] 成功 {} 笔，频控 {} 笔，业务拒绝 {} 笔，服务端异常 {} 笔，响应 {}'.format(
             kinds.count('success'), kinds.count('limited'), kinds.count('rejected'),
             len(broken), bodies), flush=True)
-        if kinds.count('success') == 0:
-            print('[并发-自刷][未测到] 两笔都被限流挡下，本轮没有任何成交，结论无效，需重跑',
-                  flush=True)
+        if kinds.count('limited') >= 1 or kinds.count('success') == 0:
+            print('[并发-自刷][未测到] 有 {} 笔被限流挡下，第二笔没走到余额校验，本轮结论无效；'
+                  '可试 STAGGER=0.2 错峰重跑'.format(kinds.count('limited')), flush=True)
 
         assert_equal(broken, [])
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
