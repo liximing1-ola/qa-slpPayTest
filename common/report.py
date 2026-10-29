@@ -13,7 +13,7 @@ import time
 import unittest
 
 from common import Assert, Logs, Scene, runFailed
-from common.case_groups import group_of
+from common.case_groups import CASE_PACKAGES, group_of
 from common.Config import config
 
 
@@ -177,10 +177,17 @@ def build_suite(app_info, case_expr='', case_dir_name=''):
     :param case_expr: 逗号分隔的混合写法，空则全量执行（run_crontab_case 不传，行为与全量一致）
         省略：test_check                             只跑 caseSlp/test_check.py
         带点：test_check.TestPayCreate.test_002      按完整用例名加载（可只写到类）
+        带点带前缀：caseSlp.test_check.TestPayCreate.test_002 也行，见下面注释
     :param case_dir_name: 用例目录名，空则按 App 映射（caseSlp / caseXsg）。并发与幂等用例放在
         平级的 caseStress，由 run_stress_case 传进来——不能建成 caseSlp 的子目录：discover 是
         递归的，子目录里的用例会被日常全量回归自动收进去
     unittest 的 discover 只能按**文件名** glob，写用例名是匹配不到文件的，所以两种写法分开处理
+
+    两种写法都收（名字前缀可带可不带）：同一个「用例名」在两个入口都得能用——
+    run_reproduce.py 是把名字直接喂给 `python -m unittest <全名>`，那边必须带目录前缀；
+    而这里原本会无条件再拼一次，于是 `CASE=caseStress.test_pay_concurrent...` 变成
+    `caseStress.caseStress.test_pay_concurrent...`，跑出来是一条 "No module named
+    'caseStress.caseStress'" 的假失败用例（实测踩过）。不要求人记住两套写法。
     """
     if app_info not in (config.appName['SLP'], config.appName['XSG']):
         raise ValueError('不支持的 App: {}, 仅支持 {}'.format(app_info, config.appName))
@@ -201,6 +208,15 @@ def build_suite(app_info, case_expr='', case_dir_name=''):
             if not item:
                 continue
             if '.' in item:
+                # 目录前缀可带可不带：带了就用剩下的部分，免得拼成 caseStress.caseStress.xxx
+                head, rest = item.split('.', 1)
+                if head in CASE_PACKAGES:
+                    if head != app_dir:
+                        print('[CASE] 前缀 {} 与实际用例目录 {} 不一致：本轮只跑 {} 下的用例，'
+                              '写 caseSlp / caseXsg / caseStress 时别混用'.format(
+                                  head, app_dir, app_dir), flush=True)
+                        sys.exit(2)
+                    item = rest
                 # 找不到时 unittest 会造一条报错用例，不会静默跳过
                 testcase.addTests(loader.loadTestsFromName('{}.{}'.format(app_dir, item)))
                 continue

@@ -50,8 +50,11 @@ import subprocess
 import sys
 
 SELF = 'pre_push_audit.py'
-# 三个用例包都要审：caseStress 是并发与幂等用例，走独立入口运行，但不能因此成为审计盲区
-CASE_PACKAGES = ['caseSlp', 'caseXsg', 'caseStress']
+# 三个用例包都要审：caseStress 是并发与幂等用例，走独立入口运行，但不能因此成为审计盲区。
+# 清单只有一份（common/case_groups.py）：新增用例包时，报告与审计要一起认出来，
+# 否则新包会在两边各漏一次
+from common import case_groups
+from common.case_groups import CASE_PACKAGES
 # 有意保留的零引用定义：README 里记录过的公共断言 API，用例随时可能引用
 ZERO_REF_ALLOWED = {'assert_in_text'}
 
@@ -70,7 +73,7 @@ def fail(message):
 
 def source_files():
     """common / caseSlp / caseXsg / caseStress 下的全部 .py，加上根目录的脚本（跳过 _ 开头的临时文件）"""
-    for root in ['common'] + CASE_PACKAGES:
+    for root in ['common'] + list(CASE_PACKAGES):
         if not os.path.isdir(root):
             continue
         for name in sorted(os.listdir(root)):
@@ -404,7 +407,6 @@ if leaks:
 # 忘了加一行，它不会报错，只会让那一类悄悄归到「未分组」——而「未分组」这一行
 # 没人会去看，等于这类用例从统计里消失了。
 print('\n[9] 场景族登记（用例模块 → 业务场景族）')
-from common import case_groups
 
 case_modules = set()
 for package in CASE_PACKAGES:

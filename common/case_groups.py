@@ -22,6 +22,11 @@ App，不会同时出现在报告里。caseStress 是独立入口的并发与幂
 
 UNGROUPED = '未分组'
 
+# 用例目录（与 App 一一对应，caseStress 走独立入口）。
+# 三处都要用到这份清单：report 拼完整用例名时要认前缀，审计要确定扫哪些目录。
+# 只写一份：多一份拷贝就多一次「新加一个用例包，一边认识、一边不认识」的机会。
+CASE_PACKAGES = ('caseSlp', 'caseXsg', 'caseStress')
+
 # 模块名（去掉 caseSlp./caseXsg. 前缀）→ 场景族
 GROUPS = {
     'test_001': '基础造数',

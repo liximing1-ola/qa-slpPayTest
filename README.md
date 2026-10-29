@@ -118,13 +118,18 @@ CASE=test_check.TestPayCreate.test_002,test_coupon python3 run_all_case.py slp
 
 不设 `CASE` 就是全量。写用例名（含 `.`）时按名字加载，找不到会造一条报错用例，**不会静默跳过**。
 
+名字带不带用例目录前缀都认：`caseSlp.test_check.TestPayCreate.test_002` 和 `test_check.TestPayCreate.test_002` 等价。`run_reproduce.py --case` 用的是全名，同一个用例名在两个入口不该有两套写法。前缀与实际跑的目录不一致（比如跑 `caseStress` 却写了 `caseSlp.`）会直接退出（退出码 `2`），而不是拼成 `caseStress.caseStress.…` 再报一条 `No module named` 的假失败。
+
 ### 并发与幂等（每天一次，独立执行）
 
 ```bash
 python3 run_stress_case.py slp
 CASE=test_pay_concurrent python3 run_stress_case.py slp    # 只跑 test_pay_concurrent 那 6 条
+CASE=caseStress.test_pay_concurrent.TestConcurrentPay.test_005 python3 run_stress_case.py slp
 python3 run_reproduce.py                                   # test_004 连跑 10 轮，出复现率
 ```
+
+`CASE` 的两种写法等价：带 `caseStress.` 前缀的全名可以照抄 `run_reproduce.py --case` 的那个名字直接粘过来，不用管「这里要不要删前缀」。
 
 `run_reproduce.py` 把「红 / 绿 / 未测到」分开数：**复现率 = 红 / (红 + 绿)**，
 未测到（被限流挡下、根本没走到校验）与无效轮次都不进分母。每轮起独立进程，与人工
@@ -527,11 +532,13 @@ tail -n 200 log/failCase.log      # 需要堆栈与现场时再看
 python -m common.selfcheck      # 不连服务端、不连库，全部通过才退出 0，末尾会打印项数
 ```
 
-覆盖六大类：频控退避、失败现场、异步读值轮询、环境种子清单、本机环境配置、并发用例工具。
+覆盖六大类：频控退避、失败现场、异步读值轮询、环境种子清单、本机环境配置、并发用例工具，另有报告推送与 `CASE` 名字解析两项。
 
 频控退避、失败现场、异步读值轮询这几类守护逻辑，真实全量里可能一整轮都触发不到（例如 2026-10-27 那轮 137 条全绿，一次频控都没撞上、一次失败都没有），于是「写了」和「真的按预期工作」之间始终差一步，等到真需要它的时候才发现坏了。自检用假 `requests`/假时钟把这几条分支固定走一遍：频控命中后退避重试、重试耗尽把响应交回用例、四种实测文案都能识别、退避间隔递增、非 json 响应不误判、现场能拼出入参/响应/账号快照且自身异常不影响用例结论，以及轮询版真的会重读、超时会写明等了多久、首轮命中只读一次。
 
 并发工具那三项是给流水对账用的：付款行与收款行会不会混、条数稳定前会不会提前返回、响应四分类（尤其网关返回 HTML 时 body 是字符串）会不会崩。它们不是照代码抄一遍——把实现换回有 bug 的版本，自检必须红，这一点每次改这三项都要用探针验一次；否则自检就只是一段永远绿的代码，比没有更糟。
+
+`CASE` 那项盯的是「同一个用例名在两个入口两套写法」：带不带目录前缀都要装出同一批用例、不能产出 `_FailedTest`、前缀与实际跑的目录不一致时要直接退出。它比用例本身更值得自检——现场踩过一次，`CASE=caseStress.…` 跑出来是一条 `No module named 'caseStress.caseStress'` 的假失败，看着像用例挂了。
 
 另外一项容易被忽略的：**自检自身不能因为一项崩掉就中断整轮**。检查函数抛的不是 `AssertionError`（比如 `AttributeError`、连库超时）时，也要记成一条失败继续往下跑，否则后面那些项看上去就像「没报错」。
 

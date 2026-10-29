@@ -547,6 +547,55 @@ def check_push_skip_lines():
     assert '无原因' in '\n'.join(report.push_skip_lines(result)), '空理由要显式写成无原因'
 
 
+def check_case_expr_prefix():
+    """CASE 这个名字，带不带用例目录前缀都得能跑
+
+    现场踩过：CASE=caseStress.test_pay_concurrent.TestConcurrentPay.test_005 跑出
+    一条 "No module named 'caseStress.caseStress'" 的报错用例——看着像用例挂了，
+    其实是名字被拼了两遍。而 run_reproduce.py 的 --case 恰恰要求全名（它直接喂
+    python -m unittest），同一个名字两个入口两套写法，人必然写错一次。
+
+    这里钉三件事：两种写法装出同一批用例、不产出 _FailedTest、前缀与实际用例
+    目录不一致时明确退出（而不是继续拼一个必然找不到的模块名）。
+    """
+    import unittest
+
+    from common import report
+
+    def _cases(suite):
+        out = []
+        for item in suite:
+            if isinstance(item, unittest.TestSuite):
+                out.extend(_cases(item))
+            else:
+                out.append(item)
+        return out
+
+    def _ids(expr):
+        cases = _cases(report.build_suite('slp', expr, 'caseStress'))
+        broken = [case for case in cases if type(case).__name__ == '_FailedTest']
+        assert not broken, '{} 应能正常加载，实际产出 _FailedTest'.format(expr)
+        assert cases, '{} 一条用例都没装出来'.format(expr)
+        return [case.id() for case in cases]
+
+    # 只写到模块：两种前缀装出来的必须是同一批用例。不写死条数——加一条用例不该让自检红
+    plain = _ids('test_pay_concurrent')
+    prefixed = _ids('caseStress.test_pay_concurrent')
+    assert plain == prefixed, '带不带前缀装出来的用例不一致：\n{}\n{}'.format(plain, prefixed)
+
+    # 只写到类：缩到几条用例时也要两边一致（类名写错也要在这里暴露，而不是等跑一轮才报错）
+    cls = 'test_pay_concurrent.TestConcurrentPay'
+    assert _ids('caseStress.' + cls) == _ids(cls), '只写到类时，两种前缀装出来的用例不一致'
+
+    # 前缀写成了别的用例目录：继续拼下去只会得到 "No module named ..."，看不出是写错了名字
+    try:
+        report.build_suite('slp', 'caseSlp.test_check', 'caseStress')
+    except SystemExit as stop:
+        assert stop.code == 2, '前缀不一致应以 2 退出，实际 {}'.format(stop.code)
+    else:
+        raise AssertionError('前缀与实际用例目录不一致时必须报错退出，不能继续拼')
+
+
 def main():
     print('框架自检：频控退避（common.Request）')
     _check('命中频控后退避重试并拿到成功响应', check_frequent_retry_then_success)
@@ -580,6 +629,7 @@ def main():
 
     print('框架自检：报告推送（common.report）')
     _check('跳过的用例带理由进推送、超限交代还剩几条', check_push_skip_lines)
+    _check('CASE 带不带用例目录前缀都能跑、前缀写错要拦下', check_case_expr_prefix)
 
     if _FAILED:
         print('\n自检未通过 {} / {} 项：{}'.format(len(_FAILED), len(_TOTAL), '、'.join(_FAILED)))

@@ -8,7 +8,9 @@
 __pycache__/
 common/__pycache__/
 
-# �ύ��Ϣ��ʱ�ļ�����ʱУ��ű������ܽ��ֿ�
+# 临时文件：提交信息草稿、根目录下划线开头的临时探针与中间输出，都不进仓库
+# （探针一律叫 _probe_xxx.py，输出落到 /log/ 或根目录 _xxx.txt，推之前连目录一起清掉）
 .commit_msg.txt
-_verify_*.py
+/_*.py
+/_*.txt
 common/env_local.py
