@@ -83,7 +83,7 @@ def read_flows_by_uid(after_id, uid):
     return mysql.selectRawDict(sql)
 
 
-def wait_flows_stable(after_id, gid, least=1, quiet=3):
+def wait_flows_stable(after_id, gid, least=1, quiet=5, await_uids=()):
     """等这批流水写完：至少读到 least 行，且连续 quiet 次读到的条数不再变化
 
     不用「读到 least 行就返回」：一笔订单写几行取决于分成配置（只给主播是 1 行，
@@ -93,29 +93,49 @@ def wait_flows_stable(after_id, gid, least=1, quiet=3):
     least 是下界：它拦的是「结算分两段写、中间停了 0.3 秒就被当成写完了」；
     一笔都没读到时不谈稳定，会一直等到超时，把已有结果（可能为空）返回，
     由调用方的断言去判差多少。
+
+    await_uids：这批里每笔都该留下付款流水的账号。光看行数不够——实测出现过
+    「4 笔分成都到了、付款行只到 3 行」，然后行数静默了整整 0.6 秒，读的人以为
+    写完了。传了它多个下界：这些账号各自至少一行，否则继续等（到超时为止）。
+    只延长等待，不放宽断言：超时仍未覆盖，就是调用方那些断言要红的事。
     """
     deadline = time.time() + WAIT_TIMEOUT
     last = -1
     same = 0
+    expected = set(int(uid) for uid in await_uids)
     while True:
         rows = read_gift_flows(after_id, gid)
+        covered = set(int(row['uid']) for row in rows)
+        # 覆盖度变化必然带来行数变化，所以只靠行数判静默就够；
+        # 覆盖度单独作为「还不能返回」的条件
         same = same + 1 if len(rows) == last and len(rows) >= least else 0
         last = len(rows)
-        if same >= quiet or time.time() >= deadline:
+        if same >= quiet and expected <= covered:
+            return rows
+        if time.time() >= deadline:
             return rows
         time.sleep(WAIT_INTERVAL)
 
 
-def split_flows(rows):
+def split_flows(rows, payers=()):
     """把流水拆成收款行与付款行
 
-    op='pay' 是付款方自己扣钱那一行，它和分成混在一起算会互相抵消。
+    付款行按**付款方 uid** 认，不按 op 名认：实测这个厅写的是 op='consume'，
+    op='pay' 一次都没出现过。按 op 名认会把付款行当成一条「收款写路径」——
+    探针只有 1 个付款账号、并发有 4 个，两边的键集合永远不相等，报出来的红是假的；
+    更糟的是「付款行数 = 成功笔数」那道校验因为探针付款行为空而整段跳过。
+    op='pay' 仍然算付款行：别的厅/渠道也许就是这个字面量，两种判据取并集。
+
+    payers 是调用方自己下单的账号。自刷（付款方同时是收款人）会把收款行误判成
+    付款行，所以不能把收款人也塞进来——并发用例只打赏给主播，刚好满足。
+
     收款侧聚合成 {(uid, op): [行数, 金额合计]}，一个 key 就是一条写路径：
     三方分成就是三个 key，其中任何一个少写一笔都会在行数上露出来。
     """
+    payer_set = set(payers)
     income, pay = {}, []
     for row in rows:
-        if row['op'] == 'pay':
+        if row['op'] == 'pay' or row['uid'] in payer_set:
             pay.append(row)
             continue
         slot = income.setdefault((row['uid'], row['op']), [0, 0])

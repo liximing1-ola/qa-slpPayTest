@@ -417,6 +417,11 @@ def check_flow_split():
 
     这里算错，「少写一笔」会被另一个收款人的行抵掉，付款行还会和收款行互相抵消，
     红和绿都会失去意义。
+
+    付款行按 **付款方 uid** 认，不按 op 名认：现场实测这个厅写的是 op='consume'，
+    op='pay' 一次都没出现过。按 op 名认会把付款行当成一条「收款写路径」，
+    探针 1 个付款账号、并发 4 个，两边键集合永远不相等，报出来的红是假的；
+    更糟的是「付款行数 = 成功笔数」那道校验因为探针付款行为空而整段跳过（实测踩过）。
     """
     from caseStress.tools import split_flows
 
@@ -438,12 +443,31 @@ def check_flow_split():
     assert (200254777, 'pay') not in income, '付款行不能进收款聚合'
     assert split_flows([]) == ({}, []), '没有流水时应返回 ({}, [])'
 
+    # 实测形态：付款方写的是 op='consume'，必须按 uid 认出来
+    real = [
+        {'id': 11, 'uid': 200254777, 'money': 100, 'op': 'consume'},
+        {'id': 12, 'uid': 200250759, 'money': 100, 'op': 'consume'},
+        {'id': 13, 'uid': 200255399, 'money': 80, 'op': 'income'},
+    ]
+    income, pay = split_flows(real, payers=(200254777, 200250759))
+    assert len(pay) == 2, '付款方名下的行不论 op 叫什么都要算付款行，实际 {}'.format(pay)
+    assert income == {(200255399, 'income'): [1, 80]}, \
+        '付款行不能混进收款聚合，实际 {}'.format(income)
+
+    # 自刷场景：付款方恰好也是收款人时不能把收款行吞掉——所以 payers 由调用方自己传，
+    # 只传本轮下单的账号，不能把收款人一并塞进来
+    income, pay = split_flows(real, payers=())
+    assert (200254777, 'consume') in income, '不传付款方时退回按 op 名认，不能凭空造付款行'
+
 
 def check_flow_wait_stable():
     """等流水：条数不再增长才返回；一直没有流水时要把空结果交回，不能抛也不能死等
 
     只看「至少 1 行」会漏掉后半段：一笔订单先写主播那行、再写厅和公会长，
     读到 1 行就收工，后面两条写路径就不会被验——而报告上看不出来。
+
+    行数静默也不等于写完了：现场实测「4 笔分成都到了、付款行只到 3 行」，然后行数
+    静默了 0.6 秒。所以多了 await_uids 这个下界——它只延长等待，不放宽断言。
     """
     from caseStress import tools
 
@@ -455,17 +479,36 @@ def check_flow_wait_stable():
         tools.WAIT_INTERVAL = 0.01
 
         # 分两段写：前两次只读到 1 行，之后才补齐 3 行
-        rounds = [[1], [1], [1, 2, 3], [1, 2, 3], [1, 2, 3]]
+        rounds = [[{'uid': 1}], [{'uid': 1}], [{'uid': 1}, {'uid': 2}, {'uid': 3}]]
+        rounds += [[{'uid': 1}, {'uid': 2}, {'uid': 3}]] * 3
         calls = []
 
         def staged(after_id, gid):
             calls.append(1)
-            return rounds.pop(0) if rounds else [1, 2, 3]
+            return rounds.pop(0) if rounds else [{'uid': 1}, {'uid': 2}, {'uid': 3}]
 
         tools.read_gift_flows = staged
         rows = tools.wait_flows_stable(0, 69, least=1, quiet=3)
         assert len(rows) == 3, '应等到 3 行落完再返回，实际 {}'.format(rows)
         assert len(calls) >= 5, '分两段写时不能读到第一段就返回，实际只读了 {} 次'.format(len(calls))
+
+        # 行数早就静默了，但第 4 个付款账号的行后到：光看行数会把它当成没写
+        early = [{'uid': 1}, {'uid': 2}, {'uid': 3}]
+        later = early + [{'uid': 4}]
+        rounds[:] = [early] * 6 + [later] * 6
+        tools.read_gift_flows = staged
+        rows = tools.wait_flows_stable(0, 69, least=1, quiet=2, await_uids=(4,))
+        assert len(rows) == 4, \
+            '付款账号还没落行时，不能因为行数静默就返回，实际 {}'.format(len(rows))
+
+        # 真没写时也要到超时才放手：不能死等，也不能刚超时就把半截结果当成完整
+        rounds[:] = [early] * 1000
+        tools.read_gift_flows = staged
+        started = time.time()
+        rows = tools.wait_flows_stable(0, 69, least=1, quiet=2, await_uids=(9,))
+        waited = time.time() - started
+        assert len(rows) == 3, '等不到时应把已有结果交回，实际 {}'.format(rows)
+        assert waited >= 0.4, '等不到时应到超时才返回，实际 {:.2f}s'.format(waited)
 
         tools.read_gift_flows = lambda after_id, gid: []
         started = time.time()
