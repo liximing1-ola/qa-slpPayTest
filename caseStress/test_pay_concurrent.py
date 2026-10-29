@@ -15,8 +15,9 @@ import unittest
 
 from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWNER_UID, PAY_AMOUNT,
                                ROOM_RID, pay_url)
-from caseStress.tools import (classify, max_pay_change_id, read_flows_by_uid, read_money, read_total_money,
-                              read_wallets, reset_payer, split_flows, wait_flows_stable)
+from caseStress.tools import (classify, expected_rows, max_pay_change_id, read_flows_by_uid, read_money,
+                              read_total_money, read_wallets, reset_payer, scale_income, split_flows,
+                              wait_flows_stable)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
@@ -162,7 +163,7 @@ class TestConcurrentPay(unittest.TestCase):
         return last
 
     def batch_flows(self, mark, gid, payers, uids, least=1, await_uids=()):
-        """取水位线之后的流水，拆成收款/付款两部分，返回 (income, pay, note)
+        """取水位线之后的流水，拆成收款/付款两部分，返回 (income, pay, note, rows)
 
         payers 是本轮自己下单的账号：付款行按 uid 认，不靠 op 名（见 tools.split_flows）。
         uids 只用于按 gid 查不到时的兜底复查，范围要盖住收款人。
@@ -172,18 +173,37 @@ class TestConcurrentPay(unittest.TestCase):
         由调用方显式打印——两种情况都不能悄悄当成通过。
 
         note 为空表示口径正常、返回值可信；note 非空时 income/pay 都是空的。
+        rows 一起交回：失败时要打原始行（id 分布能把「没写」和「读得太早」分开）。
         """
         rows = wait_flows_stable(mark, gid, least=least, await_uids=await_uids)
         income, pay = split_flows(rows, payers)
         if income or pay:
-            return income, pay, ''
+            return income, pay, '', rows
         looked = sum(len(read_flows_by_uid(mark, uid)) for uid in uids)
         if looked:
             return {}, [], '按 uid 查到 {} 行流水，但都不带 gid={}，按 gid 框批次的筛选失效'.format(
-                looked, gid)
+                looked, gid), rows
         raise AssertionError(
             '成交后 {} 秒内按 gid 和按 uid 都查不到流水（账号 {}）：结算可能没写库。'
             '这不是「未测到」，是「成交了没留痕」'.format(int(WAIT_TIMEOUT), list(uids)))
+
+    def probe_flows(self, payer):
+        """单笔探针：量出「一笔打赏到底写了哪些流水」，返回 (income, pay, note, kind)
+
+        收款侧的一切判据都来自这一笔：写几条路径、每条几行、各多少，不预设谁分成、
+        也不写死比例。三条用例（003/005/006）共用，免得各自写一份、迟早口径漂移。
+
+        kind 不是 'success' 时 income/pay 都是空的：调用方要先决定这一轮算未测到、
+        还是根本不能算未测到（成交了却没留痕是真的缺陷）。
+        """
+        mark = max_pay_change_id()
+        kind = classify(
+            post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=payer))
+        if kind != 'success':
+            return {}, [], '', kind
+        income, pay, note, _ = self.batch_flows(
+            mark, GIFT['gid'], (payer,), (ANCHOR_UID, payer), await_uids=(payer,))
+        return income, pay, note, kind
 
     def assert_conserved(self, uid, before, success_count, price, body_text):
         """钱与响应必须严格对应：多说成功就是多扣，少说成功就是给货没扣钱
@@ -261,19 +281,34 @@ class TestConcurrentPay(unittest.TestCase):
         # 两笔都成功时服务端必须真的扣两笔：余额只留了一笔，扣两笔会变负，被区间挡住
         self.assert_conserved(uid, before, kinds.count('success'), price, bodies)
 
-    def test_003(self, des='四账号各连发两笔相同请求: 每个账号扣款=自己成功笔数*单价, 且不得透支'):
+    def test_003(self, des='四账号各连发两笔: 每个账号扣款=自己成功笔数*单价, 分成也按成功笔数放大'):
         """一次并发 8 个请求，但判定按账号拆开算
 
         上一轮实测服务端对相同请求没有幂等，两笔都可能成交；这里不预设「第几笔该被拒」
         （口径还在产品那边确认），只钉死一件事：每个账号的扣款必须等于它自己成功了几笔。
         余额留两笔的量，所以「响应说一笔、实际扣两笔」不会因为余额不足被掩成拒绝，
         真扣了就能看见。
+
+        另加一道收款侧流水对账：余额只证明「钱扣对了」，证明不了「货发了几份」。
+        同账号连发两笔最该防的恰恰是「收一份钱、发两份货」——test_004 撞到的那次
+        缺陷就是两笔都返回成功、钱只扣一笔、分成却发了两份。多写一行分成在余额上
+        完全不体现，只有流水能看出来。
         """
         price = PAY_AMOUNT
-        before = {}
+        gid = GIFT['gid']
+        probe = CONCURRENT_PAYERS[0]
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, price * 2)
-            before[uid] = read_money(uid)
+
+        # 探针：这笔打赏在流水里写了几行、给谁、各多少，全部实测（同 test_005）
+        income_probe, pay_probe, note, probe_kind = self.probe_flows(probe)
+
+        # 探针花掉一笔，补回两笔的量：余额少了，「第二笔该成交却被拒」会被错当成
+        # 服务端去重，扣款侧那一半就白验了
+        reset_payer(probe, price * 2)
+        before = {uid: read_money(uid) for uid in CONCURRENT_PAYERS}
+        assert_equal(sorted(before.values()), [price * 2] * len(CONCURRENT_PAYERS))
+        mark = max_pay_change_id()
 
         tasks = []
         for uid in CONCURRENT_PAYERS:
@@ -295,10 +330,50 @@ class TestConcurrentPay(unittest.TestCase):
 
         assert_equal(broken, [])
         # 一个账号都没成交等于什么都没测到
-        assert_between(sum(kinds[uid].count('success') for uid in CONCURRENT_PAYERS),
-                       1, len(CONCURRENT_PAYERS) * 2)
+        total_success = sum(kinds[uid].count('success') for uid in CONCURRENT_PAYERS)
+        assert_between(total_success, 1, len(CONCURRENT_PAYERS) * 2)
         for uid in CONCURRENT_PAYERS:
             self.assert_conserved(uid, before[uid], kinds[uid].count('success'), price, bodies[uid])
+
+        # 收款侧流水：分成必须按成功笔数放大。探针没成交或筛选口径失效时这一半没验，
+        # 不能因为扣款侧绿了就报通过
+        if probe_kind != 'success' or note:
+            why = note or '探针未成交（{}）'.format(probe_kind)
+            print('[并发-重发][未测到] {}；收款侧本轮没验，扣款侧已验'.format(why), flush=True)
+            raise unittest.SkipTest('收款侧没验（{}）；扣款侧已验'.format(why))
+        if not income_probe:
+            raise AssertionError(
+                '探针成交并写下了 {} 行付款流水，但没有任何收款行：这笔打赏没给任何人分成'.format(
+                    len(pay_probe)))
+
+        succeeded = [uid for uid in CONCURRENT_PAYERS for kind in kinds[uid] if kind == 'success']
+        income_batch, pay_batch, note_batch, batch_rows = self.batch_flows(
+            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + (ANCHOR_UID,),
+            least=expected_rows(income_probe, pay_probe, total_success), await_uids=succeeded)
+        if note_batch:
+            print('[并发-重发][未测到] {}；收款侧本轮没验，扣款侧已验'.format(note_batch), flush=True)
+            raise unittest.SkipTest('流水筛选失效，收款侧没验：{}'.format(note_batch))
+        try:
+            # 收款侧：写路径、条数、金额整体按成功笔数放大
+            assert_equal(income_batch, scale_income(income_probe, total_success))
+            # 付款侧：成交几笔就几行扣款，且每行都要落在成交的那个账号名下
+            if not pay_probe:
+                raise unittest.SkipTest(
+                    '探针那笔没有任何付款流水（付款方 {}），付款侧本轮没验'.format(probe))
+            assert_equal(sorted({int(row['uid']) for row in pay_batch}), sorted(set(succeeded)))
+            assert_equal(len(pay_batch), len(pay_probe) * total_success)
+            assert_equal(sum(int(row['money'] or 0) for row in pay_batch),
+                         sum(int(row['money'] or 0) for row in pay_probe) * total_success)
+        finally:
+            print('[并发-重发] 流水 {}，期望 {}；付款行 {} 行 {} 元（期望 {} 行 {} 元，成交账号 {}）'
+                  '；原始行 {}'.format(
+                      flow_text(income_batch),
+                      flow_text(scale_income(income_probe, total_success)),
+                      len(pay_batch), sum(int(row['money'] or 0) for row in pay_batch),
+                      len(pay_probe) * total_success if pay_probe else '未测',
+                      sum(int(row['money'] or 0) for row in pay_probe) * total_success
+                      if pay_probe else '未测',
+                      sorted(succeeded), flow_rows_text(batch_rows)), flush=True)
 
     def test_004(self, des='同账号并发两笔自刷(余额只够一笔): 钱与响应必须一致, 不得透支'):
         """打赏给自己走的是另一条分支，余额校验与「打赏他人」不同
@@ -367,17 +442,13 @@ class TestConcurrentPay(unittest.TestCase):
             reset_payer(uid, price)
 
         # 探针：一笔成交写几行、给谁、各多少，全从流水实测，不按配置猜
-        mark = max_pay_change_id()
-        probe_kind = classify(
-            post_request_session(pay_url, self.pay_data(), tokenName='slp', pay_uid=probe))
+        income_probe, pay_probe, note, probe_kind = self.probe_flows(probe)
         if probe_kind != 'success':
             # SkipTest 而不是 return：return 在报告里就是一条「通过」，cron 绿着但什么都没验。
             # skip 会进计数，干净后一眼能看到本轮有几条没测到。
             print('[并发-流水][未测到] 单笔探针没成交（{}），本次结论无效；可稍后重跑'.format(
                 probe_kind), flush=True)
             raise unittest.SkipTest('探针未成交（{}），本轮没做流水对账'.format(probe_kind))
-        income_probe, pay_probe, note = self.batch_flows(
-            mark, gid, (probe,), (ANCHOR_UID, probe), await_uids=(probe,))
         if note:
             print('[并发-流水][未测到] {}；本轮没有对账，别当成通过'.format(note), flush=True)
             raise unittest.SkipTest('流水筛选失效，本轮没做对账：{}'.format(note))
@@ -405,18 +476,21 @@ class TestConcurrentPay(unittest.TestCase):
         assert_equal(broken, [])
         assert_between(success, 1, len(CONCURRENT_PAYERS))
 
-        # 等这批流水条数不再增长：每笔写几行由分成配置决定，不写死行数。
+        # 等这批流水写完：期望行数 = 探针实测行数 × 成功笔数（当等待下界，不放宽断言）。
         # await_uids：每笔都该留下自己的付款流水；实测出现过「4 笔分成先到、付款行后到」，
         # 光靠行数静默会提前返回，把晚到的当作没写
         succeeded = [uid for uid, kind in kind_by_uid.items() if kind == 'success']
-        batch_rows = wait_flows_stable(mark, gid, least=success, await_uids=succeeded)
-        income_batch, pay_batch = split_flows(batch_rows, CONCURRENT_PAYERS)
+        income_batch, pay_batch, note, batch_rows = self.batch_flows(
+            mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + (ANCHOR_UID,),
+            least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded)
+        if note:
+            print('[并发-流水][未测到] {}；本轮没有对账，别当成通过'.format(note), flush=True)
+            raise unittest.SkipTest('流水筛选失效，本轮没做对账：{}'.format(note))
         try:
-            # 收款侧：每个（收款人, op）就是一条写路径，条数与金额都按成功笔数放大
-            assert_equal(sorted(income_batch), sorted(income_probe))
-            for key, (count, amount) in income_probe.items():
-                assert_equal(income_batch[key][0], count * success)
-                assert_equal(income_batch[key][1], amount * success)
+            # 收款侧：每个（收款人, op）就是一条写路径，条数与金额都按成功笔数放大。
+            # 整体比较而不是分开比：键集合、条数、金额一次比完——分开比时
+            # 「主播多一行、厅长少一行」两个 key 都在、总额也对，就漏过去了
+            assert_equal(income_batch, scale_income(income_probe, success))
             # 付款侧：成交几笔就该有几行扣款流水，而且每行都得落在成交的那个账号名下。
             # 只比总行数会漏掉「A 少一行、B 多一行」；只比金额会漏掉「凑巧对得上」。
             if not pay_probe:
@@ -434,8 +508,7 @@ class TestConcurrentPay(unittest.TestCase):
             # 失败时这几行才是能定位的依据：哪条写路径少了、少了多少、缺的是哪一笔
             print('[并发-流水] 并发流水 {}，期望 {}；付款行 {} 行 {} 元（期望 {} 行 {} 元，成交账号 {}）；响应 {}'.format(
                 flow_text(income_batch),
-                flow_text({key: (count * success, amount * success)
-                           for key, (count, amount) in income_probe.items()}),
+                flow_text(scale_income(income_probe, success)),
                 len(pay_batch), sum(int(row['money'] or 0) for row in pay_batch),
                 len(pay_probe) * success if pay_probe else '未测',
                 sum(int(row['money'] or 0) for row in pay_probe) * success if pay_probe else '未测',
@@ -462,6 +535,13 @@ class TestConcurrentPay(unittest.TestCase):
         price = PAY_AMOUNT
         gid = GIFT['gid']
         broke = CONCURRENT_PAYERS[-1]
+        probe = CONCURRENT_PAYERS[0]
+
+        # 先量口径：探针用一个有余额的账号，它花掉的那一笔随后被 reset 覆盖。
+        # 必须放在「零余额」设置之前，否则探针自己就被拒了，收款侧根本无从放大
+        reset_payer(probe, price)
+        income_probe, pay_probe, note_probe, probe_kind = self.probe_flows(probe)
+
         for uid in CONCURRENT_PAYERS:
             reset_payer(uid, 0 if uid == broke else price)
         mysql.updateMoneySql(broke)  # 默认实参全 0：五个渠道一起清
@@ -496,22 +576,39 @@ class TestConcurrentPay(unittest.TestCase):
         # 付款流水一行一笔，所以成交几笔就该几行，多一行就是「拒了单还扣钱」。
         success = [kinds[uid] for uid in CONCURRENT_PAYERS].count('success')
         succeeded = [uid for uid in CONCURRENT_PAYERS if kinds[uid] == 'success']
-        income_batch, pay_batch, note = self.batch_flows(
+
+        # 收款侧也要对：拒单只回响应、分成却照写，钱就是从平台手里漏的。
+        # 这种错在付款行上完全看不出来（付款行数、金额都对），只有收款行能抓住
+        if probe_kind != 'success' or note_probe:
+            why = note_probe or '探针未成交（{}）'.format(probe_kind)
+            print('[并发-零余额][未测到] {}；扣款侧已验，收款分成侧本轮没验'.format(why), flush=True)
+            raise unittest.SkipTest('拒单是否白送分成本轮没验（{}）；扣款侧已验'.format(why))
+        if not income_probe:
+            raise AssertionError(
+                '探针成交并写下了 {} 行付款流水，但没有任何收款行：这笔打赏没给任何人分成'.format(
+                    len(pay_probe)))
+
+        income_batch, pay_batch, note, batch_rows = self.batch_flows(
             mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + (ANCHOR_UID,),
-            least=success, await_uids=succeeded)
+            least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded)
         if note:
             # 扣款侧（余额）已经验完了，但「拒单还白送分成」这一半没验到。
             # 只打印一句让这条用例报绿，等于把没验的那一半藏起来
-            print('[并发-零余额][未测到] {}；扣款侧已验，流水分成侧本轮没验'.format(note), flush=True)
+            print('[并发-零余额][未测到] {}；扣款侧已验，收款分成侧本轮没验'.format(note), flush=True)
             raise unittest.SkipTest('流水筛选失效，拒单是否白送分成本轮没验：{}'.format(note))
-        # 付款行既要行数对，也要落在成交的账号名下：只比行数会让
-        # 「被拒账号多一行、成交账号少一行」互相抵消
-        assert_equal(sorted({int(row['uid']) for row in pay_batch}), sorted(succeeded))
-        assert_equal(len(pay_batch), success)
-        # 行数对了金额还得对：拒单那一笔若留下了「0 元付款行」，行数看不出来、钱却动了
-        assert_equal(sum(int(row['money'] or 0) for row in pay_batch), price * success)
-        print('[并发-零余额] 付款流水 {} 行共 {} 元（成交 {} 笔，期望 {} 元），收款流水 {}；被拒账号={}'
-              '；原始行 {}'.format(
-                  len(pay_batch), sum(int(row['money'] or 0) for row in pay_batch), success,
-                  price * success, flow_text(income_batch), broke,
-                  flow_rows_text(pay_batch)), flush=True)
+        try:
+            # 收款侧：成交几笔就该放几倍的分成；被拒那笔若也分了成，这里会多出一整倍
+            assert_equal(income_batch, scale_income(income_probe, success))
+            # 付款行既要行数对，也要落在成交的账号名下：只比行数会让
+            # 「被拒账号多一行、成交账号少一行」互相抵消
+            assert_equal(sorted({int(row['uid']) for row in pay_batch}), sorted(succeeded))
+            assert_equal(len(pay_batch), success)
+            # 行数对了金额还得对：拒单那一笔若留下了「0 元付款行」，行数看不出来、钱却动了
+            assert_equal(sum(int(row['money'] or 0) for row in pay_batch), price * success)
+        finally:
+            print('[并发-零余额] 付款流水 {} 行共 {} 元（成交 {} 笔，期望 {} 元），'
+                  '收款流水 {}，期望 {}；被拒账号={}；原始行 {}'.format(
+                      len(pay_batch), sum(int(row['money'] or 0) for row in pay_batch), success,
+                      price * success, flow_text(income_batch),
+                      flow_text(scale_income(income_probe, success)), broke,
+                      flow_rows_text(batch_rows)), flush=True)

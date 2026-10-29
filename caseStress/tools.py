@@ -144,6 +144,38 @@ def split_flows(rows, payers=()):
     return income, pay
 
 
+def scale_income(income_probe, success):
+    """把探针单笔实测的写路径按成功笔数放大，用来和并发批次的聚合值整体比较
+
+    为什么整体比、不分开比：分开比键集合、再逐 key 比条数、再比金额，会漏掉
+    「主播多一行、厅长少一行」——两个 key 都在，条数各自对不上但总额一样；
+    整体比较时「多一条写路径」「某条路径条数不对」「金额有偏差」一次全露出来。
+
+    乘法只作用在探针实测出来的值上，不写死比例、也不写死行数：厅配置从 71:6:3
+    变成 80:0:0 只是探针值变了，不会红；红的只有「和探针不成比例」。
+
+    success=0 时每个写路径都应放大成 [0, 0]：并发批次里若还有行，就是不相等，
+    这正是「一笔都没成交却发了分成」要红的地方。
+    """
+    return {key: [count * success, amount * success]
+            for key, (count, amount) in income_probe.items()}
+
+
+def expected_rows(income_probe, pay_probe, success):
+    """这批流水一共该有几行：探针实测的行数 × 成功笔数
+
+    拿它当 wait_flows_stable 的 least（等待下界），不放宽断言：
+    - 该写的都写了，行数一到位就能返回，不必靠「静默」去赌；
+    - 真漏写时行数永远到不了，一直等到超时，再由调用方的行数断言判红。
+    上一次那只红就是反例：期望 8 行、实际只读到 7 行，而旧判据只要求「至少 1 行 +
+    静默」，在第 7 行就收工了。
+
+    不写死行数（不按「一笔几行」猜）：行数来自探针，厅配置变了先变的是探针值。
+    """
+    probe_rows = sum(count for count, _ in income_probe.values()) + len(pay_probe)
+    return probe_rows * success
+
+
 def is_success(res):
     """成功 = HTTP 200 且 body.success 为真
 

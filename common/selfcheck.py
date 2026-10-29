@@ -522,6 +522,60 @@ def check_flow_wait_stable():
         tools.WAIT_INTERVAL = old_interval
 
 
+def check_income_scaled():
+    """分成按成功笔数放大：多写一行、少一条写路径、金额偏差都必须比得出来
+
+    收款侧的断言就是「并发批次 == 探针值 × 成功笔数」。这一步算错或比得太粗，
+    「少一笔分成」会变成绿：只比总行数时「主播多一行、厅长少一行」互相抵消；
+    只比金额时「一条写路径掰成两条写」看不出来（两边总额一样）。
+
+    所以这里不光验乘法，还要验比较本身能区分四种错法——只验「乘法对」等于
+    验了一段永远绿的代码。
+    """
+    from caseStress.tools import expected_rows, scale_income
+
+    # 实测形态：这个厅只给主播分，一笔写 1 行 80 元
+    probe = {(200255399, 'income'): [1, 80]}
+    assert scale_income(probe, 4) == {(200255399, 'income'): [4, 320]}, \
+        '4 笔成交应放大成 4 行 320 元，实际 {}'.format(scale_income(probe, 4))
+
+    # 71:6:3 形态：三条写路径各自放大，比例不能混
+    three = {(200255399, 'income'): [1, 71],
+             (200258475, 'income'): [1, 6],
+             (200255209, 'tax'): [1, 3]}
+    assert scale_income(three, 4) == {(200255399, 'income'): [4, 284],
+                                      (200258475, 'income'): [4, 24],
+                                      (200255209, 'tax'): [4, 12]}, \
+        '三条写路径要各自放大，实际 {}'.format(scale_income(three, 4))
+
+    # 一笔都没成交：写路径和条数都应放大成 0，任何一行都不该存在
+    assert scale_income(probe, 0) == {(200255399, 'income'): [0, 0]}, \
+        'success=0 时条数与金额都该是 0'
+    assert scale_income({}, 4) == {}, '探针没读到写路径时不能凭空造出 key'
+
+    # 四种错法都必须与放大值不等，否则断言抓不到
+    cases = [
+        ({(200255399, 'income'): [5, 400]}, probe, 4, '多写一行'),
+        ({(200255399, 'income'): [4, 320], (200258475, 'income'): [4, 24]}, probe, 4,
+         '凭空多一条写路径'),
+        ({(200255399, 'income'): [4, 360]}, probe, 4, '金额偏差'),
+        ({(200255399, 'income'): [1, 80]}, probe, 0, '一笔没成交却发了分成'),
+    ]
+    for batch, base, success, why in cases:
+        assert batch != scale_income(base, success), \
+            '{} 必须与放大值不等，否则漏写/多写都抓不到'.format(why)
+
+    # 71:6:3 下少一条写路径：键集合缺一个，整体比较必须不相等
+    missing = {(200255399, 'income'): [4, 284], (200258475, 'income'): [4, 24]}
+    assert missing != scale_income(three, 4), '少一条写路径必须与放大值不等'
+
+    # 等待下界：探针行数 × 成功笔数。它也不写死「一笔几行」
+    assert expected_rows(probe, [{'uid': 1}], 4) == 8, '1 行收款 + 1 行付款 × 4 笔 应是 8 行'
+    assert expected_rows(probe, [], 4) == 4, '探针没有付款行时只算收款行，不能多算期望'
+    assert expected_rows(three, [], 4) == 12, '71:6:3 一笔三行，四笔应是 12 行'
+    assert expected_rows(probe, [{'uid': 1}], 0) == 0, '一笔都没成交时期望 0 行'
+
+
 def check_classify_responses():
     """响应四分类：成功 / 频控 / 业务拒绝 / 服务端异常
 
@@ -686,6 +740,7 @@ def main():
     print('框架自检：并发用例工具（caseStress.tools）')
     _check('流水聚合：付款与收款分开、同人同 op 合并', check_flow_split)
     _check('等流水：条数稳定才返回、没流水时超时带回空', check_flow_wait_stable)
+    _check('分成放大：多写一行、少一条写路径都能比出来', check_income_scaled)
     _check('响应四分类、非 dict body 不崩', check_classify_responses)
 
     print('框架自检：本机环境配置（common.envLocal）')
