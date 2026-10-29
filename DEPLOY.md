@@ -72,6 +72,64 @@ pip3 install -r requirements.txt    # 依赖有变更时执行
 
 ---
 
+## 环境被清理或重置后的恢复
+
+### 1. 先确认是环境坏了，不是代码坏了
+
+```bash
+python -m common.preflight slp
+```
+
+只要看到 `FAIL 数据 …`，就是种子数据没了（账号/房间/礼物/工会被删），**不是服务端引入的 bug**，
+不要去查代码。退出码 3 同样表示「本轮没跑」，与用例失败（1）区分。
+
+### 2. 有快照：直接恢复
+
+```bash
+python backup_seed.py list                                    # 看有哪些快照
+python backup_seed.py restore ~/.slp_backup/seed-<最新>.sql --yes
+python -m common.preflight slp                                # 再验一遍，必须全部 OK
+```
+
+恢复覆盖的是 `xianshi` 与 `config` 两个库的种子表，不会动流水和余额。
+
+### 3. 没快照：只能找后端/运维重建
+
+账号要过注册与实名，房间要绑 uid，工会要建关系，礼物要配价格——这些都不是本仓库能造的，
+**造数工具只负责把已有账号的余额/背包/等级改到想要的状态，不负责凭空创建账号**。
+
+找他们时把这些信息一次给全（都在 `caseSlp/config.py` 里）：
+
+- 账号：`payUid`、`payUid_subsidiary`、`payUid_subsidiary2`、`gs_A_ceo_uid`、`gs_B_ceo_uid`、
+  `gs_A_uid`、`gs_B_uid`、`business_room_uid`、`normal_uid`（手机号尾号 15008520xxx）
+- 房间：`gs_A_rid_1`、`gs_A_ceo_rid`、`business_room_rid`（需绑定到对应 uid）
+- 工会：`gs_A_bid`、`gs_B_bid` 及成员关系
+- 礼物：`xs_gift` 的 69 号（椰子水，100 钻）及它对应的商品 `xs_commodity.cid=329`
+
+修好后先 `python -m common.preflight slp` 确认种子齐全，再跑一轮全量。
+
+### 4. 恢复后怎么快速确认环境真的好了
+
+```bash
+python3 run_all_case.py slp          # 全量，预期 0 未通过（十几条既定 skip 不算）
+python3 run_stress_case.py slp       # 并发 5 条，确认余额与订单没被残数据带歪
+```
+
+两个入口都会先把体检结论打在最前面，体检不过就不执行用例、退出码 3——所以「跑完但没有环境行」
+本身就是个 bug，值得查。
+
+### 5. 防止下次再被清：定期导快照
+
+```bash
+# 建议每周一次，可加进 crontab（与日常回归错开时间）
+30 3 * * 1 cd /home/<user>/qa-slpPayTest && python3 backup_seed.py dump --keep 4
+```
+
+快照存在 `~/.slp_backup`（仓库外，权限 600），默认保留最近 4 份。
+**只有环境好的时候导出来的快照才有用**，别等到坏了才想起来导。
+
+---
+
 ## 网络要求
 
 服务器必须能访问以下地址：

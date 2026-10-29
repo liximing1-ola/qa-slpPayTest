@@ -41,6 +41,7 @@ qa-slpPayTest/
 ├── Robot.py               # 结果通知：企业微信群机器人 webhook
 ├── autoGitPull.py         # 分支检查 + 记录上次执行时间
 ├── pre_push_audit.py      # 推送前全仓审查（十二类）
+├── backup_seed.py         # 种子数据快照：导出 / 列出 / 恢复（见「环境容灾」）
 ├── deploy.sh              # 云服务器一键部署
 ├── caseSlp/               # SLP 用例
 │   ├── config.py          # 账号、房间、礼物、倍数等测试数据
@@ -60,7 +61,8 @@ qa-slpPayTest/
 │   ├── report.py          # 结果汇总：编号 + 用例名 + des + 失败明细、按场景族统计
 │   ├── runflow.py         # 两个入口共用的执行流程：环境体检结论、刷新 token、计数与各类清单落盘
 │   ├── case_groups.py     # 用例模块 → 业务场景族（分类统计与推送看的都是这张表）
-│   ├── preflight.py       # 执行前环境体检：MySQL / Redis / 接口，不通不跑（退出码 3）
+│   ├── preflight.py       # 执行前环境体检：MySQL / 数据 / Redis / 接口，不通不跑（退出码 3）
+│   ├── envData.py         # 种子数据清单：账号 / 房间 / 礼物 / 工会，体检与快照共用一份 id
 │   ├── selfcheck.py       # 框架自身守卫逻辑的离线自检（不连库）
 │   ├── tools.py           # 造数工具：账号、房间、背包礼物、加速卡、优惠券
 │   ├── basicSlpXsgData.py # encodeData：拼请求体
@@ -235,6 +237,64 @@ CASE=test_check python3 run_crontab_case.py slp
 具体地址不写进文档，统一配在 `common/Config.py` 或上面那几个环境变量里（本文出现的 `<api-host>` / `<db-host>` 均为占位符）。
 
 slp 与 xsg 当前指向同一套测试环境，请求只差 `package` 参数（两个 App 各自的包名，见 `caseSlp/config.py` / `caseXsg/config.py`）。
+
+---
+
+## 环境容灾
+
+### 三层数据，只有一层需要备份
+
+| 类别 | 例子 | 丢了会怎样 |
+|---|---|---|
+| **可自愈** | 余额、背包、等级、人气、加速卡、上周厅汇总 | 下一次跑用例时前置清理自己重建（`prepare_test_data` / `reset_room_acs` / `prepare_vip_pop_data` / `prepare_acceleration_card`），不需要人工干预 |
+| **半可再生** | 点唱房记录、订单 | 造数能补，但得先清残留，否则断言会多出上一轮的金额 |
+| **不可再生** | 账号、房间、工会关系、礼物/商品配置 | **造数也无从下手**（账号被删时连 `update` 都不知道往哪写），必须从快照恢复 |
+
+所以备份只针对第三层。第一层备份了也是浪费：每次跑用例都会把它覆盖掉。
+
+### 体检：把「环境被清」和「服务端改坏了」分开
+
+这是比备份更紧急的一步。原来 `preflight` 只验连通性——数据库被清空也照样绿，然后一百多条用例集体变红，现象和服务端上线引入 bug 完全一样，排查方向从一开始就是错的。
+
+现在多探一项「数据」，查的是种子表里那批账号/房间/礼物/工会还在不在：
+
+```
+[环境] OK    MySQL   192.168.1.24:3306 可读
+[环境] OK    数据    账号/房间/礼物/工会 种子齐全
+[环境] OK    Redis   192.168.1.192:6379 可 ping
+[环境] OK    接口    https://192.168.1.23/ 可达（HTTP 200）
+```
+
+缺了就点名到具体 id，并直接指路，退出码 3（与用例失败 1、没跑完 2 区分）：
+
+```
+[环境] FAIL  数据    账号缺 1 个：200250759；恢复 xs_user_index / xs_user_profile / xs_user_mobile 快照
+[环境] 本轮不执行任何用例
+[环境] 种子数据缺失通常是测试环境被清理或重置过。先用 python backup_seed.py list 看有无快照……
+```
+
+三点设计取舍：
+
+- **点名不数数**：报「缺 uid=200250759」而不是「少 1 个」，前者能照着补，后者还得自己数
+- **只查最小集**：误把一个不存在的资产写进清单，会让闸门每天误拦整轮回归，比不检查更糟
+- **工会一项只警告不拦**：工会 id 与会长的 uid 同号，做成硬拦截容易误伤
+
+### 快照：只导种子，几十 KB
+
+```bash
+python backup_seed.py dump --dry-run     # 先看会执行什么命令（本机没装 mysqldump 也能看）
+python backup_seed.py dump               # 导出，默认保留最近 4 份
+python backup_seed.py list               # 看已有快照
+python backup_seed.py restore ~/.slp_backup/seed-2026-10-29-100000.sql --yes
+```
+
+- 存在仓库外 `~/.slp_backup`，权限 600：快照里有手机号，不能跟着代码进 git
+- 密码走 `MYSQL_PWD` 环境变量，不进命令行——否则 `ps` 里能看到
+- 小表整表导、大表按种子 id 过滤：不为省几 KB 去猜过滤列名，猜错就是把环境恢复坏
+- 分两个文件（`xianshi` 与 `config` 库各一份）：mysqldump 的输出不带库前缀，混在一个文件里导不进去
+- 恢复必须 `--yes` 或手动输入 `RESTORE`：这条命令会覆盖线上测试库
+
+**只有环境好的时候导出来的快照才有用**，建议每周跑一次，别等到坏了才想起来导。
 
 ---
 

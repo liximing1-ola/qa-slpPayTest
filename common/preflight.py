@@ -5,8 +5,11 @@
 它不是回归信号，是噪音——而且比噪音更糟，因为「137 条全红」这个信号只能用一次，
 被一场连不上库的抖动用掉之后，真出事时没人会再当回事。
 
-三项探测互相独立，必须分别报：实测存在「接口能访问 192.168.1.23，但连不上
+四项探测互相独立，必须分别报：实测存在「接口能访问 192.168.1.23，但连不上
 192.168.1.24:3306」的情况。一个通了就当全通，等于把最容易坏的那条藏起来。
+
+第四项查的是「种子数据还在不在」：连得上库不等于数据还在。账号被清时一百多条用例
+会集体变红，现象和服务器改坏了完全一样——不把这两种情况分开，排查方向从一开始就是错的。
 
 每项重试 3 次才判定不可用：偶发的一次连接抖动不该让当天的回归整轮不跑。
 判定不可用时不执行任何用例，退出码 3——不跑要明说，不能安静退出。
@@ -100,6 +103,56 @@ def check_http(app_key, timeout=5):
     return True, '{} 可达（HTTP {}）'.format(url, response.status_code)
 
 
+def check_data(timeout=5):
+    """查种子数据还在不在：连得上库不等于数据还在
+
+    账号被删时，一百多条用例会集体变红，现象和服务器改坏了完全一样，排查方向从一开始
+    就是错的。这道探测就是为了把「环境被清理」和「服务端引入 bug」分开。
+
+    只差集点名缺失的 id，不数总数：「缺 uid=200250759」能照着补，「少 1 个」还得自己数。
+    表被 drop 也走查询失败分支——查不了就是环境有问题，不能当成数据还在。
+    """
+    from common.conSlpXsgMysql import conMysql
+    from common.envData import seed_checks
+    db = conMysql.db_config
+    try:
+        con = pymysql.connect(host=db['ali_db'], port=3306, user=db['ali_user'],
+                              password=db['ali_pas'], connect_timeout=timeout,
+                              read_timeout=timeout)
+    except Exception as error:
+        return False, '{}:3306 连不上，无法检查种子数据（{}）'.format(db['ali_db'], error)
+
+    blocking, warnings = [], []
+    try:
+        with con.cursor() as cur:
+            for name, sql, expected, hint, is_blocking in seed_checks():
+                collected = blocking if is_blocking else warnings
+                try:
+                    cur.execute(sql.format(','.join(str(item) for item in expected)))
+                    present = {row[0] for row in cur.fetchall()}
+                except Exception as error:
+                    collected.append('{} 查询失败（{}）'.format(name, str(error)[:60]))
+                    continue
+                missing = [item for item in expected if item not in present]
+                if not missing:
+                    continue
+                text = '{}缺 {} 个：{}'.format(
+                    name, len(missing),
+                    ', '.join(str(item) for item in missing[:3]) + (' 等' if len(missing) > 3 else ''))
+                collected.append(text + '；' + hint)
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+    if blocking:
+        return False, '；'.join(blocking)
+    if warnings:
+        return True, '种子基本齐全（{}）'.format('；'.join(warnings))
+    return True, '账号/房间/礼物/工会 种子齐全'
+
+
 def check_all(app_key, retries=3, interval=3, timeout=3, log=print):
     """逐项探测，返回 (是否全部可用, [{'name','ok','detail'}, ...])
 
@@ -108,21 +161,30 @@ def check_all(app_key, retries=3, interval=3, timeout=3, log=print):
     :param interval: 重试间隔（秒）
     """
     targets = [
-        ('MySQL', lambda: check_mysql(timeout)),
-        ('Redis', lambda: check_redis(timeout)),
-        ('接口', lambda: check_http(app_key, timeout=max(timeout, 5))),
+        ('MySQL', lambda: check_mysql(timeout), retries),
+        # 数据缺失不会靠重试长回来，只探一次，免得闸门平白多耗十几秒
+        ('数据', lambda: check_data(timeout), 1),
+        ('Redis', lambda: check_redis(timeout), retries),
+        ('接口', lambda: check_http(app_key, timeout=max(timeout, 5)), retries),
     ]
     rows = []
-    for name, probe in targets:
+    mysql_ok = True
+    for name, probe, attempts in targets:
+        if name == '数据' and not mysql_ok:
+            # MySQL 那条已经把根因说清了，这里再报一遍只会让失败项翻倍、把真问题淹掉
+            rows.append({'name': name, 'ok': True, 'detail': '跳过（MySQL 不可用）'})
+            continue
         ok, detail = False, ''
-        for attempt in range(1, retries + 1):
+        for attempt in range(1, attempts + 1):
             ok, detail = probe()
             if ok:
                 break
-            if attempt < retries:
+            if attempt < attempts:
                 log('[环境] {} 第 {}/{} 次探测失败，{} 秒后重试: {}'.format(
-                    name, attempt, retries, interval, detail))
+                    name, attempt, attempts, interval, detail))
                 time.sleep(interval)
+        if name == 'MySQL':
+            mysql_ok = ok
         rows.append({'name': name, 'ok': ok, 'detail': detail})
     return all(row['ok'] for row in rows), rows
 
@@ -151,7 +213,7 @@ def gate(app_key):
     if ok:
         return True, rows, ''
 
-    hint = local_hint()
+    hint = local_hint() or restore_hint(rows)
     print('[环境] 本轮不执行任何用例', flush=True)
     if hint:
         print('[环境] ' + hint, flush=True)
@@ -182,6 +244,15 @@ def local_hint():
         return ('本机不在测试环境内网，真实用例请在服务器执行。'
                 '本机只做静态检查：compileall / selfcheck / pre_push_audit')
     return ''
+
+
+def restore_hint(rows):
+    """种子缺失时补一句怎么恢复：只说「环境不可用」等于让人从零开始查"""
+    if not any(row['name'] == '数据' and not row['ok'] for row in rows):
+        return ''
+    return ('种子数据缺失通常是测试环境被清理或重置过。'
+            '先用 python backup_seed.py list 看有无快照，再 restore 到最近一份；'
+            '没有快照就按 DEPLOY.md 重建账号/房间/工会')
 
 
 if __name__ == '__main__':

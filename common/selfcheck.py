@@ -338,6 +338,30 @@ def check_scene_empty_and_archive():
     assert Scene.archived('不存在的用例') == '', '未归档的用例应返回空串'
 
 
+def check_seed_checks_shape():
+    """种子清单的结构守卫：SQL 恰好一个 {} 占位、期望项非空无重复、能真的格式化
+
+    体检写错了会天天误拦整轮回归，比不做体检更糟，所以清单本身也要能被机器检查。
+    这里只验结构（不连库），数据到底在不在由 preflight 在服务器上查。
+    """
+    from common.envData import seed_checks
+
+    items = seed_checks()
+    assert items, '种子清单不能为空'
+    names = [item[0] for item in items]
+    assert len(names) == len(set(names)), '种子项名称重复：{}'.format(names)
+    for name, sql, expected, hint, blocking in items:
+        assert sql.count('{}') == 1, '{} 的 SQL 必须恰好一个占位符'.format(name)
+        assert expected, '{} 的期望项不能为空'.format(name)
+        assert len(set(expected)) == len(expected), '{} 的期望项有重复'.format(name)
+        assert hint, '{} 缺少缺失时的修复提示'.format(name)
+        assert isinstance(blocking, bool), '{} 的阻断标记必须是 bool'.format(name)
+        # 占位符真的能填进去：格式写错要到服务器上才发现就太晚了
+        filled = sql.format(','.join(str(item) for item in expected))
+        assert 'in (' in filled, '{} 格式化后不像 in 查询：{}'.format(name, filled)
+        assert '{}' not in filled, '{} 格式化后仍有未填的占位符'.format(name)
+
+
 def main():
     print('框架自检：频控退避（common.Request）')
     _check('命中频控后退避重试并拿到成功响应', check_frequent_retry_then_success)
@@ -357,6 +381,9 @@ def main():
     _check('读不到时继续读到达标', check_eventually_polls_until_match)
     _check('超时失败要说明等了多久', check_eventually_timeout_reports_waited)
     _check('首轮命中只读一次', check_eventually_first_hit_single_read)
+
+    print('框架自检：环境种子清单（common.envData）')
+    _check('清单结构合法、SQL 可填、无重复项', check_seed_checks_shape)
 
     if _FAILED:
         print('\n自检未通过 {} 项：{}'.format(len(_FAILED), '、'.join(_FAILED)))
