@@ -45,6 +45,36 @@ def reset_frequent_retries():
     """并发用例开跑前清零，跑完读一次"""
     del _frequent_retries[:]
 
+
+# ===== 服务端 5xx 台账 =====
+# 5xx 不进频控重试（重试只会再撞一次同一道门口），所以它要么直接把用例搞红，
+# 要么被 @Retry 兜住后转绿。后一种在报告里和一次就过的用例长得一模一样，
+# 而「本轮偶发几次 5xx」是区分「弱测试机抖一下」与「服务端链路坏了」的唯一横向依据。
+# 只记不判：不重试、不改用例结论、不参与任何断言。
+_server_errors = []
+
+
+def server_error_count():
+    """本轮一共见过几次 5xx（含被 @Retry 兜住、最终转绿的）"""
+    return len(_server_errors)
+
+
+def server_error_records():
+    """本轮 5xx 明细的副本，交给 report 格式化"""
+    return list(_server_errors)
+
+
+def reset_server_errors():
+    """自检用；跑用例时一轮一个进程，进程结束自然清零"""
+    del _server_errors[:]
+
+
+def _note_server_error(at, code, elapsed_ms, body):
+    """记一次 5xx：时刻用于和服务端日志对齐，body 开头往往就是定性依据（如 breaker open）"""
+    text = body if isinstance(body, str) else str(body)
+    _server_errors.append({'at': at, 'case': Scene.current_case(), 'code': code,
+                           'elapsed_ms': elapsed_ms, 'body': text})
+
 # 每个账号上一次请求的计划发起时间，用于补足最小间隔
 _last_request_at = {}
 _interval_lock = threading.Lock()
@@ -218,8 +248,11 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
 
     response = None
     body = None
+    sent_at = None
     for attempt in range(FREQUENT_RETRY + 1):
         _wait_for_interval(tokenName)
+        # 记发送时刻而不是收到时刻：与服务端日志对齐的是「什么时候进的请求」
+        sent_at = Scene.now_text()
         try:
             if data is None:
                 response = requests.post(url=url, headers=header, verify=False, timeout=REQUEST_TIMEOUT)
@@ -255,19 +288,24 @@ def post_request_session(url, data, tokenName='dev', pay_uid=None):
     print(response.status_code)
     print(body)
     print("#"*100)
+    # elapsed.microseconds 只是秒以下的部分，total_seconds() 才是完整耗时
+    elapsed_ms = response.elapsed.total_seconds() * 1000
     result = {
         'code': response.status_code,
         'body': body,
-        # elapsed.microseconds 只是秒以下的部分，total_seconds() 才是完整耗时
-        'time_consuming': response.elapsed.total_seconds() * 1000,
+        'time_consuming': elapsed_ms,
         'time_total': response.elapsed.total_seconds(),
         # 响应头带出来只为了排查：集群里某台实例异常时，「命中哪台」是唯一能从客户端
         # 拿到的硬证据（8% 这种量级很接近 1/12，先看是不是集中在一台）。只记不判。
         # getattr 兜底：自检/替代用的假响应不一定有 headers，不能因为缺这个字段就把用例搞红
         'headers': dict(getattr(response, 'headers', None) or {}),
     }
-    # 只记不判：让失败时的 log/failCase.log 能直接看到入参/响应，不用再复现一轮
-    Scene.record_exchange(data, pay_uid, response.status_code, body)
+    # 只记不判：让失败时的 log/failCase.log 能直接看到入参/响应/时刻，不用再复现一轮
+    Scene.record_exchange(data, pay_uid, response.status_code, body,
+                          at=sent_at, elapsed_ms=elapsed_ms)
+    if response.status_code >= 500:
+        # 5xx 不重试：记一笔供本轮汇总，用例自己的断言该怎么判还怎么判
+        _note_server_error(sent_at, response.status_code, elapsed_ms, body)
     if cache_key is not None:
         # 发过下单请求就算"已下单"：数据准备（改金额、插背包礼物）不能在重试轮重做，
         # 否则会把首轮已经生效的造数覆盖掉，断言口径全乱

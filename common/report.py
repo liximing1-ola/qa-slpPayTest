@@ -761,6 +761,49 @@ def retry_summary(result):
         len(records), total, rate)
 
 
+def server_error_summary(records):
+    """一行摘要：本轮见过几次 5xx。没有时也要写「无」，否则分不清是没发生还是没统计
+
+    数字按「次数」而不按用例数：同一条用例首轮 500、重试再 500 会记两次，
+    这样才不会把「重试窗口内反复被拒」抹成一次。它和「重试后才通过」并列看：
+    前者是谁都没兜住的硬红，后者是被 @Retry 掩盖住的抖动。
+    """
+    if not records:
+        return '接口 5xx: 无'
+    cases = len(set(item.get('case') for item in records))
+    return '接口 5xx: {} 次 / {} 条用例（含被重试兜住的），明细见 log/caseResult.log'.format(
+        len(records), cases)
+
+
+def server_error_report(records, limit=10):
+    """5xx 明细：时刻 / 用例 / 状态码 / 耗时 / 响应开头
+
+    时刻是与服务端日志对齐的唯一锚点（两边都只有它）；耗时把「快速拒绝」和「等超时」
+    分开——前者多为熔断/限流直接拒，后者是上游在等；响应开头往往直接写着原因，
+    2026-10-30 那条就是 `desc: breaker open`。只记不判，不改任何用例结论。
+    """
+    if not records:
+        return ''
+    lines = ['', LINE_SEP, '接口 5xx 明细（共 {} 次）'.format(len(records)), LINE_SEP]
+    for item in records[:limit]:
+        elapsed = item.get('elapsed_ms')
+        lines.append('[{}] {}  HTTP {}  {}  body={}'.format(
+            item.get('at') or '时刻未知', item.get('case') or '(用例名未取到)',
+            item.get('code'), '耗时未知' if elapsed is None else '{:.0f}ms'.format(elapsed),
+            _one_line(item.get('body'), 120)))
+    if len(records) > limit:
+        lines.append('...（还有 {} 次未列出）'.format(len(records) - limit))
+    lines.append(LINE_SEP)
+    return '\n'.join(lines)
+
+
+def _one_line(value, limit):
+    """单行化 + 截断：HTML 错误页是多行的，不压成一行会把报告撑成屏幕"""
+    text = value if isinstance(value, str) else str(value)
+    text = ' '.join(text.split())
+    return text if len(text) <= limit else text[:limit] + '...'
+
+
 def _split_long_line(text, limit):
     """单行就超过上限时按字符硬切（不按字节切，否则会把中文切成半个字符）"""
     pieces, buffer, used = [], [], 0

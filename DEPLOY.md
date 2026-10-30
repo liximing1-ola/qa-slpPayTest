@@ -309,6 +309,7 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
    ```bash
    tail -30 log/cron_$(date +%F).log                    # 当天结果
    grep -h '重试后才通过' log/cron_*.log | sort | uniq -c   # 每天一行，这就是趋势
+   grep -h '接口 5xx' log/cron_*.log | sort | uniq -c        # 服务端抖动的趋势（含被重试兜住的）
    ```
 
    第二行值得每天看一眼：`重试后才通过: N 条（X%）` 统计的是「被 @Retry 兜住、但确实失败过一次」的请求。
@@ -319,6 +320,10 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
    ```bash
    CASE=test_naming_song python3 run_all_case.py slp 2>&1 | grep '重试后才通过'
    ```
+
+   第三行是 2026-10-30 新增的：`接口 5xx: N 次 / M 条用例（含被重试兜住的）`，后面跟着
+   时刻、用例、状态码、耗时与响应开头。偶发一次不说明什么，连续几天都出现就要拿
+   那个时刻去找服务端日志对线（那天是 `RpcBase.php:283 desc: breaker open`）。
 
 5. **退出码**：`run_all_case.py` / `run_crontab_case.py` 执行结束后会按结果返回退出码，
    可直接被 cron 告警、调度平台或 `cmd && 下一步` 识别：

@@ -12,6 +12,7 @@ test_exp.test_001 的 6100、test_gs_pay_self.test_004 的频控响应，全靠�
 2. 快照自身出任何错都吞掉：绝不能把 FAIL 变成 ERROR，也不能影响用例结论；
 3. 只在失败时读库：通过的用例一次额外查询都不发。
 """
+import datetime
 import json
 
 # 每个用例保留最近几次请求/响应：够覆盖「下单 + 中途一次查询」这类链路
@@ -37,17 +38,32 @@ def begin_case(case_name):
     _exchanges = []
 
 
-def record_exchange(payload, pay_uid, code, body):
+def now_text():
+    """墙上时刻（毫秒），用于和服务端日志对齐——这是双方唯一对得上的锚点"""
+    return datetime.datetime.now().strftime('%H:%M:%S.%f')[:-3]
+
+
+def current_case():
+    """当前正在执行的用例名，供 5xx 台账记录归属"""
+    return _current_case
+
+
+def record_exchange(payload, pay_uid, code, body, at=None, elapsed_ms=None):
     """记录一次请求/响应，由 Request.post_request_session 调用
 
     :param payload: 请求入参（encodeData 的结果）
     :param pay_uid: 本次请求使用的账号
     :param code: HTTP 状态码
     :param body: 已解析的响应体（非 json 时是原始文本）
+    :param at: 请求发出时刻（HH:MM:SS.mmm）。服务端排障第一个问题就是「几点几分」，
+               以前只有失败后的库内快照，时刻得靠人回忆
+    :param elapsed_ms: 本次请求耗时（毫秒）。耗时正常 = 服务端快速拒绝，
+                       耗时暴涨 = 上游在等超时，两者对应的排查方向完全不同
     """
     if len(_exchanges) >= MAX_EXCHANGES:
         _exchanges.pop(0)
-    _exchanges.append({'payload': payload, 'pay_uid': pay_uid, 'code': code, 'body': body})
+    _exchanges.append({'payload': payload, 'pay_uid': pay_uid, 'code': code, 'body': body,
+                       'at': at, 'elapsed_ms': elapsed_ms})
 
 
 def archive(case_name):
@@ -67,13 +83,13 @@ def archived(case_name):
 
 
 def _render(case_name):
-    lines = ['---- 失败现场：{} ----'.format(case_name)]
+    lines = ['---- 失败现场：{}（归档 {}）----'.format(case_name, now_text())]
     if not _exchanges:
         # 常见于用例在发请求之前就失败（造数断言、前置校验），或失败发生在读断言阶段
         lines.append('（本用例期间未记录到接口请求）')
     uids = []
     for index, item in enumerate(_exchanges, 1):
-        lines.append('[请求 {}] pay_uid={}'.format(index, item['pay_uid']))
+        lines.append(_exchange_head(index, item))
         lines.append('  入参: {}'.format(_short(item['payload'])))
         lines.append('  HTTP {}'.format(item['code']))
         lines.append('  响应: {}'.format(_short(item['body'])))
@@ -85,6 +101,16 @@ def _render(case_name):
         lines.append('[账户快照]（失败时刻的库内值，用于区分“没扣”与“扣多了”）')
         lines.extend('  ' + line for line in snapshot)
     return '\n'.join(lines)
+
+
+def _exchange_head(index, item):
+    """一行标题：账号 + 发出时刻 + 耗时（有才写，老调用方/假响应没有这两项）"""
+    head = '[请求 {}] pay_uid={}'.format(index, item['pay_uid'])
+    if item.get('at'):
+        head += '  发出 {}'.format(item['at'])
+    if item.get('elapsed_ms') is not None:
+        head += '  耗时 {:.0f}ms'.format(item['elapsed_ms'])
+    return head
 
 
 def _short(value):

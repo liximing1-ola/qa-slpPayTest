@@ -14,7 +14,8 @@ from Robot import robot
 from common import Logs, preflight
 from common.Session import Session
 from common.report import (fail_detail_text, fail_kind_report, group_report, not_pass_report,
-                           result_counts, retry_report, retry_summary, split_message)
+                           result_counts, retry_report, retry_summary, server_error_report,
+                           server_error_summary, split_message)
 
 
 def push_lines(lines, app_info):
@@ -102,12 +103,37 @@ def log_retry(test_result):
         Logs.get_log('retryCase.log', console=False, back_count=30).info(retry_text)
 
 
+def log_server_errors():
+    """接口 5xx 台账：固定一行摘要 + 明细，控制台与 caseResult.log 各一份
+
+    5xx 不会被频控重试兜，但会被 @Retry 兜：那条用例最终是 PASS，与一次就过的
+    长得一模一样。摘要行让「本轮偶发几次」始终可见——2026-10-30 的 breaker open
+    只能靠翻截图定位，就是因为这个数字从来没被打印过。
+
+    延迟 import：Request 是上层请求封装，且它会反向引用 Scene，放模块顶部
+    会把「执行流程」和「请求封装」绑成环。
+    """
+    from common.Request import server_error_records
+
+    records = server_error_records()
+    line = server_error_summary(records)
+    print(line, flush=True)
+    Logs.get_log('caseResult.log', console=False).info(line)
+    detail = server_error_report(records)
+    if detail:
+        print(detail, flush=True)
+        Logs.get_log('caseResult.log', console=False).info(detail)
+
+
 def console_reports(test_result, app_info):
     """未通过清单、失败性质、场景族统计、完整堆栈：控制台看摘要，日志留全量
 
     失败性质（连不上库 / 分成算错）决定下一步是重跑还是查代码；场景族统计回答的是
     「某一类整体跨了，还是东一条西一条」——只看失败清单回答不了这个问题。
     """
+    # 5xx 台账放在清单前面：先看「本轮服务端抖了几次」，再逐条看红
+    log_server_errors()
+
     report_text = not_pass_report(test_result, title='[{}] 未通过用例'.format(app_info))
     print(report_text, flush=True)
     Logs.get_log('notPassCase.log', console=False, back_count=30).info(report_text)

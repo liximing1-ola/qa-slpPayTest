@@ -56,8 +56,13 @@ class _ScriptedRequests(object):
 
     def post(self, url=None, data=None, headers=None, verify=None, timeout=None):
         self.calls.append(data)
-        body = self._bodies.pop(0) if self._bodies else {'success': True}
-        return _FakeResponse(body)
+        item = self._bodies.pop(0) if self._bodies else {'success': True}
+        # (code, body) 形式用于造 5xx：失败现场与 5xx 台账都靠状态码分支
+        if isinstance(item, tuple):
+            code, body = item
+        else:
+            code, body = 200, item
+        return _FakeResponse(body, code=code)
 
 
 class _FakeTime(object):
@@ -322,6 +327,31 @@ def check_scene_render():
     assert uids == ['200254777', '200255399'], '提取的账号不对: {}'.format(uids)
 
 
+def check_scene_request_time():
+    """请求行要带发出时刻与耗时：和服务端日志对齐靠的只有这个时刻
+
+    耗时同样重要：「快速拒绝（熔断/限流）」和「等超时（上游慢）」在客户端看
+    都是失败，但排查方向完全不同。
+    """
+    head = Scene._exchange_head(1, {'payload': {'a': 1}, 'pay_uid': 200254777, 'code': 500,
+                                    'body': 'x', 'at': '12:03:41.512', 'elapsed_ms': 183})
+    for expect in ('pay_uid=200254777', '12:03:41.512', '183ms'):
+        assert expect in head, '请求行缺少「{}」: {}'.format(expect, head)
+    # 老调用方/假响应没有这两项时不能拼出 None，否则现场反而更难读
+    bare = Scene._exchange_head(2, {'payload': {}, 'pay_uid': 1, 'code': 200, 'body': ''})
+    assert bare == '[请求 2] pay_uid=1', '缺时刻时不该拼出空字段: {}'.format(bare)
+
+
+class _NullLog(object):
+    """自检里替掉日志句柄：报告逻辑不该在自检时往 log/ 目录写文件"""
+
+    def info(self, *args, **kwargs):
+        pass
+
+    def error(self, *args, **kwargs):
+        pass
+
+
 def check_scene_buffer_limit():
     """现场只保留最近几次请求，不能把 failCase.log 撑爆"""
     Scene.begin_case('demo.test_002')
@@ -329,6 +359,81 @@ def check_scene_buffer_limit():
         Scene.record_exchange({'seq': index}, 1, 200, {'success': False})
     assert len(Scene._exchanges) == Scene.MAX_EXCHANGES, '缓冲应只留 {} 条'.format(Scene.MAX_EXCHANGES)
     assert Scene._exchanges[-1]['payload']['seq'] == Scene.MAX_EXCHANGES + 2, '应保留最新的那几条'
+
+
+def check_server_error_ledger():
+    """5xx 要单独计数（含被 @Retry 兜住、最终转绿的那次），4xx/200 不算
+
+    被兜住的 500 在报告里长得和一次就过的用例一样，不留这一笔，「本轮偶发几次」
+    就只能靠翻截图；时刻要能与服务端日志对齐，body 要留下定性依据（breaker open）。
+    """
+    from common import report
+
+    Request, fake_requests, fake_time, old = _with_scripted([
+        (500, '<html>RpcBase.php line: 283 desc: breaker open</html>'),
+        {'success': True},
+        (404, 'not found'),
+    ])
+    Request.reset_server_errors()
+    Scene.begin_case('demo.test_020')
+    try:
+        first = Request.post_request_session('test.local/ledger', {'a': 1}, tokenName='slp', pay_uid=1)
+        second = Request.post_request_session('test.local/ledger', {'a': 1}, tokenName='slp', pay_uid=1)
+        third = Request.post_request_session('test.local/ledger', {'a': 1}, tokenName='slp', pay_uid=1)
+    finally:
+        _restore(old)
+    try:
+        assert (first['code'], second['code'], third['code']) == (500, 200, 404), \
+            '响应码不符: {} / {} / {}'.format(first['code'], second['code'], third['code'])
+        records = Request.server_error_records()
+        assert Request.server_error_count() == 1, '4xx/200 不该进台账: {}'.format(records)
+        record = records[0]
+        assert record['case'] == 'demo.test_020', '归属的用例不对: {}'.format(record.get('case'))
+        assert record['code'] == 500, record
+        assert 'breaker open' in record['body'], '响应开头要留着，它是定性依据'
+        assert record['at'] and record['at'].count(':') == 2, '要记发出时刻: {}'.format(record.get('at'))
+        # 台账与现场共用同一笔请求：调用方漏传 at/elapsed_ms 时两处一起失明
+        head = Scene._exchanges[0]
+        assert head.get('at') and head.get('elapsed_ms') is not None, \
+            '现场里那笔请求也要有时刻与耗时: {}'.format(head)
+
+        assert '1 次' in report.server_error_summary(records), report.server_error_summary(records)
+        text = report.server_error_report(records)
+        for expect in ('demo.test_020', 'HTTP 500', 'breaker open', record['at']):
+            assert expect in text, '明细缺少「{}」: {}'.format(expect, text)
+        # 没有 5xx 时也要明确写「无」，否则分不清是没发生还是没统计
+        assert '无' in report.server_error_summary([]), report.server_error_summary([])
+    finally:
+        Request.reset_server_errors()
+    assert Request.server_error_count() == 0, '清空后应归零'
+
+
+def check_server_error_wiring():
+    """console_reports 每轮都要把这行打出来
+
+    自检只验格式化不验「有没有被调用」的话，哪天调用被拿掉，报告依旧安静，
+    而偶发的 5xx 又回到「只能翻截图」——这正是 2026-10-30 发生的事。
+    """
+    import io
+    import unittest
+    from contextlib import redirect_stdout
+
+    from common import Logs, Request, runflow
+
+    Scene.begin_case('demo.test_021')
+    Request._note_server_error('12:03:41.512', 500, 183, 'desc: breaker open')
+    old_get = Logs.get_log
+    Logs.get_log = lambda *args, **kwargs: _NullLog()
+    out = io.StringIO()
+    try:
+        with redirect_stdout(out):
+            runflow.console_reports(unittest.TestResult(), 'slp')
+    finally:
+        Logs.get_log = old_get
+        Request.reset_server_errors()
+    text = out.getvalue()
+    for expect in ('接口 5xx: 1 次', 'demo.test_021', '12:03:41.512', 'breaker open'):
+        assert expect in text, '报告里缺少「{}」'.format(expect)
 
 
 def check_scene_empty_and_archive():
@@ -1276,6 +1381,12 @@ def main():
     _check('现场包含入参/响应/账号', check_scene_render)
     _check('现场缓冲有上限', check_scene_buffer_limit)
     _check('空现场与快照异常都不影响结论', check_scene_empty_and_archive)
+    _check('请求带发出时刻与耗时，缺值时不留空字段', check_scene_request_time)
+
+    print('框架自检：接口 5xx 台账（common.Request / common.report）')
+    _check('5xx 单独计数：被重试兜住的也计入、4xx 不算、带时刻与定性依据',
+           check_server_error_ledger)
+    _check('每轮固定打印 5xx 摘要与明细（含被重试兜住的）', check_server_error_wiring)
 
     print('框架自检：异步读值轮询（common.Assert）')
     _check('读不到时继续读到达标', check_eventually_polls_until_match)
