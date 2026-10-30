@@ -15,7 +15,7 @@ __desc__ = "礼物优惠券-无损-收礼方不打折"
 import unittest
 
 from caseSlp.config import *
-from caseSlp.tools import prepare_test_data, insert_coupon
+from caseSlp.tools import prepare_test_data, insert_coupon, read_vip_pop_snapshot, wait_vip_pop_settled
 from common.Assert import assert_body, assert_between, assert_code, assert_equal, assert_equal_eventually, assert_pay_success
 from common.Request import post_request_session
 from common.basicSlpXsgData import encodeData
@@ -140,6 +140,8 @@ class TestPayCreate(unittest.TestCase):
 		prepare_test_data(payUid, gs_A_uid, gs_B_uid, normal_uid,
 		                  money=giftId['937']['price'] * num * len(uids),
 		                  god_status={gs_A_uid: 0, gs_B_uid: 1})
+		# vip/人气 是异步写的，打赏前记一份，用例末尾等它落定（见 wait_vip_pop_settled）
+		vip_pop_old = read_vip_pop_snapshot(payUid, gs_A_uid, gs_B_uid, normal_uid)
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89370']['cid'], 1)
 		data = encodeData(
@@ -168,6 +170,10 @@ class TestPayCreate(unittest.TestCase):
 			giftId['937']['price'] * rates['normal']['default'] * num)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
+		# 本条打赏会异步给双方加 vip/人气，不等它落定就结束的话，这笔尾数（礼物原价 × 个数）
+		# 会落在下一条用例的「清零 + 记基线」之后（实测 6100 = 6000 + 100）。只等落定，
+		# 不改任何预期值；重试轮不会真下单，函数内部自己跳过
+		wait_vip_pop_settled(vip_pop_old)
 
 	def test_006(self, des='房间,9折券(无损),打赏多个人多个礼物'):
 		rid = gs_B_ceo_rid
@@ -180,6 +186,8 @@ class TestPayCreate(unittest.TestCase):
 		prepare_test_data(payUid, gs_A_uid, gs_B_uid, normal_uid,
 		                  money=giftId['937']['price'] * num * len(uids),
 		                  god_status={gs_A_uid: 0, gs_B_uid: 1})
+		# vip/人气 是异步写的，打赏前记一份，用例末尾等它落定（见 wait_vip_pop_settled）
+		vip_pop_old = read_vip_pop_snapshot(payUid, gs_A_uid, gs_B_uid, normal_uid)
 		# 插入9折优惠券
 		cid = insert_coupon(payUid, commodityId['89370']['cid'], 1)
 		data = encodeData(
@@ -208,3 +216,7 @@ class TestPayCreate(unittest.TestCase):
 			giftId['937']['price'] * rates['normal']['default'] * num)
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('sum_money', payUid), giftId['937']['price'] * commodityId['89370']['discount'])
 		assert_equal_eventually(lambda: mysql.selectUserInfoSql('num_commodity', uid=payUid, cid=commodityId['89370']['cid']), 0)
+		# 本条打赏会异步给双方加 vip/人气，不等它落定就结束的话，这笔尾数（礼物原价 × 个数）
+		# 会落在下一条用例的「清零 + 记基线」之后（实测 6100 = 6000 + 100）。只等落定，
+		# 不改任何预期值；重试轮不会真下单，函数内部自己跳过
+		wait_vip_pop_settled(vip_pop_old)

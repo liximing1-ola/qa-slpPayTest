@@ -34,19 +34,15 @@ class TestPayCreate(unittest.TestCase):
 		rid = business_room_rid
 		uid = gsUid
 		assert_equal(mysql.checkUserBroker(uid), True)  # 确认 uid是工会成员
-		mysql.deleteUserAccountSql('user_popularity', uid)  # 修改pop值,还原数据
-		mysql.deleteUserAccountSql('user_title_new', uid)  # 关闭贵族,还原数据
-		mysql.deleteUserAccountSql('pay_room_money', uid)  # 修改vip值,还原数据
-
-		mysql.deleteUserAccountSql('user_popularity', payUid)  # 修改pop值,还原数据
-		mysql.deleteUserAccountSql('user_title_new', payUid)  # 关闭贵族,还原数据
-		mysql.deleteUserAccountSql('pay_room_money', payUid)  # 修改vip值,还原数据
+		# 双方的 vip/人气/贵族 一起复位（里面会等到清零后再也没人写回才返回）：上一条用例
+		# 带券多人打赏只断言余额与分成，它那笔 6000 的 vip 可能晚到这里才落库
+		prepare_vip_pop_data(uid, payUid)
 		mysql.updateUserInfoSql('user_title_new', payUid, level=juewei_level['骑士']['level'])
 		prepare_test_data(payUid, money=default_money)
 
 		payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop = read_vip_pop(payUid, uid)
-		# 上面刚把双方的 vip/人气 复位，基线必然是 0。不为 0 只可能有两种原因：上游用例的异步
-		# 结算迟到、或有别的用例把值改了回来。在这里直接报出来，比让下面的增量断言报
+		# 复位函数等到连读 3 次都是 0 才返回，所以这里的基线必然是 0。不为 0 只有一个原因：
+		# 复位期间那笔迟到的结算还在往回写。直接报出来，比让下面的增量断言报
 		# 「实际 6100 / 预期 100」好定位得多（6100 = 残留 6000 + 本次 100）
 		assert_equal((payUid_old_vip, payUid_old_pop, uid_old_vip, uid_old_pop), (0, 0, 0, 0))
 

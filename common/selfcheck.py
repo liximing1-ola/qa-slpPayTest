@@ -1158,6 +1158,110 @@ def check_case_expr_prefix():
     _refused('test_pay_concurrent.NoSuchClass', "has no attribute 'NoSuchClass'")
 
 
+class _FakeVipPopMysql(object):
+    """按脚本回放 vip 经验值/人气值，并记下每一次复位
+
+    脚本用完就停在最后一个值上：超时那一项需要它一直非 0。
+    """
+
+    def __init__(self, vip_script, pop_script):
+        self.vip_script = list(vip_script)
+        self.pop_script = list(pop_script)
+        self.cleared = []
+        self._vip_at = 0
+        self._pop_at = 0
+
+    def deleteUserAccountSql(self, table, uid):
+        self.cleared.append((table, uid))
+
+    def selectRawDict(self, sql):
+        if 'pay_room_money' in sql:
+            value, self._vip_at = self._take(self.vip_script, self._vip_at)
+            return [{'pay_room_money': value}]
+        value, self._pop_at = self._take(self.pop_script, self._pop_at)
+        return [{'popularity': value}]
+
+    @staticmethod
+    def _take(script, index):
+        return script[min(index, len(script) - 1)], index + 1
+
+    def clear_count(self, table, uid):
+        return len([item for item in self.cleared if item == (table, uid)])
+
+
+def check_vip_pop_reset():
+    """清零后又被写回必须再清一遍；一直清不干净要按时停下来
+
+    6100 = 6000 + 100 就是这么来的：上一条用例的 vip 结算晚于本条的复位。
+    只清一次、被写回后不再清，本条用例就会拿着 6000 的脏基线往下跑。
+    """
+    import common.conSlpXsgMysql as dbmod
+    from common import Request, tools
+
+    uid = 200255399
+    old_mysql = dbmod.conMysql
+    try:
+        Request.begin_case()
+        # 第一轮观测就读到 6000：必须再清一遍才往下走
+        fake = _FakeVipPopMysql([6000, 0], [6000, 0])
+        dbmod.conMysql = fake
+        result = tools.prepare_vip_pop_data(uid, quiet=2, timeout=5, interval=0.01)
+        for table in ('pay_room_money', 'user_popularity', 'user_title_new'):
+            assert fake.clear_count(table, uid) == 2, \
+                '{} 被写回后没有再清一遍（实际清了 {} 次）'.format(table, fake.clear_count(table, uid))
+        assert result == {uid: (0, 0)}, '复位返回值不是全 0：{}'.format(result)
+
+        # 第一轮读着是 0、第二轮才被写回：只有「连读 quiet 次为 0 才退」才抓得到这种晚一拍
+        fake = _FakeVipPopMysql([0, 6000, 0], [0, 6000, 0])
+        dbmod.conMysql = fake
+        result = tools.prepare_vip_pop_data(uid, quiet=2, timeout=5, interval=0.01)
+        assert fake.clear_count('pay_room_money', uid) == 2, \
+            '晚一拍写回没被抓到（实际清了 {} 次）'.format(fake.clear_count('pay_room_money', uid))
+        assert result == {uid: (0, 0)}, '晚一拍写回后没清干净：{}'.format(result)
+
+        # 一直有人在写：不能无限等，要把当前值交回去（由调用方的基线断言报出来）
+        fake = _FakeVipPopMysql([6000], [6000])
+        dbmod.conMysql = fake
+        started = time.time()
+        result = tools.prepare_vip_pop_data(uid, quiet=5, timeout=0.05, interval=0.01)
+        waited = time.time() - started
+        assert result == {uid: (6000, 6000)}, '没把当前值交回去：{}'.format(result)
+        assert waited < 1.0, '超时后还在等（等了 {:.1f} 秒）'.format(waited)
+    finally:
+        dbmod.conMysql = old_mysql
+
+
+def check_vip_pop_settled():
+    """打赏后要等这笔 vip/人气 落定：先等它动起来，再等它不再变"""
+    import common.conSlpXsgMysql as dbmod
+    from common import Request, tools
+
+    uid = 200255399
+    old_mysql = dbmod.conMysql
+    try:
+        Request.begin_case()
+        # 脚本写成「先是 0 / 后是 600 再添一笔 1200」：既要等得到晚到的那笔，
+        # 又不能在它还没添完时提前当成落定
+        fake = _FakeVipPopMysql([0, 0, 0, 0, 600, 600, 1200, 1200, 1200],
+                                [0, 0, 0, 0, 600, 600, 1200, 1200, 1200])
+        dbmod.conMysql = fake
+        baseline = tools.read_vip_pop_snapshot(uid)
+        settled = tools.wait_vip_pop_settled(baseline, quiet=2, timeout=2, first_timeout=2, interval=0.01)
+        assert settled == {uid: (1200, 1200)}, '没等出落定值：{}'.format(settled)
+        assert fake.cleared == [], '等待落定不该清库（会把本条刚写的结算抹掉）：{}'.format(fake.cleared)
+
+        # 这两项本来就不变（比如券种不计 vip）：只打日志、按时返回，不能吊死
+        fake = _FakeVipPopMysql([0], [0])
+        dbmod.conMysql = fake
+        baseline = tools.read_vip_pop_snapshot(uid)
+        started = time.time()
+        settled = tools.wait_vip_pop_settled(baseline, quiet=2, timeout=2, first_timeout=0.05, interval=0.01)
+        assert settled == baseline, '没有变化时应原样返回：{}'.format(settled)
+        assert time.time() - started < 1.0, '没有变化时也等了很久'
+    finally:
+        dbmod.conMysql = old_mysql
+
+
 def main():
     print('框架自检：频控退避（common.Request）')
     _check('命中频控后退避重试并拿到成功响应', check_frequent_retry_then_success)
@@ -1180,6 +1284,10 @@ def main():
 
     print('框架自检：环境种子清单（common.envData）')
     _check('清单结构合法、SQL 可填、无重复项', check_seed_checks_shape)
+
+    print('框架自检：用例数据复位（common.tools）')
+    _check('vip/人气 复位：被写回要再清一遍、不归零要按时停', check_vip_pop_reset)
+    _check('vip/人气 落定：打赏后先等它动起来再等它稳定', check_vip_pop_settled)
 
     print('框架自检：并发用例工具（caseStress.tools）')
     _check('流水聚合：付款与收款分开、同人同 op 合并', check_flow_split)

@@ -145,21 +145,90 @@ def reset_room_acs(uid, rid):
     mysql.insertXsstRoomacsSum(uid, rid)
 
 
-def prepare_vip_pop_data(uid, pay_uid=None):
-    """
-    准备 VIP/人气值 相关的数据清理
-    :param uid: 被打赏者UID
-    :param pay_uid: 打赏者UID（可选）
+def read_vip_pop_direct(uid):
+    """直接读表拿 (vip 经验值, 人气值)，不参与重试轮次的读值回放
+
+    复位的观察循环要在一条用例里读好几轮，走 selectUserInfoSql 会占掉回放用的读序号
+    （它按「同一查询在本轮的第几次」对齐）。重试轮一旦少读一轮，后面的 read_vip_pop
+    就会拿到错位的旧值——这类「框架自己的观察」不该进业务读值序列。
+    :param uid: 用户UID
+    :return: (pay_room_money, popularity)，缺行按 0 处理
     """
     from common.conSlpXsgMysql import conMysql as mysql
 
-    mysql.deleteUserAccountSql('user_popularity', uid)
-    mysql.deleteUserAccountSql('user_title_new', uid)
-    mysql.deleteUserAccountSql('pay_room_money', uid)
-    if pay_uid:
-        mysql.deleteUserAccountSql('user_popularity', pay_uid)
-        mysql.deleteUserAccountSql('user_title_new', pay_uid)
-        mysql.deleteUserAccountSql('pay_room_money', pay_uid)
+    vip_rows = mysql.selectRawDict('select pay_room_money from xs_user_profile where uid={}'.format(int(uid)))
+    pop_rows = mysql.selectRawDict('select popularity from xs_user_popularity where uid={}'.format(int(uid)))
+    vip = vip_rows[0].get('pay_room_money') if vip_rows else None
+    pop = pop_rows[0].get('popularity') if pop_rows else None
+    return 0 if vip is None else int(vip), 0 if pop is None else int(pop)
+
+
+def prepare_vip_pop_data(uid, pay_uid=None, quiet=3, timeout=None, interval=None):
+    """把双方的 VIP 经验值/人气值清零，并等到清零之后不再被写回
+
+    清零只是几条 update，写完不等于「别人不会再写」：vip/人气 是异步结算写的，上一条用例
+    （带券多人打赏那类）只断言余额和分成、不等这两项，它那笔 6000 就可能在本条用例
+    「清零 + 记基线」之后才落库——100 的增量会读成 6100（6100 = 6000 + 100，6000 是
+    600 钻礼物打 10 个那批，2026-10-30 全量实测）。重试也救不回来：回放轮丢弃写库
+    （_ReplayCursor 只放行查询），那 6000 清不掉，只能照样红一次。
+
+    所以清零之后多观察几轮：连读 quiet 次都是 0 才算安静；中途读回非 0 说明有笔结算
+    迟到了，打印出来再清一遍。超时没等到静默不在这里抛：有些用例只比增量（基线取当前
+    值即可），要求基线必须为 0 的那种（test_exp.test_001）会在紧跟着的基线断言上亮红，
+    并报出实际值——报错落在断言上，别让复位函数替它判。
+
+    :param uid: 被打赏者UID
+    :param pay_uid: 打赏者UID（可选）
+    :param quiet: 连续几次读到全 0 才算安静
+    :param timeout: 最多观察多少秒，默认 WAIT_TIMEOUT
+    :param interval: 两次观测的间隔，默认 WAIT_INTERVAL
+    :return: 最后一次读到的 {uid: (vip, 人气)}
+    """
+    from common.Assert import WAIT_INTERVAL, WAIT_TIMEOUT
+    from common.conSlpXsgMysql import conMysql as mysql
+    from common.Request import is_replaying
+
+    uids = [uid] + ([pay_uid] if pay_uid else [])
+    timeout = WAIT_TIMEOUT if timeout is None else timeout
+    interval = WAIT_INTERVAL if interval is None else interval
+
+    def _clear():
+        for target in uids:
+            mysql.deleteUserAccountSql('user_popularity', target)
+            mysql.deleteUserAccountSql('user_title_new', target)
+            mysql.deleteUserAccountSql('pay_room_money', target)
+
+    if is_replaying():
+        # 回放轮写库被丢弃，清了不生效、也等不到静默，只能白等一个 timeout 再打一串误导的日志
+        print('[vip] 回放轮跳过复位：本轮写库被丢弃，复位不生效')
+        return None
+
+    _clear()
+    deadline = time.time() + timeout
+    still = 0
+    rounds = 0
+    while True:
+        time.sleep(interval)
+        rounds += 1
+        snapshot = dict((target, read_vip_pop_direct(target)) for target in uids)
+        dirty = [(target, value) for target, value in snapshot.items() if value != (0, 0)]
+        if not dirty:
+            still += 1
+            if still >= quiet:
+                return snapshot
+        else:
+            still = 0
+            print('[vip] 复位后又被写回（第 {} 次观测）：{}，有结算迟到了'.format(
+                rounds, '，'.join('uid={} vip={} 人气={}'.format(target, value[0], value[1])
+                                 for target, value in sorted(dirty))))
+            if time.time() >= deadline:
+                print('[vip] 已观察 {:.1f} 秒仍在被写，不再等，当前值交后续断言判定'.format(timeout))
+                return snapshot
+            _clear()
+            continue
+        if time.time() >= deadline:
+            print('[vip] 已观察 {:.1f} 秒仍未连读 {} 次为 0，当前值交后续断言判定'.format(timeout, quiet))
+            return snapshot
 
 
 def read_vip_pop(pay_uid, uid):
@@ -178,6 +247,79 @@ def read_vip_pop(pay_uid, uid):
             mysql.selectUserInfoSql('popularity', pay_uid),
             mysql.selectUserInfoSql('pay_room_money', uid),
             mysql.selectUserInfoSql('popularity', uid))
+
+
+def read_vip_pop_snapshot(*uids):
+    """把一批账号的 (vip 经验值, 人气值) 读成 {uid: (vip, 人气)}
+
+    打赏前记一份，配合 wait_vip_pop_settled 看「这笔打赏的 vip/人气 写到哪了」。
+    """
+    return dict((target, read_vip_pop_direct(target)) for target in uids)
+
+
+def wait_vip_pop_settled(baseline, quiet=5, timeout=None, first_timeout=None, interval=None):
+    """等一条用例引发的 vip/人气 结算落定，再让下一条用例开始
+
+    带券多人打赏这类用例只断言余额与分成，vip/人气 是异步写的：不等它落库就结束，
+    这笔尾数会落在下一条用例「清零 + 记基线」之后（实测 6100 = 6000 + 100）。
+    重试救不回来——回放轮丢弃写库，那 6000 清不掉。
+
+    这里不改任何预期值，只把「自己这笔写完了」等出来：先等读数离开基线（证明结算
+    真的在写），再等连读 quiet 次不再变。落定时把前后值打一行，将来要把这两项从
+    「只等」补成「断言」时，可以直接照这行实测值写。
+
+    :param baseline: 打赏前读到的 {uid: (vip, 人气)}，见 read_vip_pop_snapshot
+    :param quiet: 连续几次读数不变才算落定
+    :param timeout: 从第一次变化起最多再等多少秒，默认 WAIT_TIMEOUT
+    :param first_timeout: 最多等多久等到第一次变化，默认 WAIT_TIMEOUT
+    :param interval: 观测间隔，默认 WAIT_INTERVAL
+    :return: 最后一次读到的 {uid: (vip, 人气)}
+    """
+    from common.Assert import WAIT_INTERVAL, WAIT_TIMEOUT
+    from common.Request import is_replaying
+
+    if is_replaying():
+        # 回放轮没有真正下单，不会产生新的 vip/人气，白等一个 first_timeout 只会拖慢重跑
+        print('[vip] 回放轮跳过等待：本轮下单是回放的，不会产生新的 vip/人气')
+        return dict(baseline)
+    timeout = WAIT_TIMEOUT if timeout is None else timeout
+    first_timeout = WAIT_TIMEOUT if first_timeout is None else first_timeout
+    interval = WAIT_INTERVAL if interval is None else interval
+
+    def _read():
+        return read_vip_pop_snapshot(*baseline)
+
+    def _text(values):
+        return '，'.join('uid={} vip {}→{} 人气 {}→{}'.format(
+            target, baseline[target][0], values[target][0], baseline[target][1], values[target][1])
+            for target in sorted(values))
+
+    started = time.time()
+    current = _read()
+    while current == baseline and time.time() - started < first_timeout:
+        time.sleep(interval)
+        current = _read()
+    if current == baseline:
+        # 不是断言：这两项不在本条用例的验证范围里，只把「没等到变化」打出来
+        print('[vip] 打赏后 {:.1f} 秒 vip/人气 没有变化：{}'.format(time.time() - started, _text(current)))
+        return current
+
+    still = 0
+    deadline = time.time() + timeout
+    last = current
+    while True:
+        time.sleep(interval)
+        current = _read()
+        still = still + 1 if current == last else 0
+        last = current
+        if still >= quiet:
+            break
+        if time.time() >= deadline:
+            print('[vip] 打赏后 vip/人气 等了 {:.1f} 秒仍在变，剩下的交给下一条用例的清零循环'.format(
+                time.time() - started))
+            break
+    print('[vip] 打赏后 vip/人气 已落定：{}'.format(_text(current)))
+    return current
 
 
 def prepare_room_data(rid, uid=None, position=0):
