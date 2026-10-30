@@ -301,6 +301,8 @@ git config credential.helper store     # 下一次 pull 输一次，之后存在
    - **`. 文件;` 后面用分号不用 `&&`**：文件不在时 `&&` 会短路整条命令，连用例都不跑且不报错；分号则照常跑用例，只是不推送，日志里会写「未设置 WX_BOT_SLP」。宁可少一条推送，不能少跑一轮用例
    - **时间选 10:00**：全量约 5 分钟、会造数扣费，这个点有人在场，推出来的失败当天就能跟进；凌晨跑则等于把问题压到第二天
    - **服务器上不要手工改代码**：`git pull --ff-only` 遇到本地修改会直接拒绝，日志里会一直报 pull 失败，而用例跑的还是旧代码
+   - **`.slp_env` 写绝对路径，不要写 `~/.slp_env`**：`~` 由 cron 的执行用户展开，配在 root 的 crontab 里就指向 `/root`，而文件一般建在 `/home/<user>/` 下；引不到时一条环境变量都没有，表现就是每轮「体检 FAIL、退出码 3」。同一件事手工排查时也会撞：root 下 `cd ~/qa-slpPayTest` 直接报 `No such file or directory`，用绝对路径
+   - **日志 owner 能反推 cron 配在谁名下**：`ls -l log/cron_*.log` 显示 `root` 就说明这条是 root 的 crontab 在跑；换人维护时先看 owner 再去改 `.slp_env`，比猜快
 
    需要改推送开关时，不用重新整条配置，直接把这一行里的 `PUSH_WX=1` 换成 `PUSH_WX=0` 重新执行即可（crontab 里可以直接 `crontab -l | sed 's/PUSH_WX=1/PUSH_WX=0/' | crontab -`）。
 
