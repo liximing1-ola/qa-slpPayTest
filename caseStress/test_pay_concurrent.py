@@ -16,9 +16,9 @@ import unittest
 from caseStress.config import (ANCHOR_UID, CEO_UID, CONCURRENT_PAYERS, GIFT, OWNER_UID, PAY_AMOUNT,
                                ROOM_RID, pay_url)
 from caseStress.tools import (classify, concurrent_window_tested, expected_rows, flows_by_key,
-                              max_pay_change_id, read_flows_by_uid, read_money, read_total_money,
-                              read_wallets, reset_payer, scale_income, split_flows, wait_flow_quiet,
-                              wait_flows_stable)
+                              income_keys_of, max_pay_change_id, read_flows_by_uid, read_money,
+                              read_total_money, read_wallets, reset_payer, scale_income, split_flows,
+                              wait_flow_quiet, wait_flows_stable)
 from common.Assert import (WAIT_INTERVAL, WAIT_TIMEOUT, assert_between, assert_equal,
                            assert_equal_eventually)
 from common.Request import FREQUENT_RETRY, frequent_retry_count, post_request_session, reset_frequent_retries
@@ -307,13 +307,17 @@ class TestConcurrentPay(unittest.TestCase):
                 return last
         return last
 
-    def batch_flows(self, mark, gid, payers, uids, least=1, await_uids=(), receiver_uids=RECEIVERS):
+    def batch_flows(self, mark, gid, payers, uids, least=1, await_uids=(), receiver_uids=RECEIVERS,
+                    income_keys=()):
         """取水位线之后的流水，拆成收款/付款两部分，返回 (income, pay, note, rows)
 
         payers 是本轮自己下单的账号：付款行按 uid 认，不靠 op 名（见 tools.split_flows）。
         uids 只用于按 gid 查不到时的兜底复查，范围要盖住收款人。
         receiver_uids 默认就是这个厅的三个收款方：不带 gid 的分成行（厅长、公会长）
         只能靠 uid 读回来，否则收款侧永远只验到主播那一条。
+        income_keys 把探针实测的收款路径 {(uid, op)} 传进来：4 个付款人里有公会长，
+        他既在下单也在收公会分成，只按 uid 分收付会把那行当成付款行吞掉
+        （2026-10-30 实测：期望 3 条写路径，批次里只剩 2 条）。
 
         按 gid 筛不到时用 uid 兜底复查，把两种可能分开：结算压根没写流水（真缺陷），
         还是写了但不带 gid（本轮的筛选口径失效）。前者直接抛失败，后者返回一句说明
@@ -324,7 +328,7 @@ class TestConcurrentPay(unittest.TestCase):
         """
         rows = wait_flows_stable(mark, gid, least=least, await_uids=await_uids,
                                  receiver_uids=receiver_uids)
-        income, pay = split_flows(rows, payers)
+        income, pay = split_flows(rows, payers, income_keys=income_keys)
         if income or pay:
             return income, pay, '', rows
         looked = sum(len(read_flows_by_uid(mark, uid)) for uid in uids)
@@ -556,7 +560,8 @@ class TestConcurrentPay(unittest.TestCase):
         succeeded = [uid for uid in CONCURRENT_PAYERS for kind in kinds[uid] if kind == 'success']
         income_batch, pay_batch, note_batch, batch_rows = self.batch_flows(
             mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + RECEIVERS,
-            least=expected_rows(income_probe, pay_probe, total_success), await_uids=succeeded)
+            least=expected_rows(income_probe, pay_probe, total_success), await_uids=succeeded,
+            income_keys=income_keys_of(income_probe))
         if note_batch:
             print('[并发-重发][未测到] {}；收款侧本轮没验，扣款侧已验'.format(note_batch), flush=True)
             raise unittest.SkipTest('流水筛选失效，收款侧没验：{}'.format(note_batch))
@@ -723,7 +728,8 @@ class TestConcurrentPay(unittest.TestCase):
         succeeded = [uid for uid, kind in kind_by_uid.items() if kind == 'success']
         income_batch, pay_batch, note, batch_rows = self.batch_flows(
             mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + RECEIVERS,
-            least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded)
+            least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded,
+            income_keys=income_keys_of(income_probe))
         if note:
             print('[并发-流水][未测到] {}；本轮没有对账，别当成通过'.format(note), flush=True)
             raise unittest.SkipTest('流水筛选失效，本轮没做对账：{}'.format(note))
@@ -831,7 +837,8 @@ class TestConcurrentPay(unittest.TestCase):
 
         income_batch, pay_batch, note, batch_rows = self.batch_flows(
             mark, gid, CONCURRENT_PAYERS, CONCURRENT_PAYERS + RECEIVERS,
-            least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded)
+            least=expected_rows(income_probe, pay_probe, success), await_uids=succeeded,
+            income_keys=income_keys_of(income_probe))
         if note:
             # 扣款侧（余额）已经验完了，但「拒单还白送分成」这一半没验到。
             # 只打印一句让这条用例报绿，等于把没验的那一半藏起来

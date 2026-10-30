@@ -527,8 +527,11 @@ def check_flow_split():
     op='pay' 一次都没出现过。按 op 名认会把付款行当成一条「收款写路径」，
     探针 1 个付款账号、并发 4 个，两边键集合永远不相等，报出来的红是假的；
     更糟的是「付款行数 = 成功笔数」那道校验因为探针付款行为空而整段跳过（实测踩过）。
+
+    uid 规则有个例外必须由探针兜住：公会长既在下单名单里，又在收公会分成，
+    只按 uid 认就会把他的分成行算成付款行（见下面 income_keys 那组对照）。
     """
-    from caseStress.tools import split_flows
+    from caseStress.tools import income_keys_of, split_flows
 
     rows = [
         {'id': 1, 'uid': 200254777, 'money': 100, 'op': 'pay'},
@@ -559,10 +562,70 @@ def check_flow_split():
     assert income == {(200255399, 'income'): [1, 80]}, \
         '付款行不能混进收款聚合，实际 {}'.format(income)
 
-    # 自刷场景：付款方恰好也是收款人时不能把收款行吞掉——所以 payers 由调用方自己传，
-    # 只传本轮下单的账号，不能把收款人一并塞进来
+    # 自刷场景：付款方恰好也是收款人时不能把收款行吞掉——所以自刷走 flows_by_key，
+    # 不复用这个函数
     income, pay = split_flows(real, payers=())
     assert (200254777, 'consume') in income, '不传付款方时退回按 op 名认，不能凭空造付款行'
+
+    # 2026-10-30 实测：并发用例的下单名单里就有公会长，他既在付款又在收公会分成，
+    # 只按 uid 认会把那笔 3 元的分成行当成付款行吞掉——收款侧整整少一条写路径，
+    # 期望 3 条、实际 2 条（真机 test_003/005/006 一起红）。income_keys 用探针实测的
+    # (uid, op) 盖住这条规则，不写死 op 名。
+    overlap = [
+        {'id': 21, 'uid': 200255209, 'money': 100, 'op': 'consume'},
+        {'id': 22, 'uid': 200255209, 'money': 3, 'op': 'income'},
+        {'id': 23, 'uid': 200255399, 'money': 71, 'op': 'income'},
+    ]
+    income, pay = split_flows(overlap, payers=(200255209,))
+    # 对照组：不传 income_keys 就是上面那个缺陷，两条断言保证探针能抓住它
+    assert (200255209, 'income') not in income, '对照组：不传 income_keys 时这行不该被算成收款'
+    assert len(pay) == 2, '对照组：不传 income_keys 时分成行被吞进付款侧，实际 {}'.format(pay)
+    income, pay = split_flows(overlap, payers=(200255209,),
+                              income_keys={(200255209, 'income')})
+    assert income.get((200255209, 'income')) == [1, 3], \
+        '付款人同时是收款人时，探针实测的那条写路径要归收款，实际 {}'.format(income)
+    assert [row['id'] for row in pay] == [21], \
+        '同一账号的付款行仍要留在付款侧，实际 {}'.format(pay)
+    assert income_keys_of({(200255399, 'income'): [2, 142], (200255209, 'tax'): [1, 3]}) == \
+        {(200255399, 'income'), (200255209, 'tax')}, '探针的写路径要原样交给 split_flows'
+
+
+def check_flow_split_wiring():
+    """并发用例拆批次时必须把探针实测的收款路径传给 split_flows
+
+    这不是语法检查：income_keys 漏传时 split_flows 不会报错，只是把「付款人同时
+    也是收款人」的那些行当成付款行，收款侧少一条写路径（2026-10-30 真机 test_003/
+    005/006 一起红），而失败信息只写「实际 2 个 key、预期 3 个」，看不出是调用点
+    漏了参数。探针那一笔（probe_flows）故意不传：它正是用来量出 income_keys 的。
+    """
+    import os
+
+    src = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       'caseStress', 'test_pay_concurrent.py')
+    with open(src, encoding='utf-8') as fh:
+        text = fh.read()
+    calls, start = [], 0
+    while True:
+        head = text.find('self.batch_flows(', start)
+        if head < 0:
+            break
+        depth, i = 0, head + len('self.batch_flows')
+        while i < len(text):
+            if text[i] == '(':
+                depth += 1
+            elif text[i] == ')':
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        calls.append(text[head:i + 1])
+        start = i + 1
+    assert calls, '没找到 self.batch_flows 调用：文件名或写法变了，这条检查已失效'
+    batch = [call for call in calls if 'CONCURRENT_PAYERS' in call]
+    assert batch, '没找到并发批次的 batch_flows 调用，这条检查已失效'
+    missing = [' '.join(call.split())[:90] for call in batch
+               if 'income_keys=income_keys_of(' not in call]
+    assert not missing, '批次拆分漏传 income_keys（收款侧会少一条写路径）：{}'.format(missing)
 
 
 def check_flow_wait_stable():
@@ -1402,6 +1465,8 @@ def main():
 
     print('框架自检：并发用例工具（caseStress.tools）')
     _check('流水聚合：付款与收款分开、同人同 op 合并', check_flow_split)
+    _check('批次拆分都传了探针的收款路径：公会长那种双重身份不漏行',
+           check_flow_split_wiring)
     _check('等流水：条数稳定才返回、没流水时超时带回空', check_flow_wait_stable)
     _check('分成流水：不带 gid 的厅长/公会长行也读回来', check_flow_receivers)
     _check('取水位线前先等流水安静：别人的行不算自己的', check_flow_quiet)

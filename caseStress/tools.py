@@ -159,7 +159,7 @@ def wait_flow_quiet(quiet=5):
         time.sleep(WAIT_INTERVAL)
 
 
-def split_flows(rows, payers=()):
+def split_flows(rows, payers=(), income_keys=()):
     """把流水拆成收款行与付款行
 
     付款行按**付款方 uid** 认，不按 op 名认：实测这个厅写的是 op='consume'，
@@ -169,21 +169,44 @@ def split_flows(rows, payers=()):
     op='pay' 仍然算付款行：别的厅/渠道也许就是这个字面量，两种判据取并集。
 
     payers 是调用方自己下单的账号。自刷（付款方同时是收款人）会把收款行误判成
-    付款行，所以不能把收款人也塞进来——并发用例只打赏给主播，刚好满足。
+    付款行，所以自刷不用这个函数（见 flows_by_key）。注意并发用例里也不能靠「把收款人
+    从 payers 里拿掉」避开：公会长本身就在下单名单里，两种身份无法从 uid 分开。
+
+    income_keys：探针实测出来的收款写路径 {(uid, op)}，命中的行一律算收款，
+    优先于「uid 在 payers 里就算付款」这条规则。为什么需要它：并发用例的 4 个
+    付款人里就包含公会长，公会长**同时也是**这个厅的收款方之一——只按 uid 认，
+    他那笔 3 元的公会分成会被当成付款行吞掉，收款侧账面就少整整一条写路径。
+    不写死 op 名：哪些 (uid, op) 算收款，全由探针交回来。
 
     收款侧聚合成 {(uid, op): [行数, 金额合计]}，一个 key 就是一条写路径：
     三方分成就是三个 key，其中任何一个少写一笔都会在行数上露出来。
     """
     payer_set = set(payers)
+    income_keys = set((int(uid), op) for uid, op in income_keys)
     income, pay = {}, []
     for row in rows:
+        key = (int(row['uid']), row['op'])
+        if key in income_keys:
+            slot = income.setdefault(key, [0, 0])
+            slot[0] += 1
+            slot[1] += int(row['money'] or 0)
+            continue
         if row['op'] == 'pay' or row['uid'] in payer_set:
             pay.append(row)
             continue
-        slot = income.setdefault((row['uid'], row['op']), [0, 0])
+        slot = income.setdefault(key, [0, 0])
         slot[0] += 1
         slot[1] += int(row['money'] or 0)
     return income, pay
+
+
+def income_keys_of(income_probe):
+    """探针收款侧的 {(uid, op)}，交给 split_flows 区分「付款人同时是收款人」的那些行
+
+    并发用例里公会长既在打赏名单里、又在收公会分成，不传它就会少算一条写路径
+    （2026-10-30 实测：探针 3 条写路径，批次里只剩主播与厅长两条）。
+    """
+    return set((int(uid), op) for uid, op in income_probe)
 
 
 def flows_by_key(rows):
